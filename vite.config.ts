@@ -74,6 +74,17 @@ export default defineConfig({
       },
     }),
   ],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom', 'react-router-dom'],
+          pdf: ['jspdf', 'jspdf-autotable'],
+          ui: ['lucide-react'],
+        },
+      },
+    },
+  },
   server: {
     allowedHosts: ['dandelion-tall-numerator.ngrok-free.dev'],
     proxy: {

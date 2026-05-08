@@ -3,8 +3,8 @@ import {
   BarChart3,
   Briefcase,
   Building2,
+  Calendar,
   Calculator,
-  ChevronDown,
   CircleUserRound,
   Eye,
   FileText,
@@ -201,8 +201,12 @@ export default function AccountManager({ onNavigate, viewMode = 'all' }: Account
       }
     | undefined
 
-  const [selectedYear, setSelectedYear] = useState(() => navState?.selectedYear ?? '2025')
-  const yearOptions = ['2026', '2025', '2024', '2023', '2022']
+  const [selectedYear] = useState(() => navState?.selectedYear ?? '2025')
+  const currentDateLabel = new Date().toLocaleDateString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  })
   const totalPending = accountRows.reduce((sum, row) => sum + parseCurrency(row.pending), 0)
   const [isAddOpen, setIsAddOpen] = useState(false)
   const defaultTransactions: Transaction[] = [
@@ -494,24 +498,14 @@ export default function AccountManager({ onNavigate, viewMode = 'all' }: Account
                 <h1 className="min-w-0 truncate text-left text-base font-extrabold leading-tight tracking-tight text-white">
                   {pageTitle}
                 </h1>
-                <div className="relative max-w-[58vw] shrink-0">
-                  <select
-                    value={selectedYear}
-                    onChange={(event) => setSelectedYear(event.target.value)}
-                    className="w-full appearance-none rounded-xl border border-white/20 bg-neutral-900 px-2.5 py-2 pr-8 text-left text-[11px] font-semibold leading-tight text-white outline-none transition hover:bg-neutral-800 focus:border-[#f39b03]/70 focus:ring-2 focus:ring-[#f39b03]/20"
-                    aria-label="Select year"
-                  >
-                    {yearOptions.map((year) => (
-                      <option key={year} value={year}>
-                        {year}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown
-                    size={13}
-                    className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-white/80"
-                  />
-                </div>
+                <button
+                  type="button"
+                  className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-white/20 bg-neutral-900 px-2.5 text-[11px] font-semibold text-white transition hover:bg-neutral-800"
+                  aria-label="Current date"
+                >
+                  <Calendar size={13} className="text-[#f39b03]" />
+                  <span className="whitespace-nowrap">{currentDateLabel}</span>
+                </button>
               </div>
             </div>
 
@@ -532,24 +526,14 @@ export default function AccountManager({ onNavigate, viewMode = 'all' }: Account
               </div>
 
               <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-                <div className="relative">
-                  <select
-                    value={selectedYear}
-                    onChange={(event) => setSelectedYear(event.target.value)}
-                    className="appearance-none rounded-xl border border-neutral-200 bg-white px-3 py-2 pr-8 text-xs font-semibold text-neutral-900 outline-none transition hover:border-neutral-300 focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20 sm:px-4 sm:py-2.5 sm:text-sm"
-                    aria-label="Select year"
-                  >
-                    {yearOptions.map((year) => (
-                      <option key={year} value={year}>
-                        {year}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown
-                    size={14}
-                    className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-neutral-500"
-                  />
-                </div>
+                <button
+                  type="button"
+                  className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-neutral-900 sm:px-4 sm:py-2.5 sm:text-sm"
+                  aria-label="Current date"
+                >
+                  <Calendar size={16} className="text-[#f39b03]" />
+                  <span className="whitespace-nowrap">{currentDateLabel}</span>
+                </button>
                 <div className="hidden items-center gap-3 rounded-xl bg-neutral-100 px-3 py-2 ring-1 ring-black/5 sm:flex sm:px-4 sm:py-2.5">
                   <div className="grid h-9 w-9 place-items-center rounded-xl bg-[#f39b03]/15 text-[#f39b03]">
                     <CircleUserRound size={18} />

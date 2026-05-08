@@ -16,7 +16,9 @@ import {
   ClipboardList,
   Building2,
   Eye,
+  Mail,
   MapPin,
+  Phone,
   X,
   IndianRupee,
 } from 'lucide-react'
@@ -30,7 +32,6 @@ type NavItem = {
   label: string
   icon: ReactNode
 }
-
 const navItems: NavItem[] = [
   { label: 'Dashboard', icon: <LayoutGrid size={16} /> },
   { label: 'Account Manager', icon: <Briefcase size={16} /> },
@@ -564,20 +565,34 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                     draggable={false}
                   />
                 </div>
-                <button
-                  type="button"
-                  className="relative grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white/5 text-white ring-1 ring-white/10 transition hover:bg-white/10"
-                  aria-label="Notifications"
-                >
-                  <Bell size={18} strokeWidth={2} className="text-white" />
-                  <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-white ring-2 ring-black" />
-                </button>
+                {selectedClient ? (
+                  <button
+                    type="button"
+                    className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white/10 text-white ring-1 ring-white/15 transition hover:bg-white/15"
+                    aria-label="Back"
+                    onClick={() => {
+                      setSelectedClientName(null)
+                      setQuery('')
+                    }}
+                  >
+                    <ArrowLeft size={18} />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="relative grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white/5 text-white ring-1 ring-white/10 transition hover:bg-white/10"
+                    aria-label="Notifications"
+                  >
+                    <Bell size={18} strokeWidth={2} className="text-white" />
+                    <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-white ring-2 ring-black" />
+                  </button>
+                )}
               </div>
               <div className="flex items-center justify-between gap-3 border-t border-white/10 px-4 py-3">
                 <h1 className="min-w-0 truncate text-left text-base font-extrabold leading-tight tracking-tight text-white">
                   Clients &amp; Sites
                 </h1>
-                <button
+                <button 
                   type="button"
                   className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-white/20 bg-neutral-900 px-2.5 text-[11px] font-semibold text-white transition hover:bg-neutral-800"
                   aria-label="Select date"
@@ -628,17 +643,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
             {selectedClient ? (
               <section className="mt-4 flex flex-col items-stretch gap-3 md:mt-6 md:flex-row md:items-center md:justify-between md:gap-4">
                 <div className="min-w-0">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedClientName(null)
-                      setQuery('')
-                    }}
-                    className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-4 py-2.5 text-sm font-extrabold text-neutral-800 shadow-sm transition hover:bg-neutral-50"
-                  >
-                    <ArrowLeft size={15} />
-                    Back
-                  </button>
+                  
                   <div className="mt-3 text-sm font-semibold text-neutral-600 md:mt-2 md:text-base">
                     Client:{' '}
                     <span className="text-3xl font-extrabold leading-tight tracking-tight text-neutral-900 md:text-2xl">
@@ -1308,8 +1313,41 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
             className="h-9 w-auto shrink-0 sm:h-10"
             draggable={false}
           />
-          <div className="min-w-0 flex-1 text-right text-[11px] font-bold text-white/90">
-            Samarth Land Surveyors
+          <div className="hidden min-w-0 flex-1 items-center justify-end text-xs font-bold text-white/95 md:flex">
+            <div className="flex min-w-0 items-center gap-2 pr-5">
+              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#f39b03]/20 text-[#f39b03] ring-1 ring-[#f39b03]/45">
+                <Phone size={13} />
+              </span>
+              <span className="truncate">Er. SHUBHAM BHOI 8643 00 1010</span>
+            </div>
+            <div className="h-6 w-px bg-white/25" />
+            <div className="flex min-w-0 items-center gap-2 px-5">
+              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#f39b03]/20 text-[#f39b03] ring-1 ring-[#f39b03]/45">
+                <Phone size={13} />
+              </span>
+              <span className="truncate">Er. SANKET KATAKAR 7026 01 6077</span>
+            </div>
+            <div className="h-6 w-px bg-white/25" />
+            <div className="flex min-w-0 items-center gap-2 px-5">
+              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#f39b03]/20 text-[#f39b03] ring-1 ring-[#f39b03]/45">
+                <Phone size={13} />
+              </span>
+              <span className="truncate">Er. SHUBHAM SODAGE 95959755566</span>
+            </div>
+            <div className="h-6 w-px bg-white/25" />
+            <div className="flex min-w-0 items-center gap-2 px-5">
+              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#f39b03]/20 text-[#f39b03] ring-1 ring-[#f39b03]/45">
+                <Phone size={13} />
+              </span>
+              <span className="truncate">Er. PRAJWAL PATIL 7058129002</span>
+            </div>
+            <div className="h-6 w-px bg-white/25" />
+            <div className="flex min-w-0 items-center gap-2 pl-5">
+              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#f39b03]/20 text-[#f39b03] ring-1 ring-[#f39b03]/45">
+                <Mail size={13} />
+              </span>
+              <span className="truncate">samarthlandsurveyors@gmail.com</span>
+            </div>
           </div>
         </div>
       </footer>

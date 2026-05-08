@@ -21,6 +21,9 @@ import {
 } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { useLocation } from 'react-router-dom'
+import jsPDF from 'jspdf'
+import autoTable from 'jspdf-autotable'
+import invoiceLogo from './assets/logo.jpeg'
 import { signOut } from './signOut'
 
 type NavItem = {
@@ -74,9 +77,33 @@ function FieldLabel({ label }: { label: string }) {
   return <label className="mb-1.5 block text-xs font-bold tracking-wide text-neutral-600">{label}</label>
 }
 
+async function loadImageAsDataUrl(src: string) {
+  const response = await fetch(src)
+  const blob = await response.blob()
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result))
+    reader.onerror = () => reject(new Error(`Unable to read image: ${src}`))
+    reader.readAsDataURL(blob)
+  })
+  return dataUrl
+}
+
 export default function MeasurementRateCalculator({ onNavigate }: MeasurementRateCalculatorProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const location = useLocation()
+  const [formValues, setFormValues] = useState({
+    client: 'RN Construction',
+    site: 'Kolhapur Cancer Centre, Kolhapur',
+    machineType: 'Total Station',
+    workType: 'Plane Table',
+    totalPoints: '55',
+    ratePerPoint: '80',
+    baseCharge: '1500',
+    extraCharges: '1500',
+    discount: '0',
+    measurementDate: '17-04-2026',
+  })
 
   const mobileBottomNav = [
     { label: 'Dashboard', path: '/dashboard', icon: Building2 },
@@ -105,6 +132,179 @@ export default function MeasurementRateCalculator({ onNavigate }: MeasurementRat
     const nextPath = routeMap[label]
     if (nextPath) onNavigate(nextPath)
     setIsSidebarOpen(false)
+  }
+
+  const updateFormValue = (field: keyof typeof formValues, value: string) => {
+    setFormValues((prev) => ({ ...prev, [field]: value }))
+  }
+
+  const parseMoney = (value: string) => Number(value.replace(/[^\d.-]/g, '')) || 0
+  const formatInr = (value: number) => `Rs ${value.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  const currentDateLabel = new Date().toLocaleDateString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  })
+
+  const handleResetForm = () => {
+    setFormValues({
+      client: 'RN Construction',
+      site: 'Kolhapur Cancer Centre, Kolhapur',
+      machineType: 'Total Station',
+      workType: 'Plane Table',
+      totalPoints: '55',
+      ratePerPoint: '80',
+      baseCharge: '1500',
+      extraCharges: '1500',
+      discount: '0',
+      measurementDate: '17-04-2026',
+    })
+  }
+
+  const handleGenerateInvoice = async () => {
+    const points = Number(formValues.totalPoints) || 0
+    const ratePerPoint = parseMoney(formValues.ratePerPoint)
+    const baseCharge = parseMoney(formValues.baseCharge)
+    const extraCharges = parseMoney(formValues.extraCharges)
+    const discount = parseMoney(formValues.discount)
+
+    const pointsAmount = points * ratePerPoint
+    const subtotal = baseCharge + pointsAmount + extraCharges
+    const total = Math.max(0, subtotal - discount)
+
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+    const invoiceNo = `INV-${String(Math.floor(1000 + Math.random() * 9000))}`
+    const invoiceDate = formValues.measurementDate || new Date().toLocaleDateString('en-GB')
+    const dueDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-GB')
+    const totalTaxPercent = 0
+    const taxAmount = (total * totalTaxPercent) / 100
+    const grandTotal = total + taxAmount
+
+    const pageWidth = doc.internal.pageSize.getWidth()
+    const pageHeight = doc.internal.pageSize.getHeight()
+    const left = 14
+    const right = pageWidth - 14
+    const logoDataUrl = await loadImageAsDataUrl(invoiceLogo)
+
+    // Watermark logo (behind invoice content)
+    const watermarkSize = 105
+    const watermarkX = (pageWidth - watermarkSize) / 2
+    const watermarkY = (pageHeight - watermarkSize) / 2 + 10
+    const pdfDoc = doc as jsPDF & {
+      GState?: new (options: { opacity?: number }) => unknown
+      setGState?: (state: unknown) => void
+    }
+    if (pdfDoc.GState && pdfDoc.setGState) {
+      pdfDoc.setGState(new pdfDoc.GState({ opacity: 0.08 }))
+      doc.addImage(logoDataUrl, 'JPEG', watermarkX, watermarkY, watermarkSize, watermarkSize)
+      pdfDoc.setGState(new pdfDoc.GState({ opacity: 1 }))
+    } else {
+      // Fallback when gState is unavailable.
+      doc.addImage(logoDataUrl, 'JPEG', watermarkX, watermarkY, watermarkSize, watermarkSize)
+    }
+
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(20)
+    doc.setTextColor(30, 30, 30)
+    doc.text('INVOICE', left + 42, 20)
+
+    // Square logo.jpeg renders best with 1:1 box; previous wide box made it look cut/small.
+    doc.addImage(logoDataUrl, 'JPEG', left, 8, 34, 34)
+
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9)
+    doc.setTextColor(90, 90, 90)
+    doc.text('SAMARTH LAND SURVEYORS', left, 24)
+    doc.text('Bhoinagar Shahapur, Ichalkaranji', left, 28.5)
+    doc.text('Contact: +91 8643001010 / +91 7026016077', left, 33)
+    doc.text('Email: samarthlandsurveyors@gmail.com', left, 37.5)
+
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(35, 35, 35)
+    doc.setFontSize(9.5)
+    doc.text(`Invoice No: ${invoiceNo}`, right, 20, { align: 'right' })
+    doc.text(`Invoice Date: ${invoiceDate}`, right, 25.5, { align: 'right' })
+    doc.text(`Due Date: ${dueDate}`, right, 31, { align: 'right' })
+    doc.text(`Status: Unpaid`, right, 36.5, { align: 'right' })
+
+    doc.setDrawColor(220, 220, 220)
+    doc.line(left, 42, right, 42)
+
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(10.5)
+    doc.text('Bill To', left, 50)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9.5)
+    doc.setTextColor(55, 55, 55)
+    doc.text(formValues.client || 'Client Name', left, 56)
+    doc.text(formValues.site || 'Site Address', left, 61)
+
+    const lineItems = [
+      ['1', 'Base Charges', '1', formatInr(baseCharge), formatInr(baseCharge)],
+      ['2', `${formValues.workType} Survey Work`, String(points), formatInr(ratePerPoint), formatInr(pointsAmount)],
+      ['3', 'Additional Charges', '1', formatInr(extraCharges), formatInr(extraCharges)],
+      ['4', 'Discount', '1', '-', `- ${formatInr(discount)}`],
+    ]
+
+    autoTable(doc, {
+      startY: 68,
+      head: [['#', 'Description', 'Qty', 'Unit Price', 'Amount']],
+      body: lineItems,
+      theme: 'grid',
+      headStyles: { fillColor: [243, 155, 3], textColor: 255, fontStyle: 'bold' },
+      styles: { fontSize: 9, cellPadding: 2, overflow: 'linebreak' },
+      columnStyles: {
+        0: { halign: 'center', cellWidth: 10 },
+        1: { cellWidth: 74 },
+        2: { halign: 'right', cellWidth: 18 },
+        3: { halign: 'right', cellWidth: 34 },
+        4: { halign: 'right', cellWidth: 34 },
+      },
+      margin: { left, right: pageWidth - right },
+    })
+
+    const summaryY = (doc as jsPDF & { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY ?? 130
+    const labelX = right - 56
+    const valueX = right
+
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(55, 55, 55)
+    doc.setFontSize(9.5)
+    doc.text('Subtotal', labelX, summaryY + 9)
+    doc.text(formatInr(subtotal), valueX, summaryY + 9, { align: 'right' })
+    doc.text(`Tax (${totalTaxPercent}%)`, labelX, summaryY + 15)
+    doc.text(formatInr(taxAmount), valueX, summaryY + 15, { align: 'right' })
+    doc.setDrawColor(210, 210, 210)
+    doc.line(labelX, summaryY + 18, valueX, summaryY + 18)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(11.5)
+    doc.setTextColor(30, 30, 30)
+    doc.text('Total Due', labelX, summaryY + 25)
+    doc.text(formatInr(grandTotal), valueX, summaryY + 25, { align: 'right' })
+
+    const notesY = summaryY + 38
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(9.5)
+    doc.text('Payment Details', left, notesY)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(8.8)
+    doc.setTextColor(75, 75, 75)
+    doc.text('Union Bank: 144512010000444 (IFSC: UBIN0814458)', left, notesY + 5)
+    doc.text('Canara Bank: 05862200005500 (IFSC: CNRB0010586)', left, notesY + 9.5)
+    doc.text('UPI: 8643001010 / 7026016077', left, notesY + 14)
+    doc.text('Payment terms: Due within 7 days from invoice date.', left, notesY + 18.5)
+
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(95, 95, 95)
+    doc.text('Thank you for your business.', left, notesY + 27)
+
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(40, 40, 40)
+    doc.text('Authorised Signatory', right, notesY + 27, { align: 'right' })
+
+    const safeClient = (formValues.client || 'client').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+    const safeDate = new Date().toISOString().slice(0, 10)
+    doc.save(`invoice-${safeClient}-${safeDate}.pdf`)
   }
 
   return (
@@ -240,7 +440,7 @@ export default function MeasurementRateCalculator({ onNavigate }: MeasurementRat
               </div>
               <div className="border-t border-white/10 px-4 py-3">
                 <h1 className="min-w-0 truncate text-left text-base font-extrabold leading-tight tracking-tight text-white">
-                  Measurement &amp; Rate Calculator
+                  Measurement Calculator
                 </h1>
               </div>
             </div>
@@ -255,7 +455,7 @@ export default function MeasurementRateCalculator({ onNavigate }: MeasurementRat
                   className="flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-4 py-2.5 text-sm font-semibold text-neutral-900"
                 >
                   <Calendar size={16} className="text-[#f39b03]" />
-                  <span>20 May 2025</span>
+                  <span>{currentDateLabel}</span>
                 </button>
                 <div className="hidden items-center gap-3 rounded-xl bg-neutral-100 px-4 py-2.5 ring-1 ring-black/5 sm:flex">
                   <div className="grid h-9 w-9 place-items-center rounded-xl bg-[#f39b03]/15 text-[#f39b03]">
@@ -300,14 +500,10 @@ export default function MeasurementRateCalculator({ onNavigate }: MeasurementRat
               </div>
 
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-              <div>
-                <h1 className="text-2xl font-extrabold tracking-tight text-neutral-900 sm:text-3xl">
-                  Measurement &amp; Rate Calculator
-                </h1>
-              </div>
+             
               <button
                 type="button"
-                className="inline-flex h-11 items-center justify-center rounded-xl bg-[#f39b03] px-4 text-sm font-bold text-white shadow-[0_10px_24px_rgba(243,155,3,0.35)] transition hover:brightness-95 sm:h-auto sm:py-2.5"
+                className="inline-flex h-11 items-center justify-center rounded-xl bg-[#f39b03] px-4 text-sm font-bold text-white sm:h-auto sm:py-2.5 mt-2"
               >
                 + Add Rate
               </button>
@@ -320,26 +516,46 @@ export default function MeasurementRateCalculator({ onNavigate }: MeasurementRat
                 <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
                 <div>
                   <FieldLabel label="Client" />
-                  <select className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-semibold text-neutral-700 outline-none focus:border-[#f39b03]">
-                    <option>Select client</option>
+                  <select
+                    value={formValues.client}
+                    onChange={(e) => updateFormValue('client', e.target.value)}
+                    className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-semibold text-neutral-700 outline-none focus:border-[#f39b03]"
+                  >
+                    <option>RN Construction</option>
+                    <option>Amit Developers</option>
+                    <option>Shree Krishna Infra</option>
                   </select>
                 </div>
                 <div>
                   <FieldLabel label="Site" />
-                  <select className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-semibold text-neutral-700 outline-none focus:border-[#f39b03]">
-                    <option>Select site</option>
+                  <select
+                    value={formValues.site}
+                    onChange={(e) => updateFormValue('site', e.target.value)}
+                    className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-semibold text-neutral-700 outline-none focus:border-[#f39b03]"
+                  >
+                    <option>Kolhapur Cancer Centre, Kolhapur</option>
+                    <option>Sai Residency, Pune</option>
+                    <option>Green Valley, Pune</option>
                   </select>
                 </div>
                 <div>
                   <FieldLabel label="Machine Type" />
-                  <select className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-semibold text-neutral-700 outline-none focus:border-[#f39b03]">
+                  <select
+                    value={formValues.machineType}
+                    onChange={(e) => updateFormValue('machineType', e.target.value)}
+                    className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-semibold text-neutral-700 outline-none focus:border-[#f39b03]"
+                  >
                     <option>Total Station</option>
                     <option>DGPS</option>
                   </select>
                 </div>
                 <div>
                   <FieldLabel label="Work Type" />
-                  <select className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-semibold text-neutral-700 outline-none focus:border-[#f39b03]">
+                  <select
+                    value={formValues.workType}
+                    onChange={(e) => updateFormValue('workType', e.target.value)}
+                    className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-semibold text-neutral-700 outline-none focus:border-[#f39b03]"
+                  >
                     <option>Plane Table</option>
                     <option>P.T. &amp; Contour</option>
                     <option>Stake Out</option>
@@ -349,34 +565,62 @@ export default function MeasurementRateCalculator({ onNavigate }: MeasurementRat
                 </div>
                 <div>
                   <FieldLabel label="Total Points" />
-                  <input className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-semibold text-neutral-700 outline-none focus:border-[#f39b03]" placeholder="0" />
+                  <input
+                    value={formValues.totalPoints}
+                    onChange={(e) => updateFormValue('totalPoints', e.target.value)}
+                    className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-semibold text-neutral-700 outline-none focus:border-[#f39b03]"
+                    placeholder="0"
+                  />
                 </div>
                 <div>
                   <FieldLabel label="Rate Per Point" />
-                  <input className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-semibold text-neutral-700 outline-none focus:border-[#f39b03]" placeholder="₹ 0" />
+                  <input
+                    value={formValues.ratePerPoint}
+                    onChange={(e) => updateFormValue('ratePerPoint', e.target.value)}
+                    className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-semibold text-neutral-700 outline-none focus:border-[#f39b03]"
+                    placeholder="₹ 0"
+                  />
                 </div>
                 <div>
                   <FieldLabel label="Base Charge" />
-                  <input className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-semibold text-neutral-700 outline-none focus:border-[#f39b03]" placeholder="₹ 0" />
+                  <input
+                    value={formValues.baseCharge}
+                    onChange={(e) => updateFormValue('baseCharge', e.target.value)}
+                    className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-semibold text-neutral-700 outline-none focus:border-[#f39b03]"
+                    placeholder="₹ 0"
+                  />
                 </div>
                 <div>
                   <FieldLabel label="Extra Charges" />
-                  <input className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-semibold text-neutral-700 outline-none focus:border-[#f39b03]" placeholder="₹ 0" />
+                  <input
+                    value={formValues.extraCharges}
+                    onChange={(e) => updateFormValue('extraCharges', e.target.value)}
+                    className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-semibold text-neutral-700 outline-none focus:border-[#f39b03]"
+                    placeholder="₹ 0"
+                  />
                 </div>
                 <div>
                   <FieldLabel label="Discount" />
-                  <input className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-semibold text-neutral-700 outline-none focus:border-[#f39b03]" placeholder="₹ 0" />
+                  <input
+                    value={formValues.discount}
+                    onChange={(e) => updateFormValue('discount', e.target.value)}
+                    className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-semibold text-neutral-700 outline-none focus:border-[#f39b03]"
+                    placeholder="₹ 0"
+                  />
                 </div>
                 <div>
                   <FieldLabel label="Measurement Date" />
-                  <button
-                    type="button"
-                    className="relative flex w-full items-center rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-semibold text-neutral-700"
-                  >
-                    <Calendar size={16} className="mr-2 text-[#f39b03]" />
-                    Select date
-                    <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2" />
-                  </button>
+                  <div className="relative">
+                    <Calendar size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#f39b03]" />
+                    <input
+                      type="text"
+                      value={formValues.measurementDate}
+                      onChange={(e) => updateFormValue('measurementDate', e.target.value)}
+                      className="w-full rounded-xl border border-neutral-200 py-2.5 pl-9 pr-8 text-sm font-semibold text-neutral-700 outline-none focus:border-[#f39b03]"
+                      placeholder="DD-MM-YYYY"
+                    />
+                    <ChevronDown size={14} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-neutral-500" />
+                  </div>
                 </div>
                 </div>
                 <div className="mt-4 rounded-xl bg-neutral-50 p-4 ring-1 ring-neutral-200">
@@ -391,6 +635,7 @@ export default function MeasurementRateCalculator({ onNavigate }: MeasurementRat
                 <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-end sm:gap-3">
                   <button
                     type="button"
+                    onClick={handleResetForm}
                     className="h-11 rounded-xl border border-neutral-300 bg-white px-4 text-sm font-bold text-neutral-700"
                   >
                     Reset
@@ -398,100 +643,19 @@ export default function MeasurementRateCalculator({ onNavigate }: MeasurementRat
                   <button type="button" className="h-11 rounded-xl bg-neutral-900 px-4 text-sm font-bold text-white">
                     Save Measurement
                   </button>
-                  <button type="button" className="h-11 rounded-xl bg-[#f39b03] px-4 text-sm font-bold text-white">
+                  <button
+                    type="button"
+                    onClick={handleGenerateInvoice}
+                    className="h-11 rounded-xl bg-[#f39b03] px-4 text-sm font-bold text-white"
+                  >
                     Generate Invoice
                   </button>
                 </div>
               </section>
 
-              <section className="mt-4 rounded-xl bg-white p-4 shadow-sm ring-1 ring-black/5 md:mt-6 md:rounded-2xl md:p-6 md:shadow-[0_10px_30px_rgba(16,24,40,0.06)]">
-                <div className="mb-4 flex items-center justify-between">
-                  <h2 className="text-base font-extrabold tracking-tight text-neutral-900 md:text-lg">Rate Master</h2>
-                </div>
-                <div className="overflow-x-auto rounded-xl border border-neutral-200">
-                  <table className="w-full min-w-[860px] border-collapse">
-                  <thead className="bg-neutral-50">
-                    <tr className="text-left text-xs font-extrabold uppercase tracking-wide text-neutral-500">
-                      <th className="px-4 py-3">Machine Type</th>
-                      <th className="px-4 py-3">Work Type</th>
-                      <th className="px-4 py-3">Rate Per Point</th>
-                      <th className="px-4 py-3">Base Charge</th>
-                      <th className="px-4 py-3">Status</th>
-                      <th className="px-4 py-3">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="text-sm font-semibold text-neutral-800">
-                    {[
-                      ['DGPS', 'Excavation Points', '₹50', '₹5,000', 'Active'],
-                      ['Total Station', 'Layout Survey', '₹40', '₹3,000', 'Active'],
-                      ['DGPS', 'Contour Survey', '₹60', '₹6,000', 'Active'],
-                    ].map(([machine, work, rate, base, status]) => (
-                      <tr key={`${machine}-${work}`} className="border-t border-neutral-200">
-                        <td className="px-4 py-3 font-extrabold text-neutral-900">{machine}</td>
-                        <td className="px-4 py-3">{work}</td>
-                        <td className="px-4 py-3">{rate}</td>
-                        <td className="px-4 py-3">{base}</td>
-                        <td className="px-4 py-3">
-                          <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-700">{status}</span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <button type="button" className="text-sm font-bold text-[#f39b03] hover:underline">
-                            Edit
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              </section>
+             
 
-              <section className="mt-4 rounded-xl bg-white p-4 shadow-sm ring-1 ring-black/5 md:mt-6 md:rounded-2xl md:p-6 md:shadow-[0_10px_30px_rgba(16,24,40,0.06)]">
-                <h2 className="text-base font-extrabold tracking-tight text-neutral-900 md:text-lg">Recent Measurements</h2>
-                <div className="mt-4 overflow-x-auto rounded-xl border border-neutral-200">
-                  <table className="w-full min-w-[900px] border-collapse">
-                  <thead className="bg-neutral-50">
-                    <tr className="text-left text-xs font-extrabold uppercase tracking-wide text-neutral-500">
-                      <th className="px-4 py-3">Date</th>
-                      <th className="px-4 py-3">Client</th>
-                      <th className="px-4 py-3">Site</th>
-                      <th className="px-4 py-3">Machine</th>
-                      <th className="px-4 py-3">Points</th>
-                      <th className="px-4 py-3">Amount</th>
-                      <th className="px-4 py-3">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="text-sm font-semibold text-neutral-800">
-                    {[
-                      ['22 May 2025', 'Amit Developers', 'Sai Residency', 'DGPS', '120', '₹11,000', 'Pending'],
-                      ['21 May 2025', 'Vishwakarma Properties', 'Sunrise Enclave', 'Total Station', '95', '₹7,800', 'Paid'],
-                      ['20 May 2025', 'Shree Krishna Infra', 'Green Valley', 'DGPS', '140', '₹13,400', 'Pending'],
-                    ].map(([date, client, site, machine, points, amount, status]) => (
-                      <tr key={`${date}-${client}`} className="border-t border-neutral-200">
-                        <td className="px-4 py-3">{date}</td>
-                        <td className="px-4 py-3 font-extrabold text-neutral-900">{client}</td>
-                        <td className="px-4 py-3">{site}</td>
-                        <td className="px-4 py-3">{machine}</td>
-                        <td className="px-4 py-3">{points}</td>
-                        <td className="px-4 py-3 font-extrabold text-neutral-900">{amount}</td>
-                        <td className="px-4 py-3">
-                          <span
-                            className={[
-                              'rounded-full px-2.5 py-1 text-xs font-bold',
-                              status === 'Paid'
-                                ? 'bg-emerald-100 text-emerald-700'
-                                : 'bg-rose-100 text-rose-700',
-                            ].join(' ')}
-                          >
-                            {status}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              </section>
+            
             </section>
           </div>
         </main>

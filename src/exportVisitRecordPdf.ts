@@ -1,4 +1,5 @@
 import jsPDF from 'jspdf'
+import invoiceLogo from './assets/logo.jpeg'
 
 export type VisitRecordPdfData = {
   visitId: string
@@ -42,14 +43,15 @@ function lineValue(doc: jsPDF, xStart: number, xEnd: number, y: number, value: s
 export async function exportVisitRecordPdf(data: VisitRecordPdfData) {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
   const pageWidth = 297
-  const logoDataUrl = await loadImageAsDataUrl('/samarth-logo.png')
+  const logoDataUrl = await loadImageAsDataUrl(invoiceLogo)
 
   doc.setFillColor(255, 255, 255)
   doc.rect(0, 0, pageWidth, 210, 'F')
   doc.setDrawColor(60, 60, 60)
   doc.rect(6, 6, 285, 198)
 
-  doc.addImage(logoDataUrl, 'PNG', 10, 10, 45, 24)
+  // Keep square aspect ratio so the logo stays clear.
+  doc.addImage(logoDataUrl, 'JPEG', 10, 8, 32, 32)
 
   doc.setTextColor(35, 35, 35)
   doc.setFont('helvetica', 'bold')
