@@ -1,0 +1,700 @@
+import {
+  BarChart3,
+  Bell,
+  Briefcase,
+  Building2,
+  Calendar,
+  Calculator,
+  ChevronDown,
+  CircleUserRound,
+  ClipboardList,
+  X,
+  FileText,
+  Gauge,
+  IndianRupee,
+  LayoutGrid,
+  LogOut,
+  Mail,
+  MapPin,
+  Menu,
+  Phone,
+  UsersRound,
+} from 'lucide-react'
+import { useState, type ReactNode } from 'react'
+import { signOut } from './signOut'
+
+type NavItem = {
+  label: string
+  icon: ReactNode
+}
+
+const navItems: NavItem[] = [
+  { label: 'Dashboard', icon: <LayoutGrid size={16} /> },
+  { label: 'Account Manager', icon: <Briefcase size={16} /> },
+  { label: 'Clients & Sites', icon: <UsersRound size={16} /> },
+  { label: 'Site Visits', icon: <ClipboardList size={16} /> },
+  { label: 'Measurement', icon: <Calculator size={16} /> },
+  { label: 'Settings', icon: <Building2 size={16} /> },
+  { label: 'Log Out', icon: <LogOut size={16} /> },
+]
+
+function StatCard({
+  title,
+  value,
+  subtitle,
+  icon,
+  toneClass,
+  mobileCardTint,
+}: {
+  title: string
+  value: string
+  subtitle: string
+  icon: ReactNode
+  toneClass: string
+  /** Full-card soft tint on mobile only (md+ uses white card) */
+  mobileCardTint: string
+}) {
+  return (
+    <div
+      className={[
+        'w-full rounded-xl p-3 shadow-sm ring-1 ring-black/5',
+        mobileCardTint,
+        'md:rounded-2xl md:bg-white md:p-5 md:shadow-[0_10px_30px_rgba(16,24,40,0.06)]',
+      ].join(' ')}
+    >
+      <div className="flex items-start gap-2 md:gap-4">
+        <div
+          className={[
+            'grid h-9 w-9 shrink-0 place-items-center rounded-xl md:h-12 md:w-12 md:rounded-2xl',
+            toneClass,
+          ].join(' ')}
+        >
+          <span className="[&>svg]:h-4 [&>svg]:w-4 md:scale-100 md:[&>svg]:h-5 md:[&>svg]:w-5">
+            {icon}
+          </span>
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-[11px] font-semibold leading-tight text-neutral-700 md:text-sm">
+            {title}
+          </div>
+          <div className="mt-0.5 text-base font-extrabold leading-tight tracking-tight text-neutral-950 md:mt-1 md:text-2xl">
+            {value}
+          </div>
+          <div className="mt-0.5 text-[10px] font-medium leading-snug text-neutral-500 md:mt-1 md:text-xs">
+            {subtitle}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function CardShell({
+  title,
+  action,
+  children,
+}: {
+  title: string
+  action?: ReactNode
+  children: ReactNode
+}) {
+  return (
+    <div className="rounded-xl bg-white shadow-sm ring-1 ring-black/5 md:rounded-2xl md:shadow-[0_10px_30px_rgba(16,24,40,0.06)]">
+      <div className="flex items-center justify-between gap-3 border-b border-neutral-100 px-4 py-3 sm:px-6 sm:py-4">
+        <div className="text-xs font-extrabold tracking-tight text-neutral-900 md:text-sm">
+          {title}
+        </div>
+        {action ? (
+          <div className="text-[11px] font-semibold text-[#f39b03] hover:opacity-90 md:text-xs">
+            {action}
+          </div>
+        ) : null}
+      </div>
+      <div className="p-3 sm:p-4 md:p-6">{children}</div>
+    </div>
+  )
+}
+
+type DashboardProps = {
+  onNavigate: (path: string) => void
+}
+
+export default function Dashboard({ onNavigate }: DashboardProps) {
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+  const recentVisits = [
+    ['Sai Residency', 'Amit Developers', '20 May 2025', '₹15,000'],
+    ['Green Valley Phase 2', 'Shree Krishna Infra', '19 May 2025', '₹12,000'],
+    ['Sunrise Enclave', 'Vishwakarma Properties', '18 May 2025', '₹18,500'],
+  ] as const
+
+  const handleNavClick = async (label: string) => {
+    if (label === 'Log Out') {
+      await signOut()
+      setIsSidebarOpen(false)
+      onNavigate('/login')
+      return
+    }
+    const routeMap: Record<string, string> = {
+      Dashboard: '/dashboard',
+      'Account Manager': '/account-manager',
+      'Clients & Sites': '/clients-sites',
+      'Site Visits': '/site-visits',
+      Measurement: '/measurement-rate-calculator',
+      Settings: '/settings',
+    }
+    const nextPath = routeMap[label]
+    if (nextPath) onNavigate(nextPath)
+    setIsSidebarOpen(false)
+  }
+
+  const mobileBottomNav = [
+    { label: 'Dashboard', path: '/dashboard', icon: LayoutGrid },
+    { label: 'Accounts', path: '/account-manager', icon: Briefcase },
+    { label: 'Clients', path: '/clients-sites', icon: UsersRound },
+    { label: 'Sites', path: '/site-visits', icon: MapPin },
+    { label: 'Measure', path: '/measurement-rate-calculator', icon: Calculator },
+    { label: 'Settings', path: '/settings', icon: Building2 },
+  ] as const
+
+  const handleSummaryCardClick = (summary: 'total-revenue' | 'received' | 'pending' | 'total-sites') => {
+    // Use a query param so `ClientsSites` can sort/filter accordingly.
+    onNavigate(`/clients-sites?summary=${summary}`)
+  }
+
+  return (
+    <div className="flex h-[100svh] max-h-[100svh] min-h-[100svh] flex-col overflow-hidden bg-black md:h-dvh md:max-h-dvh md:min-h-dvh md:bg-neutral-100">
+      <div className="flex min-h-0 flex-1 w-full max-w-none">
+        {/* Sidebar */}
+        <aside className="fixed inset-y-0 left-0 z-20 hidden w-[280px] flex-col bg-gradient-to-b from-[#050505] via-[#0b0b0b] to-[#040404] pb-20 text-white lg:flex">
+          <div className="px-6 pt-7">
+            <div className="flex items-center gap-3">
+              <img
+                src="/samarth-logo.png"
+                alt="Samarth Land Surveyors"
+                className="h-25 w-auto"
+                draggable={false}
+              />
+            </div>
+          </div>
+
+          <nav className="mt-5 flex-1 px-3">
+            <div className="space-y-1">
+              {navItems.map((item) => {
+                const active = item.label === 'Dashboard'
+                const isLogout = item.label === 'Log Out'
+                return (
+                  <button
+                    type="button"
+                    key={item.label}
+                    onClick={() => handleNavClick(item.label)}
+                    className={[
+                      'group flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-[13px] font-semibold transition',
+                      isLogout
+                        ? 'bg-red-500/15 text-red-300 ring-1 ring-red-400/35 hover:bg-red-500/20 hover:text-red-200'
+                        : active
+                        ? 'bg-[#f39b03]/18 text-[#f39b03] ring-1 ring-[#f39b03]/30'
+                        : 'text-white/85 hover:bg-white/5 hover:text-white',
+                    ].join(' ')}
+                  >
+                    <span
+                      className={[
+                        'grid h-8 w-8 place-items-center rounded-lg',
+                        isLogout
+                          ? 'bg-red-500/18 text-red-300'
+                          : active
+                          ? 'bg-[#f39b03]/14'
+                          : 'bg-white/5',
+                      ].join(' ')}
+                    >
+                      {item.icon}
+                    </span>
+                    <span className="truncate">{item.label}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </nav>
+
+        </aside>
+
+        {isSidebarOpen ? (
+          <button
+            type="button"
+            className="fixed inset-0 z-40 bg-black/40 lg:hidden"
+            aria-label="Close sidebar overlay"
+            onClick={() => setIsSidebarOpen(false)}
+          />
+        ) : null}
+
+        <aside
+          className={[
+            'fixed inset-y-0 left-0 z-50 flex w-[280px] flex-col overflow-y-auto bg-gradient-to-b from-[#050505] via-[#0b0b0b] to-[#040404] pb-20 text-white transition-transform duration-300 lg:hidden',
+            isSidebarOpen ? 'translate-x-0' : '-translate-x-full',
+          ].join(' ')}
+          aria-label="Profile"
+        >
+          <div className="flex items-center justify-between px-5 pt-6">
+            <span className="text-sm font-extrabold tracking-tight text-white">Profile</span>
+            <button
+              type="button"
+              className="grid h-9 w-9 place-items-center rounded-xl bg-white/10 hover:bg-white/20"
+              aria-label="Close profile"
+              onClick={() => setIsSidebarOpen(false)}
+            >
+              <X size={18} />
+            </button>
+          </div>
+
+          <div className="mt-6 px-5">
+            <div className="rounded-2xl bg-white/5 p-4 ring-1 ring-white/10">
+              <div className="flex flex-col items-center text-center">
+                <div className="grid h-16 w-16 place-items-center rounded-2xl bg-white/10 text-white ring-1 ring-white/15">
+                  <CircleUserRound size={32} strokeWidth={1.75} />
+                </div>
+                <div className="mt-3 text-base font-extrabold text-white">Er. Shubham Bhoi</div>
+                <div className="mt-1 text-xs font-semibold text-white/65">Admin</div>
+              </div>
+              <div className="mt-4 space-y-2 border-t border-white/10 pt-4">
+                <a
+                  href="mailto:samarthlandsurveyors@gmail.com"
+                  className="flex items-center gap-2 rounded-xl px-2 py-2 text-left text-xs font-semibold text-white/90 hover:bg-white/5"
+                >
+                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white/10 text-[#f39b03]">
+                    <Mail size={15} />
+                  </span>
+                  <span className="min-w-0 truncate">samarthlandsurveyors@gmail.com</span>
+                </a>
+                <a
+                  href="tel:+918643001010"
+                  className="flex items-center gap-2 rounded-xl px-2 py-2 text-left text-xs font-semibold text-white/90 hover:bg-white/5"
+                >
+                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white/10 text-[#f39b03]">
+                    <Phone size={15} />
+                  </span>
+                  <span>+91 86430 01010</span>
+                </a>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-5 px-5">
+            <div className="text-[11px] font-extrabold uppercase tracking-wide text-white/45">Quick navigation</div>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              {[
+                { label: 'Dashboard', path: '/dashboard', icon: LayoutGrid },
+                { label: 'Accounts', path: '/account-manager', icon: Briefcase },
+                { label: 'Clients', path: '/clients-sites', icon: UsersRound },
+                { label: 'Visits', path: '/site-visits', icon: MapPin },
+                { label: 'Measurement', path: '/measurement-rate-calculator', icon: Calculator },
+              ].map(({ label, path, icon: Icon }) => (
+                <button
+                  type="button"
+                  key={path}
+                  onClick={() => {
+                    onNavigate(path)
+                    setIsSidebarOpen(false)
+                  }}
+                  className={[
+                    'flex flex-col items-center gap-1.5 rounded-xl px-2 py-3 text-[11px] font-bold ring-1 transition',
+                    path === '/dashboard'
+                      ? 'bg-white/10 text-[#f39b03] ring-[#f39b03]/35'
+                      : path === '/measurement-rate-calculator'
+                        ? 'bg-white/5 text-white/85 ring-white/10 hover:bg-white/10'
+                        : 'bg-white/5 text-white/85 ring-white/10 hover:bg-white/10',
+                  ].join(' ')}
+                >
+                  <Icon size={18} />
+                  <span className="truncate">{label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-6 flex-1 px-5">
+            <button
+              type="button"
+              onClick={() => handleNavClick('Log Out')}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-red-500/15 py-3 text-sm font-bold text-red-200 ring-1 ring-red-400/35 hover:bg-red-500/25"
+            >
+              <LogOut size={18} />
+              Log Out
+            </button>
+          </div>
+        </aside>
+
+        {/* Main */}
+        <main className="flex min-h-0 min-w-0 flex-1 flex-col lg:ml-[280px]">
+          {/* Header */}
+          <header className="sticky top-0 z-10 shrink-0 bg-white backdrop-blur">
+            <div className="border-b border-white/10 bg-black md:hidden">
+              <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 px-4 py-3">
+                <button
+                  type="button"
+                  className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white/10 text-white ring-1 ring-white/15 transition hover:bg-white/15"
+                  aria-label="Open menu"
+                  onClick={() => setIsSidebarOpen(true)}
+                >
+                  <Menu size={18} strokeWidth={2.25} className="text-white" />
+                </button>
+                <div className="flex min-w-0 justify-center px-1">
+                  <img
+                    src="/samarth-logo.png"
+                    alt="Samarth Land Surveyors"
+                    className="h-14 max-h-[68px] w-auto max-w-full object-contain object-center sm:h-[72px] sm:max-h-[72px]"
+                    draggable={false}
+                  />
+                </div>
+                <button
+                  type="button"
+                  className="relative grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white/5 text-white ring-1 ring-white/10 transition hover:bg-white/10"
+                  aria-label="Notifications"
+                >
+                  <Bell size={18} strokeWidth={2} className="text-white" />
+                  <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-white ring-2 ring-black" />
+                </button>
+              </div>
+              <div className="flex items-center justify-between gap-3 border-t border-white/10 px-4 py-3">
+                <h1 className="min-w-0 truncate text-left text-base font-extrabold leading-tight tracking-tight text-white">
+                  Dashboard
+                </h1>
+                <button
+                  type="button"
+                  className="relative inline-flex max-w-[58vw] shrink-0 items-center gap-1.5 rounded-xl border border-white/20 bg-neutral-900 py-2 pl-2.5 pr-8 text-left text-[11px] font-semibold leading-tight text-white outline-none transition hover:bg-neutral-800 focus:border-[#f39b03]/70 focus:ring-2 focus:ring-[#f39b03]/20"
+                  aria-label="Selected date"
+                >
+                  <Calendar size={13} className="shrink-0 text-[#f39b03]" />
+                  <span className="truncate">20 May 2025</span>
+                  <ChevronDown
+                    size={13}
+                    className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-white/80"
+                  />
+                </button>
+              </div>
+            </div>
+
+            <div className="relative hidden w-full items-center justify-between gap-4 border-b border-neutral-200 bg-white px-4 py-2.5 shadow-[0_6px_20px_rgba(16,24,40,0.05)] sm:px-6 md:flex md:px-6 md:py-4 lg:px-8">
+              <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
+                <button
+                  type="button"
+                  className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white shadow-sm ring-1 ring-black/5 hover:bg-neutral-50 md:h-10 md:w-10 md:shadow-[0_10px_30px_rgba(16,24,40,0.06)] lg:hidden"
+                  aria-label="Open menu"
+                  onClick={() => setIsSidebarOpen(true)}
+                >
+                  <Menu size={18} className="text-neutral-900" />
+                </button>
+                <div className="min-w-0 truncate text-lg font-extrabold tracking-tight text-neutral-950 sm:text-xl">
+                  Dashboard
+                </div>
+              </div>
+
+              <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+                <button
+                  type="button"
+                  className="flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-xs font-semibold text-neutral-900 outline-none transition hover:border-neutral-300 sm:px-4 sm:py-2.5 sm:text-sm"
+                  aria-label="Select date"
+                >
+                  <Calendar size={16} className="text-[#f39b03]" />
+                  <span className="whitespace-nowrap">20 May 2025</span>
+                </button>
+                <div className="hidden items-center gap-3 rounded-xl bg-neutral-100 px-3 py-2 ring-1 ring-black/5 sm:flex sm:px-4 sm:py-2.5">
+                  <div className="grid h-9 w-9 place-items-center rounded-xl bg-[#f39b03]/15 text-[#f39b03]">
+                    <CircleUserRound size={18} />
+                  </div>
+                  <div className="min-w-0 text-left">
+                    <div className="truncate text-xs font-extrabold text-neutral-900 sm:text-sm">
+                      Er. Shubham Bhoi
+                    </div>
+                    <div className="text-[11px] font-semibold text-neutral-600">Admin</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </header>
+
+          <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-white p-4 pb-[calc(3.65rem+max(12px,env(safe-area-inset-bottom,0px)))] sm:px-6 sm:pt-6 sm:pb-[calc(3.65rem+max(12px,env(safe-area-inset-bottom,0px)))] md:p-6 md:pb-24 lg:p-8 lg:pb-28">
+            {/* Summary cards */}
+            <section className="grid grid-cols-2 gap-3 md:gap-4 xl:grid-cols-4">
+              <button
+                type="button"
+                onClick={() => handleSummaryCardClick('total-revenue')}
+                className="w-full cursor-pointer rounded-xl bg-transparent p-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f39b03]/70"
+                aria-label="Open Total Revenue records"
+              >
+                <StatCard
+                  title="Total Revenue"
+                  value="₹12,75,000"
+                  subtitle="This Financial Year"
+                  icon={<IndianRupee size={20} className="text-emerald-600" />}
+                  toneClass="bg-emerald-100"
+                  mobileCardTint="bg-emerald-50/90"
+                />
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSummaryCardClick('received')}
+                className="w-full cursor-pointer rounded-xl bg-transparent p-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f39b03]/70"
+                aria-label="Open Received Amount records"
+              >
+                <StatCard
+                  title="Received Amount"
+                  value="₹8,45,500"
+                  subtitle="This Financial Year"
+                  icon={<Gauge size={20} className="text-sky-600" />}
+                  toneClass="bg-sky-100"
+                  mobileCardTint="bg-sky-50/90"
+                />
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSummaryCardClick('pending')}
+                className="w-full cursor-pointer rounded-xl bg-transparent p-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f39b03]/70"
+                aria-label="Open Pending Amount records"
+              >
+                <StatCard
+                  title="Pending Amount"
+                  value="₹4,29,500"
+                  subtitle="This Financial Year"
+                  icon={<BarChart3 size={20} className="text-rose-600" />}
+                  toneClass="bg-rose-100"
+                  mobileCardTint="bg-rose-50/90"
+                />
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSummaryCardClick('total-sites')}
+                className="w-full cursor-pointer rounded-xl bg-transparent p-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f39b03]/70"
+                aria-label="Open Total Sites records"
+              >
+                <StatCard
+                  title="Total Sites"
+                  value="48"
+                  subtitle="All Sites"
+                  icon={<Building2 size={20} className="text-neutral-700 md:text-[#f39b03]" />}
+                  toneClass="bg-neutral-200 md:bg-[#f39b03]/12"
+                  mobileCardTint="bg-neutral-900/[0.07]"
+                />
+              </button>
+            </section>
+
+            {/* Quick Actions */}
+            <section className="mt-4 md:mt-6">
+              <CardShell title="Quick Actions">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-3">
+                  {[
+                    { title: 'Add Site', icon: <Building2 size={18} /> },
+                    { title: 'Add Site Visit', icon: <ClipboardList size={18} /> },
+                    { title: 'Generate Report', icon: <FileText size={18} /> },
+                  ].map((a) => (
+                    <button
+                      key={a.title}
+                      type="button"
+                      className="group flex items-center justify-between gap-3 rounded-xl border border-neutral-200 bg-white px-4 py-3 text-left shadow-sm ring-1 ring-black/5 transition hover:border-[#f39b03]/40 hover:shadow-[0_16px_40px_rgba(16,24,40,0.08)] md:gap-4 md:rounded-2xl md:px-5 md:py-4 md:shadow-[0_10px_30px_rgba(16,24,40,0.04)] md:ring-0"
+                    >
+                      <div className="flex min-w-0 items-center gap-2.5 md:gap-3">
+                        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#f39b03]/12 text-[#f39b03] md:h-11 md:w-11 md:rounded-2xl">
+                          {a.icon}
+                        </div>
+                        <div className="truncate text-xs font-extrabold text-neutral-900 md:text-sm">
+                          {a.title}
+                        </div>
+                      </div>
+                      <span className="shrink-0 rounded-lg bg-neutral-900 px-2.5 py-1.5 text-[10px] font-bold text-white transition group-hover:bg-[#f39b03] md:rounded-xl md:px-3 md:py-2 md:text-xs">
+                        Open
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </CardShell>
+            </section>
+
+            {/* Bottom content */}
+            <section className="mt-4 grid grid-cols-1 gap-4 md:mt-6 md:gap-5 xl:grid-cols-2">
+              <CardShell
+                title="Recent Site Visits"
+                action={<a href="#">View All</a>}
+              >
+                <div className="hidden overflow-hidden rounded-2xl border border-neutral-200 md:block">
+                  <table className="w-full border-collapse">
+                    <thead className="bg-neutral-50">
+                      <tr className="text-left text-xs font-extrabold uppercase tracking-wide text-neutral-500">
+                        <th className="px-4 py-3">Site Name</th>
+                        <th className="px-4 py-3">Client</th>
+                        <th className="px-4 py-3">Visit Date</th>
+                        <th className="px-4 py-3 text-right">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody className="text-sm font-semibold text-neutral-800">
+                      {recentVisits.map(([site, client, date, amount]) => (
+                        <tr key={site} className="border-t border-neutral-200">
+                          <td className="px-4 py-3 font-extrabold text-neutral-900">
+                            {site}
+                          </td>
+                          <td className="px-4 py-3 text-neutral-700">{client}</td>
+                          <td className="px-4 py-3 text-neutral-700">{date}</td>
+                          <td className="px-4 py-3 text-right font-extrabold text-neutral-900">
+                            {amount}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <ul className="flex flex-col gap-2 md:hidden">
+                  {recentVisits.map(([site, client, date, amount]) => (
+                    <li key={`${site}-mobile`}>
+                      <div className="rounded-lg bg-white p-2.5 shadow-sm ring-1 ring-black/5">
+                        <div className="truncate text-xs font-bold text-neutral-900">{site}</div>
+                        <div className="mt-0.5 truncate text-[10px] font-semibold text-neutral-600">
+                          {client}
+                        </div>
+                        <div className="mt-1.5 flex items-center justify-between gap-2 text-[10px] font-semibold text-neutral-500">
+                          <span>{date}</span>
+                          <span className="shrink-0 text-xs font-extrabold text-neutral-900">{amount}</span>
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </CardShell>
+
+              <CardShell
+                title="Pending Amount by Client"
+                action={<a href="#">View All</a>}
+              >
+                <ul className="flex flex-col gap-2 md:gap-3">
+                  {[
+                    ['Amit Developers', '₹1,25,000'],
+                    ['Shree Krishna Infra', '₹86,500'],
+                    ['Vishwakarma Properties', '₹65,000'],
+                    ['Gajanan Projects', '₹42,000'],
+                  ].map(([name, amt]) => (
+                    <li key={name}>
+                      <div className="flex items-center justify-between gap-2 rounded-lg bg-white px-2.5 py-2 shadow-sm ring-1 ring-black/5 md:rounded-2xl md:border md:border-neutral-200 md:px-4 md:py-3 md:shadow-[0_10px_30px_rgba(16,24,40,0.04)] md:ring-0">
+                        <div className="flex min-w-0 items-center gap-2 md:gap-3">
+                          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#f39b03]/12 text-[#f39b03] md:h-10 md:w-10 md:rounded-2xl">
+                            <IndianRupee size={18} />
+                          </div>
+                          <div className="truncate text-xs font-extrabold text-neutral-900 md:text-sm">
+                            {name}
+                          </div>
+                        </div>
+                        <div className="shrink-0 text-xs font-extrabold text-neutral-900 md:text-sm">{amt}</div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </CardShell>
+            </section>
+
+          </div>
+        </main>
+      </div>
+
+      <nav
+        className="fixed inset-x-0 bottom-0 z-50 flex w-full flex-col border-t border-white/10 bg-black [transform:translate3d(0,0,0)] md:hidden"
+        aria-label="Mobile primary navigation"
+      >
+        <div className="mx-auto flex w-full max-w-lg items-stretch justify-between gap-0 px-1 pt-1.5 pb-1">
+          {mobileBottomNav.map((item) => {
+            const active = item.path === '/dashboard'
+            const Icon = item.icon
+            return (
+              <button
+                type="button"
+                key={item.path}
+                onClick={() => onNavigate(item.path)}
+                className={[
+                  'flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-xl px-1 py-1 text-[10px] font-bold transition',
+                  active ? 'text-[#f39b03]' : 'text-white/50 hover:text-white/80',
+                ].join(' ')}
+              >
+                <span
+                  className={[
+                    'grid h-8 w-8 place-items-center rounded-lg transition',
+                    active ? 'bg-[#f39b03]/20 text-[#f39b03]' : 'bg-white/5 text-white/55',
+                  ].join(' ')}
+                >
+                  <Icon size={18} strokeWidth={active ? 2.25 : 2} />
+                </span>
+                <span className="truncate">{item.label}</span>
+              </button>
+            )
+          })}
+        </div>
+        <div aria-hidden className="mobile-nav-safe-spacer" />
+      </nav>
+
+      {/* Fixed Bottom Footer (tablet/desktop) */}
+      <footer className="fixed inset-x-0 bottom-0 z-50 hidden border-t border-white/10 bg-gradient-to-b from-[#050505] via-[#0b0b0b] to-[#040404] text-white shadow-[0_-12px_30px_rgba(0,0,0,0.3)] md:block">
+        <div className="mx-auto flex w-full max-w-none items-center justify-between gap-3 px-3 py-2 sm:px-5 sm:py-3">
+          <img
+            src="/samarth-logo.png"
+            alt="Samarth Land Surveyors"
+            className="h-9 w-auto shrink-0 sm:h-10"
+            draggable={false}
+          />
+
+          <div className="hidden min-w-0 flex-1 items-center justify-end text-xs font-bold text-white/95 md:flex">
+            <div className="flex min-w-0 items-center gap-2 pr-5">
+              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#f39b03]/20 text-[#f39b03] ring-1 ring-[#f39b03]/45">
+                <Phone size={13} />
+              </span>
+              <span className="truncate">Er. SHUBHAM BHOI 8643 00 1010</span>
+            </div>
+            <div className="h-6 w-px bg-white/25" />
+            <div className="flex min-w-0 items-center gap-2 px-5">
+              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#f39b03]/20 text-[#f39b03] ring-1 ring-[#f39b03]/45">
+                <Phone size={13} />
+              </span>
+              <span className="truncate">Er. SANKET KATAKAR 7026 01 6077</span>
+            </div>
+            <div className="h-6 w-px bg-white/25" />
+            <div className="flex min-w-0 items-center gap-2 px-5">
+              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#f39b03]/20 text-[#f39b03] ring-1 ring-[#f39b03]/45">
+                <Phone size={13} />
+              </span>
+              <span className="truncate">Er. SHUBHAM SODAGE 95959755566</span>
+            </div>
+            <div className="h-6 w-px bg-white/25" />
+            <div className="flex min-w-0 items-center gap-2 px-5">
+              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#f39b03]/20 text-[#f39b03] ring-1 ring-[#f39b03]/45">
+                <Phone size={13} />
+              </span>
+              <span className="truncate">Er. PRAJWAL PATIL 7058129002</span>
+            </div>
+            <div className="h-6 w-px bg-white/25" />
+            <div className="flex min-w-0 items-center gap-2 pl-5">
+              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#f39b03]/20 text-[#f39b03] ring-1 ring-[#f39b03]/45">
+                <Mail size={13} />
+              </span>
+              <span className="truncate">samarthlandsurveyors@gmail.com</span>
+            </div>
+          </div>
+
+          <div className="min-w-0 flex-1 justify-end text-right text-[10px] font-bold leading-tight text-white/90 md:hidden">
+            <div className="flex items-center justify-end gap-2">
+              <Phone size={11} className="text-[#f39b03]" />
+              <span>8643 00 1010</span>
+              <span className="text-white/55">|</span>
+              <Phone size={11} className="text-[#f39b03]" />
+              <span>7026 01 6077</span>
+            </div>
+            <div className="mt-1 flex items-center justify-end gap-2">
+              <Phone size={11} className="text-[#f39b03]" />
+              <span>95959755566</span>
+              <span className="text-white/55">|</span>
+              <Phone size={11} className="text-[#f39b03]" />
+              <span>7058129002</span>
+            </div>
+            <div className="mt-1 flex items-center justify-end gap-2">
+              <Mail size={11} className="text-[#f39b03]" />
+              <span className="truncate">samarthlandsurveyors@gmail.com</span>
+            </div>
+          </div>
+        </div>
+      </footer>
+    </div>
+  )
+}
+
