@@ -434,36 +434,6 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
 
           <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-white p-4 pb-[calc(3.65rem+max(12px,env(safe-area-inset-bottom,0px)))] sm:px-6 sm:pt-6 sm:pb-[calc(3.65rem+max(12px,env(safe-area-inset-bottom,0px)))] md:p-6 md:pb-24 lg:p-8 lg:pb-28">
             <div className="mx-auto w-full max-w-[1200px] space-y-6 md:space-y-8">
-              {/* Page toolbar — main content only */}
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex min-w-0 items-center gap-3">
-                 
-                  <div className="min-w-0">
-                    <h2 className="text-xl font-extrabold tracking-tight text-neutral-950 md:text-2xl">
-                      {showAddForm ? 'Add Site Visit' : 'Site Visit Records'}
-                    </h2>
-                    <p className="mt-0.5 text-sm font-semibold text-neutral-500">
-                      {showAddForm
-                        ? 'Record visit details, work done, and site photos.'
-                        : 'Review existing visits and open the form only when needed.'}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  
-                  {!showAddForm ? (
-                    <button
-                      type="button"
-                      onClick={() => setShowAddForm(true)}
-                      className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#f39b03] px-4 text-sm font-extrabold text-white shadow-[0_10px_30px_rgba(16,24,40,0.12)] transition hover:bg-[#e18e03]"
-                    >
-                      <Plus size={16} />
-                      Add New Site Visit
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-
               {!showAddForm ? (
                 <section className="grid grid-cols-2 gap-3 md:gap-4 xl:grid-cols-4">
                   <SummaryMiniCard
@@ -497,10 +467,53 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                 </section>
               ) : null}
 
+              {/* Page toolbar — main content only */}
+              {showAddForm ? (
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="min-w-0">
+                    <h2 className="text-xl font-extrabold tracking-tight text-neutral-950 md:text-2xl">Add Site Visit</h2>
+                    <p className="mt-0.5 text-sm font-semibold text-neutral-500">
+                      Record visit details, work done, and site photos.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-3 rounded-xl bg-white p-3 ring-1 ring-black/5 md:flex-row md:items-center md:justify-between md:gap-4 md:p-4">
+                  <div className="w-full md:max-w-xs">
+                    <input
+                      type="text"
+                      placeholder="Search account..."
+                      className="h-10 w-full rounded-lg border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
+                    />
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      className="inline-flex h-10 items-center justify-center rounded-lg border border-neutral-200 bg-white px-3 text-sm font-bold text-neutral-700 transition hover:bg-neutral-50"
+                    >
+                      Filters
+                    </button>
+                    <button
+                      type="button"
+                      className="inline-flex h-10 items-center justify-center rounded-lg border border-neutral-200 bg-white px-3 text-sm font-bold text-neutral-700 transition hover:bg-neutral-50"
+                    >
+                      Export
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowAddForm(true)}
+                      className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#f39b03] px-4 text-sm font-extrabold text-white shadow-[0_8px_24px_rgba(16,24,40,0.12)] transition hover:bg-[#e18e03]"
+                    >
+                      <Plus size={16} />
+                      Add new Site visit
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {!showAddForm ? (
                 <section className="rounded-xl bg-white p-5 shadow-[0_10px_30px_rgba(16,24,40,0.06)] ring-1 ring-black/5 md:rounded-2xl md:p-8">
                   <div className="flex items-center justify-between gap-3 border-b border-neutral-100 pb-4">
-                    <h3 className="text-sm font-extrabold tracking-tight text-neutral-950">Site Visit Records</h3>
                     <span className="text-xs font-semibold text-neutral-500">{visitRecords.length} records</span>
                   </div>
 

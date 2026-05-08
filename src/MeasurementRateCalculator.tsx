@@ -238,6 +238,11 @@ export default function MeasurementRateCalculator({ onNavigate }: MeasurementRat
                   <Bell size={18} strokeWidth={2} className="text-white" />
                 </button>
               </div>
+              <div className="border-t border-white/10 px-4 py-3">
+                <h1 className="min-w-0 truncate text-left text-base font-extrabold leading-tight tracking-tight text-white">
+                  Measurement &amp; Rate Calculator
+                </h1>
+              </div>
             </div>
 
             <div className="relative hidden w-full items-center justify-between gap-4 border-b border-neutral-200 bg-white px-6 py-4 shadow-[0_6px_20px_rgba(16,24,40,0.05)] md:flex lg:px-8">
@@ -267,24 +272,7 @@ export default function MeasurementRateCalculator({ onNavigate }: MeasurementRat
 
           <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-white p-4 pb-[calc(3.65rem+max(12px,env(safe-area-inset-bottom,0px)))] sm:px-6 sm:pt-6 sm:pb-[calc(3.65rem+max(12px,env(safe-area-inset-bottom,0px)))] md:p-6 md:pb-24 lg:p-8 lg:pb-28">
             <section className="mx-auto w-full max-w-[1400px]">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-              <div>
-                <h1 className="text-2xl font-extrabold tracking-tight text-neutral-900 sm:text-3xl">
-                  Measurement &amp; Rate Calculator
-                </h1>
-                <p className="mt-1 text-sm font-medium text-neutral-500">
-                  Calculate survey charges based on points, machine, and work type.
-                </p>
-              </div>
-              <button
-                type="button"
-                className="inline-flex h-11 items-center justify-center rounded-xl bg-[#f39b03] px-4 text-sm font-bold text-white shadow-[0_10px_24px_rgba(243,155,3,0.35)] transition hover:brightness-95 sm:h-auto sm:py-2.5"
-              >
-                + Add Rate
-              </button>
-              </div>
-
-              <div className="mt-4 grid grid-cols-2 gap-3 md:mt-6 md:grid-cols-4 md:gap-4">
+              <div className="mt-0 grid grid-cols-2 gap-3 md:mt-0 md:grid-cols-4 md:gap-4">
                 <SummaryCard
                   title="Total Measurements"
                   value="132"
@@ -309,6 +297,20 @@ export default function MeasurementRateCalculator({ onNavigate }: MeasurementRat
                   tone="bg-rose-100 text-rose-600"
                   icon={<FileText size={18} />}
                 />
+              </div>
+
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+              <div>
+                <h1 className="text-2xl font-extrabold tracking-tight text-neutral-900 sm:text-3xl">
+                  Measurement &amp; Rate Calculator
+                </h1>
+              </div>
+              <button
+                type="button"
+                className="inline-flex h-11 items-center justify-center rounded-xl bg-[#f39b03] px-4 text-sm font-bold text-white shadow-[0_10px_24px_rgba(243,155,3,0.35)] transition hover:brightness-95 sm:h-auto sm:py-2.5"
+              >
+                + Add Rate
+              </button>
               </div>
 
               <section className="mt-4 rounded-xl bg-white p-4 shadow-sm ring-1 ring-black/5 md:mt-6 md:rounded-2xl md:p-6 md:shadow-[0_10px_30px_rgba(16,24,40,0.06)]">

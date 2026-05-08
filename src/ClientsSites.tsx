@@ -210,7 +210,9 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
   const [selectedClientName, setSelectedClientName] = useState<string | null>(null)
   const location = useLocation()
 
-  const summary = new URLSearchParams(location.search).get('summary') ?? ''
+  const searchParams = new URLSearchParams(location.search)
+  const summary = searchParams.get('summary') ?? ''
+  const requestedClient = searchParams.get('client') ?? ''
   const showAllSites = summary === 'total-sites'
 
   useEffect(() => {
@@ -220,6 +222,14 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
     setSelectedClientName(null)
     setQuery('')
   }, [summary])
+
+  useEffect(() => {
+    if (!requestedClient || summary) return
+    const matchedClient = clientRows.find((client) => client.name === requestedClient)
+    if (!matchedClient) return
+    setSelectedClientName(matchedClient.name)
+    setQuery('')
+  }, [requestedClient, summary])
 
   const mobileBottomNav = [
     { label: 'Dashboard', path: '/dashboard', icon: LayoutGrid },
@@ -328,23 +338,20 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
     return `/add-site?${params.toString()}`
   }
 
-  const handleExportClientReport = () => {
-    if (!selectedClient) return
-
-    const sites = selectedSites
+  const exportClientReport = (client: ClientRow, sites: SiteRow[]) => {
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
 
     doc.setFontSize(16)
     doc.setTextColor(23, 23, 23)
-    doc.text(`Client Report: ${selectedClient.name}`, 14, 16)
+    doc.text(`Client Report: ${client.name}`, 14, 16)
 
     doc.setFontSize(10)
     doc.setTextColor(82, 82, 82)
-    doc.text(`Phone: ${selectedClient.phone}`, 14, 23)
-    doc.text(`Total Sites: ${selectedClient.sites}`, 14, 28)
-    doc.text(`Total Revenue: ${selectedClient.revenue}`, 78, 28)
-    doc.text(`Received: ${selectedClient.received}`, 14, 33)
-    doc.text(`Pending: ${selectedClient.pending}`, 78, 33)
+    doc.text(`Phone: ${client.phone}`, 14, 23)
+    doc.text(`Total Sites: ${client.sites}`, 14, 28)
+    doc.text(`Total Revenue: ${client.revenue}`, 78, 28)
+    doc.text(`Received: ${client.received}`, 14, 33)
+    doc.text(`Pending: ${client.pending}`, 78, 33)
     doc.text(
       `Generated: ${new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}`,
       14,
@@ -368,9 +375,53 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
       },
     })
 
-    const safeName = selectedClient.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+    const safeName = client.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
     const safeDate = new Date().toISOString().slice(0, 10)
     doc.save(`client-report-${safeName || 'client'}-${safeDate}.pdf`)
+  }
+
+  const handleExportClientReport = () => {
+    if (!selectedClient) return
+    exportClientReport(selectedClient, selectedSites)
+  }
+
+  const handleExportAllClientsReport = () => {
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+
+    doc.setFontSize(16)
+    doc.setTextColor(23, 23, 23)
+    doc.text('All Clients Report', 14, 16)
+
+    doc.setFontSize(10)
+    doc.setTextColor(82, 82, 82)
+    doc.text(`Total Clients: ${filteredRows.length}`, 14, 23)
+    doc.text(
+      `Generated: ${new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}`,
+      14,
+      28,
+    )
+
+    const body =
+      filteredRows.length === 0
+        ? [['—', '—', '—', '—', 'No clients found']]
+        : filteredRows.map((client) => [client.name, client.phone, String(client.sites), client.received, client.pending])
+
+    autoTable(doc, {
+      startY: 34,
+      head: [['Client Name', 'Phone', 'Total Sites', 'Received (Rs)', 'Pending (Rs)']],
+      body,
+      headStyles: { fillColor: [243, 155, 3], textColor: 255, fontStyle: 'bold' },
+      styles: { fontSize: 9, cellPadding: 2 },
+      margin: { left: 14, right: 14 },
+      columnStyles: {
+        2: { halign: 'right' },
+        3: { halign: 'right' },
+        4: { halign: 'right' },
+      },
+    })
+
+    const safeDate = new Date().toISOString().slice(0, 10)
+    doc.save(`all-clients-report-${safeDate}.pdf`)
   }
 
   return (
@@ -575,76 +626,65 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
 
           <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-white p-4 pb-[calc(3.65rem+max(12px,env(safe-area-inset-bottom,0px)))] sm:px-6 sm:pt-6 sm:pb-[calc(3.65rem+max(12px,env(safe-area-inset-bottom,0px)))] md:p-6 md:pb-24 lg:p-8 lg:pb-28">
             {selectedClient ? (
-              <section className="mt-4 flex items-center justify-between gap-3 md:mt-6 md:gap-4">
+              <section className="mt-4 flex flex-col items-stretch gap-3 md:mt-6 md:flex-row md:items-center md:justify-between md:gap-4">
                 <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-neutral-600 md:text-sm">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedClientName(null)
-                        setQuery('')
-                      }}
-                      className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-xs font-extrabold text-neutral-800 shadow-sm transition hover:bg-neutral-50 md:text-sm"
-                    >
-                      <ArrowLeft size={14} />
-                      Back
-                    </button>
-                    <span className="w-full truncate">
-                      Client:{' '}
-                      <span className="text-lg font-extrabold text-neutral-900 md:text-2xl">{selectedClient.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedClientName(null)
+                      setQuery('')
+                    }}
+                    className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-4 py-2.5 text-sm font-extrabold text-neutral-800 shadow-sm transition hover:bg-neutral-50"
+                  >
+                    <ArrowLeft size={15} />
+                    Back
+                  </button>
+                  <div className="mt-3 text-sm font-semibold text-neutral-600 md:mt-2 md:text-base">
+                    Client:{' '}
+                    <span className="text-3xl font-extrabold leading-tight tracking-tight text-neutral-900 md:text-2xl">
+                      {selectedClient.name}
                     </span>
                   </div>
-                  <div className="mt-1 text-[11px] font-semibold text-neutral-500 md:text-xs">
-                    Phone: {selectedClient.phone} • Total Sites: {selectedClient.sites}
+                  <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] font-semibold text-neutral-600 md:mt-2 md:gap-3 md:text-xs">
+                    <span className="inline-flex items-center rounded-lg bg-neutral-100 px-2.5 py-1 text-neutral-700 ring-1 ring-neutral-200">
+                      Phone: {selectedClient.phone}
+                    </span>
+                    <span className="inline-flex items-center rounded-lg bg-neutral-100 px-2.5 py-1 text-neutral-700 ring-1 ring-neutral-200">
+                      Total Sites: {selectedClient.sites}
+                    </span>
                   </div>
                 </div>
-                <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={() => onNavigate(getAddSitePath())}
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#f39b03] px-3 text-xs font-extrabold text-white shadow-[0_10px_30px_rgba(16,24,40,0.12)] transition hover:bg-[#e18e03] md:h-11 md:px-4 md:text-sm"
-                  >
-                    <Plus size={14} className="md:h-4 md:w-4" />
-                    Add New Site
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleExportClientReport}
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 text-xs font-extrabold text-neutral-800 shadow-sm transition hover:bg-neutral-50 md:h-11 md:px-4 md:text-sm"
-                  >
-                    <Download size={14} className="text-neutral-700 md:h-4 md:w-4" />
-                    Export Client Report
-                  </button>
-                  <button
-                    type="button"
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 text-xs font-extrabold text-neutral-800 shadow-sm transition hover:bg-neutral-50 md:h-11 md:px-4 md:text-sm"
-                  >
-                    <Filter size={14} className="text-neutral-700 md:h-4 md:w-4" />
-                    Filter
-                  </button>
+                <div className="w-full shrink-0 md:w-auto">
+                  <div className="flex w-full items-center gap-2 md:w-auto md:justify-end">
+                    <button
+                      type="button"
+                      onClick={() => onNavigate(getAddSitePath())}
+                      className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl bg-[#f39b03] px-3 text-xs font-extrabold text-white shadow-[0_10px_30px_rgba(16,24,40,0.12)] transition hover:bg-[#e18e03] md:h-11 md:flex-none md:px-4 md:text-sm"
+                    >
+                      <Plus size={14} className="md:h-4 md:w-4" />
+                      Add New Site
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleExportClientReport}
+                      className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 text-xs font-extrabold text-neutral-800 shadow-sm transition hover:bg-neutral-50 md:h-11 md:flex-none md:px-4 md:text-sm"
+                    >
+                      <Download size={14} className="text-neutral-700 md:h-4 md:w-4" />
+                      Export Client Report
+                    </button>
+                  </div>
+                  <div className="mt-2 flex justify-end md:mt-2">
+                    <button
+                      type="button"
+                      className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-white px-4 text-xs font-extrabold text-neutral-800 shadow-sm transition hover:bg-neutral-50 md:h-11 md:px-4 md:text-sm"
+                    >
+                      <Filter size={14} className="text-neutral-700 md:h-4 md:w-4" />
+                      Filter
+                    </button>
+                  </div>
                 </div>
               </section>
-            ) : (
-              /* Search + Filter */
-              <section className="mt-4 flex items-center justify-between gap-2 md:mt-5 md:gap-4">
-                <div className="w-full md:max-w-xl">
-                  <input
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    type="text"
-                    placeholder={showAllSites ? 'Search sites…' : 'Search clients…'}
-                    className="h-11 w-full rounded-xl border border-neutral-200 bg-neutral-50 px-4 text-sm font-semibold text-neutral-800 outline-none transition focus:border-[#f39b03] focus:bg-white focus:ring-2 focus:ring-[#f39b03]/20"
-                  />
-                </div>
-                <button
-                  type="button"
-                  className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 text-xs font-extrabold text-neutral-800 shadow-sm transition hover:bg-neutral-50 md:px-4 md:text-sm"
-                >
-                  <Filter size={14} className="text-neutral-700 md:h-4 md:w-4" />
-                  Filter
-                </button>
-              </section>
-            )}
+            ) : null}
 
             {/* Top summary cards */}
             <section className="mt-4 grid grid-cols-2 gap-3 md:mt-6 md:grid-cols-4 md:gap-4">
@@ -705,6 +745,40 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                 />
               </button>
             </section>
+
+            {!selectedClient ? (
+              /* Search + Filter */
+              <section className="mt-4 flex flex-col items-stretch gap-2 md:mt-5 md:flex-row md:items-center md:justify-between md:gap-4">
+                <div className="w-full md:max-w-xl">
+                  <input
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    type="text"
+                    placeholder={showAllSites ? 'Search sites…' : 'Search clients…'}
+                    className="h-11 w-full rounded-xl border border-neutral-200 bg-neutral-50 px-4 text-sm font-semibold text-neutral-800 outline-none transition focus:border-[#f39b03] focus:bg-white focus:ring-2 focus:ring-[#f39b03]/20"
+                  />
+                </div>
+                <div className="flex w-full items-center gap-2 md:w-auto">
+                  {!showAllSites ? (
+                    <button
+                      type="button"
+                      className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 text-xs font-extrabold text-neutral-800 shadow-sm transition hover:bg-neutral-50 md:flex-none md:px-4 md:text-sm"
+                      onClick={handleExportAllClientsReport}
+                    >
+                      <Download size={14} className="text-neutral-700 md:h-4 md:w-4" />
+                      Export All Clients
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 text-xs font-extrabold text-neutral-800 shadow-sm transition hover:bg-neutral-50 md:flex-none md:px-4 md:text-sm"
+                  >
+                    <Filter size={14} className="text-neutral-700 md:h-4 md:w-4" />
+                    Filter
+                  </button>
+                </div>
+              </section>
+            ) : null}
 
             {selectedClient ? (
               /* Client detail: sites table */

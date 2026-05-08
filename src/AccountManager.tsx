@@ -611,17 +611,17 @@ export default function AccountManager({ onNavigate, viewMode = 'all' }: Account
             </section>
 
             {viewMode !== 'pending' ? (
-              <section className="mt-4 rounded-xl bg-white p-3 shadow-sm ring-1 ring-black/5 sm:p-4 md:mt-6 md:rounded-2xl md:p-5 md:shadow-[0_10px_30px_rgba(16,24,40,0.06)]">
+              <section className="mt-4 rounded-xl bg-white p-2.5 shadow-sm ring-1 ring-black/5 sm:p-4 md:mt-6 md:rounded-2xl md:p-5 md:shadow-[0_10px_30px_rgba(16,24,40,0.06)]">
               <div className="flex flex-col gap-2.5 md:gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div className="relative w-full md:max-w-none lg:max-w-xl">
                   <Search
                     aria-hidden
-                    className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400 md:h-[17px] md:w-[17px]"
+                    className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-neutral-400 md:h-[17px] md:w-[17px]"
                   />
                   <input
                     type="text"
                     placeholder="Search account..."
-                    className="h-11 w-full rounded-xl border border-neutral-200 bg-neutral-50 pl-10 pr-3 text-sm font-medium text-neutral-800 outline-none transition focus:border-[#f39b03] focus:bg-white focus:ring-2 focus:ring-[#f39b03]/20 md:rounded-xl md:pr-4"
+                    className="h-9 w-full rounded-lg border border-neutral-200 bg-neutral-50 pl-9 pr-3 text-xs font-medium text-neutral-800 outline-none transition focus:border-[#f39b03] focus:bg-white focus:ring-2 focus:ring-[#f39b03]/20 md:h-11 md:rounded-xl md:pl-10 md:pr-4 md:text-sm"
                   />
                 </div>
 
@@ -629,8 +629,7 @@ export default function AccountManager({ onNavigate, viewMode = 'all' }: Account
                   <div className="flex w-full items-stretch md:w-auto">
                     <button
                       type="button"
-                      className="inline-flex h-11 flex-1 items-center
-                       justify-start gap-2 rounded-xl border border-neutral-200 bg-white px-4 text-sm font-semibold text-neutral-700 transition hover:border-neutral-300 hover:bg-neutral-50 md:flex-initial md:px-4"
+                      className="inline-flex h-9 flex-1 items-center justify-start gap-2 rounded-lg border border-neutral-200 bg-white px-3 text-xs font-semibold text-neutral-700 transition hover:border-neutral-300 hover:bg-neutral-50 md:h-11 md:flex-initial md:rounded-xl md:px-4 md:text-sm"
                     >
                       <Filter className="h-4 w-4 shrink-0 md:h-4 md:w-4" aria-hidden />
                       Filters
@@ -638,7 +637,7 @@ export default function AccountManager({ onNavigate, viewMode = 'all' }: Account
                     <div className="flex flex-1 items-center justify-center md:flex-initial">
                       <button
                         type="button"
-                        className="inline-flex h-11 items-center gap-2 rounded-xl border border-neutral-200 bg-white px-4 text-sm font-semibold text-neutral-700 transition hover:border-neutral-300 hover:bg-neutral-50 md:px-4"
+                        className="inline-flex h-9 items-center gap-2 rounded-lg border border-neutral-200 bg-white px-3 text-xs font-semibold text-neutral-700 transition hover:border-neutral-300 hover:bg-neutral-50 md:h-11 md:rounded-xl md:px-4 md:text-sm"
                         aria-label="Export filtered transactions as PDF"
                         title="Download PDF of transactions shown for the selected year"
                         onClick={async () => {
@@ -658,7 +657,7 @@ export default function AccountManager({ onNavigate, viewMode = 'all' }: Account
                   </div>
                   <button
                     type="button"
-                    className="flex h-11 w-full shrink-0 items-center justify-center rounded-xl bg-[#f39b03] px-4 text-sm font-bold text-white shadow-sm transition hover:bg-[#e18e03] md:inline-flex md:w-auto md:px-5"
+                    className="flex h-9 w-full shrink-0 items-center justify-center rounded-lg bg-[#f39b03] px-4 text-xs font-bold text-white shadow-sm transition hover:bg-[#e18e03] md:inline-flex md:h-11 md:w-auto md:rounded-xl md:px-5 md:text-sm"
                     onClick={() => {
                       setDraftTx({
                         id: '',

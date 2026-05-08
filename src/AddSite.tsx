@@ -344,10 +344,48 @@ export default function AddSite({ onNavigate }: AddSiteProps) {
       >
         <div className="flex items-center justify-between px-6 pt-6">
           <img src="/samarth-logo.png" alt="Samarth Land Surveyors" className="h-10 w-auto" draggable={false} />
-          <button type="button" className="grid h-9 w-9 place-items-center rounded-xl bg-white/10 hover:bg-white/20" onClick={() => setIsSidebarOpen(false)}>
+          <button
+            type="button"
+            className="grid h-9 w-9 place-items-center rounded-xl bg-white/10 hover:bg-white/20"
+            aria-label="Close menu"
+            onClick={() => setIsSidebarOpen(false)}
+          >
             <X size={18} />
           </button>
         </div>
+        <nav className="mt-4 flex-1 px-3">
+          <div className="space-y-1">
+            {navItems.map((item) => {
+              const active = item.label === 'Clients & Sites'
+              const isLogout = item.label === 'Log Out'
+              return (
+                <button
+                  type="button"
+                  key={item.label}
+                  onClick={() => handleNavClick(item.label)}
+                  className={[
+                    'group flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-[13px] font-semibold transition',
+                    isLogout
+                      ? 'bg-red-500/15 text-red-300 ring-1 ring-red-400/35 hover:bg-red-500/20 hover:text-red-200'
+                      : active
+                        ? 'bg-[#f39b03]/18 text-[#f39b03] ring-1 ring-[#f39b03]/30'
+                        : 'text-white/85 hover:bg-white/5 hover:text-white',
+                  ].join(' ')}
+                >
+                  <span
+                    className={[
+                      'grid h-8 w-8 place-items-center rounded-lg',
+                      isLogout ? 'bg-red-500/18 text-red-300' : active ? 'bg-[#f39b03]/14' : 'bg-white/5',
+                    ].join(' ')}
+                  >
+                    {item.icon}
+                  </span>
+                  <span className="truncate">{item.label}</span>
+                </button>
+              )
+            })}
+          </div>
+        </nav>
       </aside>
 
       <nav className="fixed inset-x-0 bottom-0 z-50 flex w-full flex-col border-t border-white/10 bg-black md:hidden" aria-label="Mobile primary navigation">

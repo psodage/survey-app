@@ -9,7 +9,6 @@ import {
   CircleUserRound,
   ClipboardList,
   X,
-  FileText,
   Gauge,
   IndianRupee,
   LayoutGrid,
@@ -122,10 +121,67 @@ type DashboardProps = {
 export default function Dashboard({ onNavigate }: DashboardProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const recentVisits = [
-    ['Sai Residency', 'Amit Developers', '20 May 2025', '₹15,000'],
-    ['Green Valley Phase 2', 'Shree Krishna Infra', '19 May 2025', '₹12,000'],
-    ['Sunrise Enclave', 'Vishwakarma Properties', '18 May 2025', '₹18,500'],
+    {
+      id: 'SV-2451',
+      site: 'Sai Residency',
+      client: 'Amit Developers',
+      date: '20 May 2025',
+      amount: '15,000',
+      machine: 'Total Station',
+      paymentMode: 'Cash',
+      notes: 'Completed boundary points and levels.',
+      work: 'Topographic survey for layout planning and road alignment.',
+    },
+    {
+      id: 'SV-2442',
+      site: 'Green Valley Phase 2',
+      client: 'Shree Krishna Infra',
+      date: '19 May 2025',
+      amount: '12,000',
+      machine: 'Auto Level',
+      paymentMode: 'UPI',
+      notes: 'Checked key reference levels before next stage.',
+      work: 'Road level transfer and control point verification.',
+    },
+    {
+      id: 'SV-2430',
+      site: 'Sunrise Enclave',
+      client: 'Vishwakarma Properties',
+      date: '18 May 2025',
+      amount: '18,500',
+      machine: 'GPS / GNSS',
+      paymentMode: 'Bank Transfer',
+      notes: 'Boundary and utilities alignment completed.',
+      work: 'Topographic survey and boundary point marking.',
+    },
   ] as const
+  const pendingAmountByClient = [
+    ['Amit Developers', '₹1,25,000'],
+    ['Shree Krishna Infra', '₹86,500'],
+    ['Vishwakarma Properties', '₹65,000'],
+    ['Gajanan Projects', '₹42,000'],
+  ] as const
+
+  const getVisitDetailsPath = (visit: (typeof recentVisits)[number]) => {
+    const params = new URLSearchParams({
+      mode: 'visit',
+      visitId: visit.id,
+      client: visit.client,
+      name: visit.site,
+      date: visit.date,
+      machine: visit.machine,
+      amount: visit.amount,
+      paymentMode: visit.paymentMode,
+      notes: visit.notes,
+      work: visit.work,
+    })
+    return `/site-details?${params.toString()}`
+  }
+
+  const getClientDetailsPath = (clientName: string) => {
+    const params = new URLSearchParams({ client: clientName })
+    return `/clients-sites?${params.toString()}`
+  }
 
   const handleNavClick = async (label: string) => {
     if (label === 'Log Out') {
@@ -481,13 +537,14 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
               <CardShell title="Quick Actions">
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-3">
                   {[
-                    { title: 'Add Site', icon: <Building2 size={18} /> },
-                    { title: 'Add Site Visit', icon: <ClipboardList size={18} /> },
-                    { title: 'Generate Report', icon: <FileText size={18} /> },
+                    { title: 'Add Site', path: '/add-site', icon: <Building2 size={18} /> },
+                    { title: 'Add Site Visit', path: '/add-site-visit', icon: <ClipboardList size={18} /> },
+                    { title: 'View Clients', path: '/clients-sites', icon: <UsersRound size={18} /> },
                   ].map((a) => (
                     <button
                       key={a.title}
                       type="button"
+                      onClick={() => onNavigate(a.path)}
                       className="group flex items-center justify-between gap-3 rounded-xl border border-neutral-200 bg-white px-4 py-3 text-left shadow-sm ring-1 ring-black/5 transition hover:border-[#f39b03]/40 hover:shadow-[0_16px_40px_rgba(16,24,40,0.08)] md:gap-4 md:rounded-2xl md:px-5 md:py-4 md:shadow-[0_10px_30px_rgba(16,24,40,0.04)] md:ring-0"
                     >
                       <div className="flex min-w-0 items-center gap-2.5 md:gap-3">
@@ -511,7 +568,11 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
             <section className="mt-4 grid grid-cols-1 gap-4 md:mt-6 md:gap-5 xl:grid-cols-2">
               <CardShell
                 title="Recent Site Visits"
-                action={<a href="#">View All</a>}
+                action={
+                  <button type="button" onClick={() => onNavigate('/site-visits')}>
+                    View All
+                  </button>
+                }
               >
                 <div className="hidden overflow-hidden rounded-2xl border border-neutral-200 md:block">
                   <table className="w-full border-collapse">
@@ -524,15 +585,19 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                       </tr>
                     </thead>
                     <tbody className="text-sm font-semibold text-neutral-800">
-                      {recentVisits.map(([site, client, date, amount]) => (
-                        <tr key={site} className="border-t border-neutral-200">
+                      {recentVisits.map((visit) => (
+                        <tr
+                          key={visit.id}
+                          className="cursor-pointer border-t border-neutral-200 hover:bg-neutral-50/70"
+                          onClick={() => onNavigate(getVisitDetailsPath(visit))}
+                        >
                           <td className="px-4 py-3 font-extrabold text-neutral-900">
-                            {site}
+                            {visit.site}
                           </td>
-                          <td className="px-4 py-3 text-neutral-700">{client}</td>
-                          <td className="px-4 py-3 text-neutral-700">{date}</td>
+                          <td className="px-4 py-3 text-neutral-700">{visit.client}</td>
+                          <td className="px-4 py-3 text-neutral-700">{visit.date}</td>
                           <td className="px-4 py-3 text-right font-extrabold text-neutral-900">
-                            {amount}
+                            ₹{visit.amount}
                           </td>
                         </tr>
                       ))}
@@ -541,18 +606,22 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                 </div>
 
                 <ul className="flex flex-col gap-2 md:hidden">
-                  {recentVisits.map(([site, client, date, amount]) => (
-                    <li key={`${site}-mobile`}>
-                      <div className="rounded-lg bg-white p-2.5 shadow-sm ring-1 ring-black/5">
-                        <div className="truncate text-xs font-bold text-neutral-900">{site}</div>
+                  {recentVisits.map((visit) => (
+                    <li key={`${visit.id}-mobile`}>
+                      <button
+                        type="button"
+                        onClick={() => onNavigate(getVisitDetailsPath(visit))}
+                        className="w-full rounded-lg bg-white p-2.5 text-left shadow-sm ring-1 ring-black/5"
+                      >
+                        <div className="truncate text-xs font-bold text-neutral-900">{visit.site}</div>
                         <div className="mt-0.5 truncate text-[10px] font-semibold text-neutral-600">
-                          {client}
+                          {visit.client}
                         </div>
                         <div className="mt-1.5 flex items-center justify-between gap-2 text-[10px] font-semibold text-neutral-500">
-                          <span>{date}</span>
-                          <span className="shrink-0 text-xs font-extrabold text-neutral-900">{amount}</span>
+                          <span>{visit.date}</span>
+                          <span className="shrink-0 text-xs font-extrabold text-neutral-900">₹{visit.amount}</span>
                         </div>
-                      </div>
+                      </button>
                     </li>
                   ))}
                 </ul>
@@ -560,17 +629,20 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
 
               <CardShell
                 title="Pending Amount by Client"
-                action={<a href="#">View All</a>}
+                action={
+                  <button type="button" onClick={() => onNavigate('/account-manager/pending')}>
+                    View All
+                  </button>
+                }
               >
                 <ul className="flex flex-col gap-2 md:gap-3">
-                  {[
-                    ['Amit Developers', '₹1,25,000'],
-                    ['Shree Krishna Infra', '₹86,500'],
-                    ['Vishwakarma Properties', '₹65,000'],
-                    ['Gajanan Projects', '₹42,000'],
-                  ].map(([name, amt]) => (
+                  {pendingAmountByClient.map(([name, amt]) => (
                     <li key={name}>
-                      <div className="flex items-center justify-between gap-2 rounded-lg bg-white px-2.5 py-2 shadow-sm ring-1 ring-black/5 md:rounded-2xl md:border md:border-neutral-200 md:px-4 md:py-3 md:shadow-[0_10px_30px_rgba(16,24,40,0.04)] md:ring-0">
+                      <button
+                        type="button"
+                        onClick={() => onNavigate(getClientDetailsPath(name))}
+                        className="flex w-full items-center justify-between gap-2 rounded-lg bg-white px-2.5 py-2 text-left shadow-sm ring-1 ring-black/5 transition hover:bg-neutral-50 md:rounded-2xl md:border md:border-neutral-200 md:px-4 md:py-3 md:shadow-[0_10px_30px_rgba(16,24,40,0.04)] md:ring-0"
+                      >
                         <div className="flex min-w-0 items-center gap-2 md:gap-3">
                           <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#f39b03]/12 text-[#f39b03] md:h-10 md:w-10 md:rounded-2xl">
                             <IndianRupee size={18} />
@@ -580,7 +652,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                           </div>
                         </div>
                         <div className="shrink-0 text-xs font-extrabold text-neutral-900 md:text-sm">{amt}</div>
-                      </div>
+                      </button>
                     </li>
                   ))}
                 </ul>
