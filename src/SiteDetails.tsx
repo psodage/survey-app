@@ -8,6 +8,7 @@ import {
   CircleDollarSign,
   ClipboardList,
   Download,
+  FileBarChart,
   LayoutGrid,
   LogOut,
   MapPin,
@@ -17,8 +18,14 @@ import {
   X,
   type LucideIcon,
 } from 'lucide-react'
-import { useState, type ReactNode } from 'react'
+import { Fragment, useState, type ReactNode } from 'react'
+import { useLocation as useRouterLocation } from 'react-router-dom'
+import { AccountManagerSidebarBlock } from './AccountManagerSidebarBlock'
+import { CollaborationBrandMark } from './CollaborationBrandMark'
+import { CardShell, surfaceCardClass } from './dashboardCards'
+import { exportCombinedSiteInvoicePdf, exportInvoicePdf } from './exportInvoicePdf'
 import { exportVisitRecordPdf } from './exportVisitRecordPdf'
+import { getHeaderDateLabel } from './headerDateLabel'
 import { signOut } from './signOut'
 
 type NavItem = {
@@ -31,7 +38,7 @@ const navItems: NavItem[] = [
   { label: 'Account Manager', icon: <Briefcase size={16} /> },
   { label: 'Clients & Sites', icon: <UsersRound size={16} /> },
   { label: 'Site Visits', icon: <ClipboardList size={16} /> },
-  { label: 'Measurement', icon: <Calculator size={16} /> },
+  { label: 'Reports', icon: <FileBarChart size={16} /> },
   { label: 'Settings', icon: <Building2 size={16} /> },
   { label: 'Log Out', icon: <LogOut size={16} /> },
 ]
@@ -88,8 +95,10 @@ const siteVisitRecords: SiteVisitRecord[] = [
   },
 ]
 
-export default function SiteDetails({ onNavigate }: SiteDetailsProps) {
+export function SiteDetails({ onNavigate }: SiteDetailsProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+  const { pathname: routerPathname } = useRouterLocation()
+  const headerDateLabel = getHeaderDateLabel()
   const params = new URLSearchParams(window.location.search)
   const mode = params.get('mode') ?? 'site'
   const isVisitMode = mode === 'visit'
@@ -106,6 +115,8 @@ export default function SiteDetails({ onNavigate }: SiteDetailsProps) {
   const paymentMode = params.get('paymentMode') ?? '-'
   const notes = params.get('notes') ?? '-'
   const work = params.get('work') ?? '-'
+  const engineerName = params.get('engineerName') ?? ''
+  const contactPerson = params.get('contactPerson') ?? engineerName
   const relatedVisitRecords = siteVisitRecords.filter((record) => record.client === client && record.site === name)
   const pageTitle = isVisitMode ? 'Site Visit Details' : 'Site Details'
   const backPath = isVisitMode ? '/site-visits' : '/clients-sites'
@@ -116,7 +127,7 @@ export default function SiteDetails({ onNavigate }: SiteDetailsProps) {
     { label: 'Accounts', path: '/account-manager', icon: Briefcase },
     { label: 'Clients', path: '/clients-sites', icon: UsersRound },
     { label: 'Sites', path: '/site-visits', icon: MapPin },
-    { label: 'Measure', path: '/measurement-rate-calculator', icon: Calculator },
+    { label: 'Reports', path: '/reports', icon: FileBarChart },
     { label: 'Settings', path: '/settings', icon: Building2 },
   ] as const
 
@@ -133,7 +144,7 @@ export default function SiteDetails({ onNavigate }: SiteDetailsProps) {
       'Account Manager': '/account-manager',
       'Clients & Sites': '/clients-sites',
       'Site Visits': '/site-visits',
-      Measurement: '/measurement-rate-calculator',
+      Reports: '/reports',
       Settings: '/settings',
     }
     const nextPath = routeMap[label]
@@ -147,6 +158,42 @@ export default function SiteDetails({ onNavigate }: SiteDetailsProps) {
       : status === 'On Hold'
         ? 'bg-amber-50 text-amber-700 ring-amber-200'
         : 'bg-emerald-50 text-emerald-700 ring-emerald-200'
+
+  const parseVisitAmount = (amount: string) => Number(amount.replace(/[^\d.]/g, '')) || 0
+
+  const siteAddressLine = [name, location !== 'Unknown Location' ? location : ''].filter(Boolean).join(', ')
+
+  const handleIndividualVisitInvoice = (record: SiteVisitRecord) => {
+    const amountNum = parseVisitAmount(record.amount)
+    void exportInvoicePdf({
+      client,
+      site: `${siteAddressLine} (Visit ${record.id})`,
+      workType: record.machine,
+      totalPoints: 1,
+      ratePerPoint: amountNum > 0 ? amountNum : 0,
+      baseCharge: 0,
+      extraCharges: 0,
+      discount: 0,
+      invoiceDate: new Date().toLocaleDateString('en-GB'),
+    })
+  }
+
+  const handleCommonSiteInvoice = () => {
+    const visits = relatedVisitRecords.map((r) => ({
+      visitId: r.id,
+      date: r.date,
+      machine: r.machine,
+      amount: parseVisitAmount(r.amount),
+      notes: r.notes,
+    }))
+    void exportCombinedSiteInvoicePdf({
+      client,
+      site: name,
+      location: location !== 'Unknown Location' ? location : undefined,
+      invoiceDate: new Date().toLocaleDateString('en-GB'),
+      visits,
+    })
+  }
 
   const handleExportVisitPdf = (record: {
     visitId: string
@@ -168,11 +215,11 @@ export default function SiteDetails({ onNavigate }: SiteDetailsProps) {
       amount: record.amount,
       notes: record.notes,
       work: record.work,
-      contactPerson: 'Site Coordinator',
+      contactPerson: contactPerson || 'Site Coordinator',
       phone: '-',
       dwgRefBy: 'Samarth Land Surveyors',
       dwgNo: record.visitId.replace('SV-', ''),
-      engineerName: 'Er. Shubham Bhoi',
+      engineerName: engineerName || 'Er. Shubham Bhoi',
     })
   }
 
@@ -243,19 +290,23 @@ export default function SiteDetails({ onNavigate }: SiteDetailsProps) {
       <div className="flex min-h-0 flex-1 w-full max-w-none">
         <aside className="fixed inset-y-0 left-0 z-20 hidden w-[280px] flex-col bg-gradient-to-b from-[#050505] via-[#0b0b0b] to-[#040404] pb-20 text-white lg:flex">
           <div className="px-6 pt-7">
-            <div className="flex items-center gap-3">
-              <img
-                src="/samarth-logo.png"
-                alt="Samarth Land Surveyors"
-                className="h-25 w-auto"
-                draggable={false}
-              />
-            </div>
+            <CollaborationBrandMark variant="desktopSidebar" />
           </div>
 
           <nav className="mt-5 flex-1 px-3">
             <div className="space-y-1">
               {navItems.map((item) => {
+                if (item.label === 'Account Manager') {
+                  return (
+                    <Fragment key="account-manager">
+                      <AccountManagerSidebarBlock
+                        pathname={routerPathname}
+                        onNavigate={onNavigate}
+                        onAfterNavigate={() => setIsSidebarOpen(false)}
+                      />
+                    </Fragment>
+                  )
+                }
                 const active = item.label === activeNavLabel
                 const isLogout = item.label === 'Log Out'
                 return (
@@ -323,6 +374,17 @@ export default function SiteDetails({ onNavigate }: SiteDetailsProps) {
           <nav className="mt-4 flex-1 px-3">
             <div className="space-y-1">
               {navItems.map((item) => {
+                if (item.label === 'Account Manager') {
+                  return (
+                    <Fragment key="account-manager-mobile">
+                      <AccountManagerSidebarBlock
+                        pathname={routerPathname}
+                        onNavigate={onNavigate}
+                        onAfterNavigate={() => setIsSidebarOpen(false)}
+                      />
+                    </Fragment>
+                  )
+                }
                 const active = item.label === activeNavLabel
                 const isLogout = item.label === 'Log Out'
                 return (
@@ -368,12 +430,7 @@ export default function SiteDetails({ onNavigate }: SiteDetailsProps) {
                   <Menu size={18} strokeWidth={2.25} className="text-white" />
                 </button>
                 <div className="flex min-w-0 justify-center px-1">
-                  <img
-                    src="/samarth-logo.png"
-                    alt="Samarth Land Surveyors"
-                    className="h-14 max-h-[68px] w-auto max-w-full object-contain object-center sm:h-[72px] sm:max-h-[72px]"
-                    draggable={false}
-                  />
+                  <CollaborationBrandMark variant="mobileHeader" />
                 </div>
                 <button
                   type="button"
@@ -388,9 +445,19 @@ export default function SiteDetails({ onNavigate }: SiteDetailsProps) {
                 <h1 className="min-w-0 truncate text-left text-base font-extrabold leading-tight tracking-tight text-white">
                   {pageTitle}
                 </h1>
-                <span className="inline-flex items-center rounded-xl border border-white/20 bg-neutral-900 px-2.5 py-2 text-[11px] font-semibold leading-tight text-white">
-                  {statusLabel}
-                </span>
+                <div className="flex shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-white/20 bg-neutral-900 px-2.5 text-[11px] font-semibold text-white transition hover:bg-neutral-800"
+                    aria-label="Current date"
+                  >
+                    <Calendar size={13} className="text-[#f39b03]" />
+                    <span className="whitespace-nowrap">{headerDateLabel}</span>
+                  </button>
+                  <span className="inline-flex items-center rounded-xl border border-white/20 bg-neutral-900 px-2.5 py-2 text-[11px] font-semibold leading-tight text-white">
+                    {statusLabel}
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -418,6 +485,14 @@ export default function SiteDetails({ onNavigate }: SiteDetailsProps) {
               </div>
 
               <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+                <button
+                  type="button"
+                  className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-neutral-900 sm:px-4 sm:py-2.5 sm:text-sm"
+                  aria-label="Current date"
+                >
+                  <Calendar size={16} className="text-[#f39b03]" />
+                  <span className="whitespace-nowrap">{headerDateLabel}</span>
+                </button>
                 <span className={['inline-flex items-center rounded-full px-3 py-1 text-xs font-extrabold ring-1', statusTone].join(' ')}>
                   {statusLabel}
                 </span>
@@ -436,7 +511,7 @@ export default function SiteDetails({ onNavigate }: SiteDetailsProps) {
 
           <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-white p-4 pb-[calc(3.65rem+max(12px,env(safe-area-inset-bottom,0px)))] sm:px-6 sm:pt-6 sm:pb-[calc(3.65rem+max(12px,env(safe-area-inset-bottom,0px)))] md:p-6 md:pb-24 lg:p-8 lg:pb-28">
             <div className="space-y-4 md:space-y-6">
-              <section className="rounded-xl bg-neutral-900/[0.04] p-4 shadow-sm ring-1 ring-black/5 md:rounded-2xl md:bg-white md:p-6 md:shadow-[0_10px_30px_rgba(16,24,40,0.06)]">
+              <section className={`bg-neutral-900/[0.04] p-4 md:bg-white md:p-6 ${surfaceCardClass}`}>
                 <div className="text-[11px] font-semibold text-neutral-500 md:text-sm">Site Name</div>
                 <div className="mt-1 text-lg font-extrabold tracking-tight text-neutral-950 md:text-3xl">{name}</div>
                 <div className="mt-3 hidden items-center rounded-full bg-[#f39b03]/12 px-3 py-1 text-xs font-extrabold text-[#c97702] ring-1 ring-[#f39b03]/25 md:inline-flex">
@@ -448,20 +523,27 @@ export default function SiteDetails({ onNavigate }: SiteDetailsProps) {
                 {detailCards.map((card) => (
                   <div
                     key={card.title}
-                    className={`rounded-xl p-3 shadow-sm ring-1 ring-black/5 ${card.cardTint} md:bg-white md:p-4`}
+                    className={`w-full min-h-[108px] rounded-xl p-3 shadow-sm ring-1 ring-black/5 md:min-h-[126px] ${card.cardTint} md:rounded-2xl md:bg-white md:p-5 md:shadow-[0_10px_30px_rgba(16,24,40,0.06)]`}
                   >
-                    <div className="flex items-start gap-2.5">
-                      <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${card.tone}`}>
-                        <card.icon size={15} />
+                    <div className="flex items-start gap-2 md:gap-4">
+                      <span
+                        className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl md:h-12 md:w-12 md:rounded-2xl ${card.tone}`}
+                      >
+                        <card.icon size={20} />
                       </span>
-                      <div className="min-w-0">
-                        <div className="text-[11px] font-bold text-neutral-500">{card.title}</div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[11px] font-semibold leading-tight text-neutral-700 md:text-sm">
+                          {card.title}
+                        </div>
                         <div
-                          className={`mt-0.5 truncate text-sm font-extrabold md:text-base ${
+                          className={`mt-0.5 truncate text-base font-extrabold leading-tight tracking-tight md:mt-1 md:text-2xl ${
                             card.title === 'Pending Amount' ? 'text-rose-600' : 'text-neutral-900'
                           }`}
                         >
                           {card.value}
+                        </div>
+                        <div className="mt-0.5 text-[10px] font-medium leading-snug text-neutral-500 md:mt-1 md:text-xs">
+                          {isVisitMode ? 'Visit Snapshot' : 'Site Snapshot'}
                         </div>
                       </div>
                     </div>
@@ -470,10 +552,7 @@ export default function SiteDetails({ onNavigate }: SiteDetailsProps) {
               </section>
 
               {isVisitMode ? (
-                <section className="overflow-hidden rounded-lg bg-white shadow-sm ring-1 ring-black/5 md:rounded-2xl md:shadow-[0_10px_30px_rgba(16,24,40,0.06)]">
-                  <div className="border-b border-neutral-200 px-4 py-3 sm:px-6 sm:py-4">
-                    <div className="text-xs font-extrabold tracking-tight text-neutral-900 md:text-sm">Visit Details</div>
-                  </div>
+                <CardShell title="Visit Details" className="overflow-hidden" bodyClassName="p-0">
                   <div className="grid grid-cols-1 gap-3 p-4 text-sm font-semibold text-neutral-700 sm:grid-cols-2 sm:px-6 sm:py-5">
                     <p>
                       <span className="text-neutral-500">Machine:</span> {machine}
@@ -488,7 +567,7 @@ export default function SiteDetails({ onNavigate }: SiteDetailsProps) {
                       <span className="text-neutral-500">Work Details:</span> {work}
                     </p>
                   </div>
-                  <div className="border-t border-neutral-200 px-4 py-3 sm:px-6 sm:py-4">
+                  <div className="flex flex-col gap-2 border-t border-neutral-200 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3 sm:px-6 sm:py-4">
                     <button
                       type="button"
                       onClick={() =>
@@ -505,16 +584,58 @@ export default function SiteDetails({ onNavigate }: SiteDetailsProps) {
                       className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#f39b03] px-4 text-xs font-extrabold text-white transition hover:bg-[#e18e03] sm:text-sm"
                     >
                       <Download size={15} />
-                      Generate PDF
+                      Visit record (PDF)
                     </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void exportInvoicePdf({
+                          client,
+                          site: `${siteAddressLine} (Visit ${visitId})`,
+                          workType: machine,
+                          totalPoints: 1,
+                          ratePerPoint: parseVisitAmount(amount),
+                          baseCharge: 0,
+                          extraCharges: 0,
+                          discount: 0,
+                          invoiceDate: new Date().toLocaleDateString('en-GB'),
+                        })
+                      }
+                      className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-white px-4 text-xs font-extrabold text-neutral-800 ring-1 ring-black/5 transition hover:bg-neutral-50 sm:text-sm"
+                    >
+                      <Calculator size={15} className="text-[#f39b03]" />
+                      Individual invoice
+                    </button>
+                    {relatedVisitRecords.length > 0 ? (
+                      <button
+                        type="button"
+                        onClick={handleCommonSiteInvoice}
+                        className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[#f39b03]/40 bg-[#f39b03]/10 px-4 text-xs font-extrabold text-[#b87402] transition hover:bg-[#f39b03]/15 sm:text-sm"
+                      >
+                        <Calculator size={15} className="text-[#f39b03]" />
+                        Common invoice (all visits)
+                      </button>
+                    ) : null}
                   </div>
-                </section>
+                </CardShell>
               ) : (
-                <section className="overflow-hidden rounded-lg bg-white shadow-sm ring-1 ring-black/5 md:rounded-2xl md:shadow-[0_10px_30px_rgba(16,24,40,0.06)]">
-                  <div className="border-b border-neutral-200 px-4 py-3 sm:px-6 sm:py-4">
-                    <div className="text-xs font-extrabold tracking-tight text-neutral-900 md:text-sm">Visit Record</div>
-                  </div>
-
+                <CardShell
+                  title="Visit Record"
+                  className="overflow-hidden"
+                  bodyClassName="p-0"
+                  headerEnd={
+                    relatedVisitRecords.length > 0 ? (
+                      <button
+                        type="button"
+                        onClick={handleCommonSiteInvoice}
+                        className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-xl border border-[#f39b03]/40 bg-[#f39b03]/10 px-3 text-[11px] font-extrabold text-[#b87402] transition hover:bg-[#f39b03]/15 sm:text-xs"
+                      >
+                        <Calculator size={14} className="text-[#f39b03]" />
+                        Common invoice (all visits)
+                      </button>
+                    ) : null
+                  }
+                >
                   {relatedVisitRecords.length === 0 ? (
                     <div className="px-4 py-5 text-sm font-semibold text-neutral-600 sm:px-6">
                       No visit records found for this site.
@@ -535,31 +656,41 @@ export default function SiteDetails({ onNavigate }: SiteDetailsProps) {
                               <div className="mt-2 text-[11px] font-semibold text-neutral-600">
                                 {record.machine} • {record.paymentMode}
                               </div>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  handleExportVisitPdf({
-                                    visitId: record.id,
-                                    date: record.date,
-                                    machine: record.machine,
-                                    amount: record.amount,
-                                    paymentMode: record.paymentMode,
-                                    notes: record.notes,
-                                    work: record.work,
-                                  })
-                                }
-                                className="mt-3 inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-neutral-200 bg-white px-2.5 text-[10px] font-extrabold text-neutral-800 transition hover:bg-neutral-50"
-                              >
-                                <Download size={12} />
-                                PDF
-                              </button>
+                              <div className="mt-3 flex flex-wrap gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    handleExportVisitPdf({
+                                      visitId: record.id,
+                                      date: record.date,
+                                      machine: record.machine,
+                                      amount: record.amount,
+                                      paymentMode: record.paymentMode,
+                                      notes: record.notes,
+                                      work: record.work,
+                                    })
+                                  }
+                                  className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-neutral-200 bg-white px-2.5 text-[10px] font-extrabold text-neutral-800 transition hover:bg-neutral-50"
+                                >
+                                  <Download size={12} />
+                                  Visit PDF
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleIndividualVisitInvoice(record)}
+                                  className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-[#f39b03]/35 bg-[#f39b03]/10 px-2.5 text-[10px] font-extrabold text-[#b87402] transition hover:bg-[#f39b03]/15"
+                                >
+                                  <Calculator size={12} className="text-[#f39b03]" />
+                                  Invoice
+                                </button>
+                              </div>
                             </li>
                           ))}
                         </ul>
                       </div>
 
                       <div className="hidden overflow-x-auto md:block">
-                        <table className="w-full min-w-[760px] border-collapse">
+                        <table className="w-full min-w-[880px] border-collapse">
                           <thead className="bg-neutral-50">
                             <tr className="text-left text-xs font-extrabold uppercase tracking-wide text-neutral-500">
                               <th className="px-4 py-3">Visit ID</th>
@@ -568,7 +699,8 @@ export default function SiteDetails({ onNavigate }: SiteDetailsProps) {
                               <th className="px-4 py-3">Payment</th>
                               <th className="px-4 py-3 text-right">Amount</th>
                               <th className="px-4 py-3">Notes</th>
-                              <th className="px-4 py-3 text-center">PDF</th>
+                              <th className="px-4 py-3 text-center">Visit PDF</th>
+                              <th className="px-4 py-3 text-center">Invoice</th>
                             </tr>
                           </thead>
                           <tbody className="text-sm font-semibold text-neutral-800">
@@ -600,6 +732,16 @@ export default function SiteDetails({ onNavigate }: SiteDetailsProps) {
                                     PDF
                                   </button>
                                 </td>
+                                <td className="px-4 py-3 text-center">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleIndividualVisitInvoice(record)}
+                                    className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-[#f39b03]/35 bg-[#f39b03]/10 px-2.5 text-[11px] font-extrabold text-[#b87402] transition hover:bg-[#f39b03]/15"
+                                  >
+                                    <Calculator size={12} className="text-[#f39b03]" />
+                                    Individual
+                                  </button>
+                                </td>
                               </tr>
                             ))}
                           </tbody>
@@ -607,7 +749,7 @@ export default function SiteDetails({ onNavigate }: SiteDetailsProps) {
                       </div>
                     </>
                   )}
-                </section>
+                </CardShell>
               )}
             </div>
           </div>

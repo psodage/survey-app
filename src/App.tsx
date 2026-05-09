@@ -1,18 +1,43 @@
-import { type ReactNode } from 'react'
-import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
+import { type ReactNode, useEffect, useState } from 'react'
+import { Navigate, Route, Routes, useLocation, useNavigate, type NavigateFunction } from 'react-router-dom'
 import AccountManager from './AccountManager'
+import AccountManagerSelect from './AccountManagerSelect'
+import { DEFAULT_ACCOUNT_MANAGER_ID } from './accountManagersData'
 import AddSite from './AddSite'
 import AddSiteVisit from './AddSiteVisit'
 import ClientsSites from './ClientsSites'
 import Dashboard from './Dashboard'
-import MeasurementRateCalculator from './MeasurementRateCalculator'
-import SiteDetails from './SiteDetails'
+import Invoice from './Invoice'
+import { SiteDetails } from './SiteDetails'
 import Settings from './Settings'
 import InstallAppPrompt from './components/InstallAppPrompt'
 import Login from './Login.jsx'
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
   return <>{children}</>
+}
+
+/** Mobile: pick a manager. Desktop (md+): same URL redirects to default manager ledger. */
+function AccountManagerIndex({ onNavigate }: { onNavigate: NavigateFunction }) {
+  const location = useLocation()
+  const [mdUp, setMdUp] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches,
+  )
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 768px)')
+    const apply = () => setMdUp(mq.matches)
+    mq.addEventListener('change', apply)
+    return () => mq.removeEventListener('change', apply)
+  }, [])
+  if (mdUp) {
+    return (
+      <Navigate
+        to={{ pathname: `/account-manager/${DEFAULT_ACCOUNT_MANAGER_ID}`, search: location.search }}
+        replace
+      />
+    )
+  }
+  return <AccountManagerSelect onNavigate={onNavigate} />
 }
 
 function PlaceholderPage({ title }: { title: string }) {
@@ -49,10 +74,10 @@ function AppRoutes() {
         }
       />
       <Route
-        path="/measurement-rate-calculator"
+        path="/invoice"
         element={
           <ProtectedRoute>
-            <MeasurementRateCalculator onNavigate={navigate} />
+            <Invoice onNavigate={navigate} />
           </ProtectedRoute>
         }
       />
@@ -60,39 +85,15 @@ function AppRoutes() {
         path="/account-manager"
         element={
           <ProtectedRoute>
+            <AccountManagerIndex onNavigate={navigate} />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/account-manager/:managerId"
+        element={
+          <ProtectedRoute>
             <AccountManager onNavigate={navigate} />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/account-manager/debits"
-        element={
-          <ProtectedRoute>
-            <AccountManager viewMode="debits" onNavigate={navigate} />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/account-manager/credits"
-        element={
-          <ProtectedRoute>
-            <AccountManager viewMode="credits" onNavigate={navigate} />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/account-manager/pending"
-        element={
-          <ProtectedRoute>
-            <AccountManager viewMode="pending" onNavigate={navigate} />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/account-manager/net-balance"
-        element={
-          <ProtectedRoute>
-            <AccountManager viewMode="net" onNavigate={navigate} />
           </ProtectedRoute>
         }
       />

@@ -7,6 +7,7 @@ import {
   Calendar,
   CircleUserRound,
   ClipboardList,
+  FileBarChart,
   LayoutGrid,
   LogOut,
   MapPin,
@@ -15,8 +16,12 @@ import {
   X,
   type LucideIcon,
 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { Fragment, useMemo, useState } from 'react'
 import { useLocation } from 'react-router-dom'
+import { AccountManagerSidebarBlock } from './AccountManagerSidebarBlock'
+import { CollaborationBrandMark } from './CollaborationBrandMark'
+import { CardPanel } from './dashboardCards'
+import { getHeaderDateLabel } from './headerDateLabel'
 import { signOut } from './signOut'
 
 type AddSiteProps = {
@@ -52,6 +57,7 @@ export default function AddSite({ onNavigate }: AddSiteProps) {
   const [extraCharges, setExtraCharges] = useState('')
   const [discount, setDiscount] = useState('')
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+  const headerDateLabel = getHeaderDateLabel()
   const calculatedTotalAmount = useMemo(() => {
     const points = parseAmount(totalPoints)
     const rate = parseAmount(ratePerPoint)
@@ -66,7 +72,8 @@ export default function AddSite({ onNavigate }: AddSiteProps) {
     { label: 'Accounts', path: '/account-manager', icon: Briefcase },
     { label: 'Clients', path: '/clients-sites', icon: UsersRound },
     { label: 'Sites', path: '/site-visits', icon: MapPin },
-    { label: 'Measurement', path: '/measurement-rate-calculator', icon: Calculator },
+    { label: 'Invoice', path: '/invoice', icon: Calculator },
+    { label: 'Reports', path: '/reports', icon: FileBarChart },
     { label: 'Settings', path: '/settings', icon: Building2 },
   ]
 
@@ -82,7 +89,8 @@ export default function AddSite({ onNavigate }: AddSiteProps) {
       'Account Manager': '/account-manager',
       'Clients & Sites': '/clients-sites',
       'Site Visits': '/site-visits',
-      Measurement: '/measurement-rate-calculator',
+      Invoice: '/invoice',
+      Reports: '/reports',
       Settings: '/settings',
     }
     const nextPath = routeMap[label]
@@ -95,7 +103,8 @@ export default function AddSite({ onNavigate }: AddSiteProps) {
     { label: 'Account Manager', icon: <Briefcase size={16} /> },
     { label: 'Clients & Sites', icon: <UsersRound size={16} /> },
     { label: 'Site Visits', icon: <ClipboardList size={16} /> },
-    { label: 'Measurement', icon: <Calculator size={16} /> },
+    { label: 'Invoice', icon: <Calculator size={16} /> },
+    { label: 'Reports', icon: <FileBarChart size={16} /> },
     { label: 'Settings', icon: <Building2 size={16} /> },
     { label: 'Log Out', icon: <LogOut size={16} /> },
   ]
@@ -105,11 +114,22 @@ export default function AddSite({ onNavigate }: AddSiteProps) {
       <div className="flex min-h-0 flex-1 w-full max-w-none">
         <aside className="fixed inset-y-0 left-0 z-20 hidden w-[280px] flex-col bg-gradient-to-b from-[#050505] via-[#0b0b0b] to-[#040404] pb-20 text-white lg:flex">
           <div className="px-6 pt-7">
-            <img src="/samarth-logo.png" alt="Samarth Land Surveyors" className="h-25 w-auto" draggable={false} />
+            <CollaborationBrandMark variant="desktopSidebar" />
           </div>
           <nav className="mt-5 flex-1 px-3">
             <div className="space-y-1">
               {navItems.map((item) => {
+                if (item.label === 'Account Manager') {
+                  return (
+                    <Fragment key="account-manager">
+                      <AccountManagerSidebarBlock
+                        pathname={location.pathname}
+                        onNavigate={onNavigate}
+                        onAfterNavigate={() => setIsSidebarOpen(false)}
+                      />
+                    </Fragment>
+                  )
+                }
                 const active = item.label === 'Clients & Sites'
                 const isLogout = item.label === 'Log Out'
                 return (
@@ -145,20 +165,47 @@ export default function AddSite({ onNavigate }: AddSiteProps) {
                   <Menu size={18} strokeWidth={2.25} className="text-white" />
                 </button>
                 <div className="flex min-w-0 justify-center px-1">
-                  <img src="/samarth-logo.png" alt="Samarth Land Surveyors" className="h-14 max-h-[68px] w-auto max-w-full object-contain object-center" draggable={false} />
+                  <CollaborationBrandMark variant="mobileHeader" />
                 </div>
                 <button type="button" className="relative grid h-9 w-9 place-items-center rounded-xl bg-white/5 text-white ring-1 ring-white/10" aria-label="Notifications">
                   <Bell size={18} strokeWidth={2} className="text-white" />
                   <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-white ring-2 ring-black" />
                 </button>
               </div>
+              <div className="flex items-center justify-between gap-3 border-t border-white/10 px-4 py-3">
+                <h1 className="min-w-0 truncate text-left text-base font-extrabold leading-tight tracking-tight text-white">
+                  Add New Site
+                </h1>
+                <button
+                  type="button"
+                  className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-white/20 bg-neutral-900 px-2.5 text-[11px] font-semibold text-white transition hover:bg-neutral-800"
+                  aria-label="Current date"
+                >
+                  <Calendar size={13} className="text-[#f39b03]" />
+                  <span className="whitespace-nowrap">{headerDateLabel}</span>
+                </button>
+              </div>
             </div>
-            <div className="relative hidden w-full items-center justify-between gap-4 border-b border-neutral-200 bg-white px-6 py-4 md:flex lg:px-8">
-              <div className="truncate text-lg font-extrabold tracking-tight text-neutral-950 sm:text-xl">Add New Site</div>
-              <div className="flex shrink-0 items-center gap-3">
-                <button type="button" className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-neutral-900">
+            <div className="relative hidden w-full items-center justify-between gap-4 border-b border-neutral-200 bg-white px-4 py-2.5 shadow-[0_6px_20px_rgba(16,24,40,0.05)] sm:px-6 md:flex md:px-6 md:py-4 lg:px-8">
+              <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
+                <button
+                  type="button"
+                  className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white shadow-sm ring-1 ring-black/5 hover:bg-neutral-50 md:h-10 md:w-10 md:shadow-[0_10px_30px_rgba(16,24,40,0.06)] lg:hidden"
+                  aria-label="Open menu"
+                  onClick={() => setIsSidebarOpen(true)}
+                >
+                  <Menu size={18} className="text-neutral-900" />
+                </button>
+                <div className="truncate text-lg font-extrabold tracking-tight text-neutral-950 sm:text-xl">Add New Site</div>
+              </div>
+              <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+                <button
+                  type="button"
+                  className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-neutral-900 sm:px-4 sm:py-2.5 sm:text-sm"
+                  aria-label="Current date"
+                >
                   <Calendar size={16} className="text-[#f39b03]" />
-                  <span className="whitespace-nowrap">20 May 2025</span>
+                  <span className="whitespace-nowrap">{headerDateLabel}</span>
                 </button>
                 <div className="hidden items-center gap-3 rounded-xl bg-neutral-100 px-4 py-2.5 ring-1 ring-black/5 sm:flex">
                   <div className="grid h-9 w-9 place-items-center rounded-xl bg-[#f39b03]/15 text-[#f39b03]"><CircleUserRound size={18} /></div>
@@ -172,7 +219,7 @@ export default function AddSite({ onNavigate }: AddSiteProps) {
           </header>
 
           <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-white p-4 pb-24 sm:px-6 sm:pt-6 md:p-6 lg:p-8">
-            <div className="mx-auto max-w-3xl rounded-2xl bg-white p-5 shadow-[0_10px_30px_rgba(16,24,40,0.06)] ring-1 ring-black/5 md:p-8">
+            <CardPanel className="mx-auto max-w-3xl p-5 md:p-8">
               <div className="mb-5 flex items-center justify-between gap-3 border-b border-neutral-200 pb-4">
                 <div>
                   <h1 className="text-xl font-extrabold tracking-tight text-neutral-950 md:text-2xl">Add New Site</h1>
@@ -328,7 +375,7 @@ export default function AddSite({ onNavigate }: AddSiteProps) {
             </button>
           </div>
               </form>
-            </div>
+            </CardPanel>
           </div>
         </main>
       </div>
@@ -356,6 +403,17 @@ export default function AddSite({ onNavigate }: AddSiteProps) {
         <nav className="mt-4 flex-1 px-3">
           <div className="space-y-1">
             {navItems.map((item) => {
+              if (item.label === 'Account Manager') {
+                return (
+                  <Fragment key="account-manager-mobile">
+                    <AccountManagerSidebarBlock
+                      pathname={location.pathname}
+                      onNavigate={onNavigate}
+                      onAfterNavigate={() => setIsSidebarOpen(false)}
+                    />
+                  </Fragment>
+                )
+              }
               const active = item.label === 'Clients & Sites'
               const isLogout = item.label === 'Log Out'
               return (

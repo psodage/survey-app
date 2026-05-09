@@ -4,9 +4,9 @@ import {
   Building2,
   Calculator,
   Calendar,
-  ChevronDown,
   CircleUserRound,
   ClipboardList,
+  FileBarChart,
   LayoutGrid,
   LogOut,
   Mail,
@@ -16,7 +16,12 @@ import {
   UsersRound,
   X,
 } from 'lucide-react'
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useLocation } from 'react-router-dom'
+import { AccountManagerSidebarBlock } from './AccountManagerSidebarBlock'
+import { CollaborationBrandMark } from './CollaborationBrandMark'
+import { CardShell } from './dashboardCards'
+import { getHeaderDateLabel } from './headerDateLabel'
 import { signOut } from './signOut'
 
 type NavItem = {
@@ -26,34 +31,6 @@ type NavItem = {
 
 type SettingsProps = {
   onNavigate: (path: string) => void
-}
-
-function CardShell({
-  title,
-  leadingIcon,
-  children,
-}: {
-  title: string
-  leadingIcon?: ReactNode
-  children: ReactNode
-}) {
-  return (
-    <div className="rounded-xl bg-white shadow-sm ring-1 ring-black/5 md:rounded-2xl md:shadow-[0_10px_30px_rgba(16,24,40,0.06)]">
-      <div className="flex items-center justify-between gap-3 border-b border-neutral-100 px-4 py-3 sm:px-6 sm:py-4">
-        <div className="flex min-w-0 items-center gap-2.5">
-          {leadingIcon ? (
-            <span className="grid h-9 w-9 place-items-center rounded-xl bg-[#f39b03]/12 text-[#f39b03] ring-1 ring-[#f39b03]/20">
-              {leadingIcon}
-            </span>
-          ) : null}
-          <div className="truncate text-xs font-extrabold tracking-tight text-neutral-900 md:text-sm">
-            {title}
-          </div>
-        </div>
-      </div>
-      <div className="p-3 sm:p-4 md:p-6">{children}</div>
-    </div>
-  )
 }
 
 function ToggleRow({
@@ -109,6 +86,8 @@ function Field({
 
 export default function Settings({ onNavigate }: SettingsProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+  const { pathname } = useLocation()
+  const headerDateLabel = getHeaderDateLabel()
 
   // Company
   const [companyName, setCompanyName] = useState('Samarth Land Surveyors')
@@ -175,7 +154,8 @@ export default function Settings({ onNavigate }: SettingsProps) {
     { label: 'Account Manager', icon: <Briefcase size={16} /> },
     { label: 'Clients & Sites', icon: <UsersRound size={16} /> },
     { label: 'Site Visits', icon: <ClipboardList size={16} /> },
-    { label: 'Measurement', icon: <Calculator size={16} /> },
+    { label: 'Invoice', icon: <Calculator size={16} /> },
+    { label: 'Reports', icon: <FileBarChart size={16} /> },
     { label: 'Settings', icon: <Building2 size={16} /> },
     { label: 'Log Out', icon: <LogOut size={16} /> },
   ]
@@ -192,8 +172,8 @@ export default function Settings({ onNavigate }: SettingsProps) {
       'Account Manager': '/account-manager',
       'Clients & Sites': '/clients-sites',
       'Site Visits': '/site-visits',
+      Invoice: '/invoice',
       Reports: '/reports',
-      Measurement: '/measurement-rate-calculator',
       Settings: '/settings',
     }
     const nextPath = routeMap[label]
@@ -206,7 +186,8 @@ export default function Settings({ onNavigate }: SettingsProps) {
     { label: 'Accounts', path: '/account-manager', icon: Briefcase },
     { label: 'Clients', path: '/clients-sites', icon: UsersRound },
     { label: 'Sites', path: '/site-visits', icon: ClipboardList },
-    { label: 'Measure', path: '/measurement-rate-calculator', icon: Calculator },
+    { label: 'Invoice', path: '/invoice', icon: Calculator },
+    { label: 'Reports', path: '/reports', icon: FileBarChart },
     { label: 'Settings', path: '/settings', icon: Building2 },
   ] as const
 
@@ -266,19 +247,23 @@ export default function Settings({ onNavigate }: SettingsProps) {
         {/* Sidebar */}
         <aside className="fixed inset-y-0 left-0 z-20 hidden w-[280px] flex-col bg-gradient-to-b from-[#050505] via-[#0b0b0b] to-[#040404] pb-20 text-white lg:flex">
           <div className="px-6 pt-7">
-            <div className="flex items-center gap-3">
-              <img
-                src="/samarth-logo.png"
-                alt="Samarth Land Surveyors"
-                className="h-25 w-auto"
-                draggable={false}
-              />
-            </div>
+            <CollaborationBrandMark variant="desktopSidebar" />
           </div>
 
           <nav className="mt-5 flex-1 px-3">
             <div className="space-y-1">
               {navItems.map((item) => {
+                if (item.label === 'Account Manager') {
+                  return (
+                    <Fragment key="account-manager">
+                      <AccountManagerSidebarBlock
+                        pathname={pathname}
+                        onNavigate={onNavigate}
+                        onAfterNavigate={() => setIsSidebarOpen(false)}
+                      />
+                    </Fragment>
+                  )
+                }
                 const active = item.label === 'Settings'
                 const isLogout = item.label === 'Log Out'
                 return (
@@ -377,13 +362,18 @@ export default function Settings({ onNavigate }: SettingsProps) {
 
           <div className="mt-5 px-5">
             <div className="text-[11px] font-extrabold uppercase tracking-wide text-white/45">Quick navigation</div>
+            <div className="mt-2 space-y-2">
+              <AccountManagerSidebarBlock
+                pathname={pathname}
+                onNavigate={onNavigate}
+                onAfterNavigate={() => setIsSidebarOpen(false)}
+              />
+            </div>
             <div className="mt-2 grid grid-cols-2 gap-2">
               {[
                 { label: 'Dashboard', path: '/dashboard', icon: LayoutGrid },
-                { label: 'Accounts', path: '/account-manager', icon: Briefcase },
                 { label: 'Clients', path: '/clients-sites', icon: UsersRound },
                 { label: 'Visits', path: '/site-visits', icon: ClipboardList },
-                { label: 'Measurement', path: '/measurement-rate-calculator', icon: Calculator },
               ].map(({ label, path, icon: Icon }) => (
                 <button
                   type="button"
@@ -433,12 +423,7 @@ export default function Settings({ onNavigate }: SettingsProps) {
                   <Menu size={18} strokeWidth={2.25} className="text-white" />
                 </button>
                 <div className="flex min-w-0 justify-center px-1">
-                  <img
-                    src="/samarth-logo.png"
-                    alt="Samarth Land Surveyors"
-                    className="h-14 max-h-[68px] w-auto max-w-full object-contain object-center sm:h-[72px] sm:max-h-[72px]"
-                    draggable={false}
-                  />
+                  <CollaborationBrandMark variant="mobileHeader" />
                 </div>
                 <button
                   type="button"
@@ -455,15 +440,11 @@ export default function Settings({ onNavigate }: SettingsProps) {
                 </h1>
                 <button
                   type="button"
-                  className="relative inline-flex max-w-[58vw] shrink-0 items-center gap-1.5 rounded-xl border border-white/20 bg-neutral-900 py-2 pl-2.5 pr-8 text-left text-[11px] font-semibold leading-tight text-white outline-none transition hover:bg-neutral-800 focus:border-[#f39b03]/70 focus:ring-2 focus:ring-[#f39b03]/20"
-                  aria-label="Selected date"
+                  className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-white/20 bg-neutral-900 px-2.5 text-[11px] font-semibold text-white transition hover:bg-neutral-800"
+                  aria-label="Current date"
                 >
-                  <Calendar size={13} className="shrink-0 text-[#f39b03]" />
-                  <span className="truncate">20 May 2025</span>
-                  <ChevronDown
-                    size={13}
-                    className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-white/80"
-                  />
+                  <Calendar size={13} className="text-[#f39b03]" />
+                  <span className="whitespace-nowrap">{headerDateLabel}</span>
                 </button>
               </div>
             </div>
@@ -486,11 +467,11 @@ export default function Settings({ onNavigate }: SettingsProps) {
               <div className="flex shrink-0 items-center gap-2 sm:gap-3">
                 <button
                   type="button"
-                  className="flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-xs font-semibold text-neutral-900 outline-none transition hover:border-neutral-300 sm:px-4 sm:py-2.5 sm:text-sm"
-                  aria-label="Select date"
+                  className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-neutral-900 sm:px-4 sm:py-2.5 sm:text-sm"
+                  aria-label="Current date"
                 >
                   <Calendar size={16} className="text-[#f39b03]" />
-                  <span className="whitespace-nowrap">20 May 2025</span>
+                  <span className="whitespace-nowrap">{headerDateLabel}</span>
                 </button>
                 <div className="hidden items-center gap-3 rounded-xl bg-neutral-100 px-3 py-2 ring-1 ring-black/5 sm:flex sm:px-4 sm:py-2.5">
                   <div className="grid h-9 w-9 place-items-center rounded-xl bg-[#f39b03]/15 text-[#f39b03]">

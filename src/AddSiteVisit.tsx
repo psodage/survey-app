@@ -1,12 +1,15 @@
 import {
+  ArrowRight,
   Bell,
   Briefcase,
   Building2,
-  Calculator,
   Calendar,
+  Calculator,
   ChevronDown,
   ClipboardList,
   CircleUserRound,
+  Eye,
+  FileBarChart,
   ImagePlus,
   LogOut,
   MapPin,
@@ -18,8 +21,20 @@ import {
   Phone,
   X,
 } from 'lucide-react'
-import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useLocation } from 'react-router-dom'
+import { AccountManagerSidebarBlock } from './AccountManagerSidebarBlock'
+import { CollaborationBrandMark } from './CollaborationBrandMark'
+import {
+  CardPanel,
+  CardShell,
+  StatCard,
+  toolbarPlusIconClass,
+  toolbarPrimaryButtonClass,
+  toolbarSearchInputClass,
+  toolbarSecondaryButtonClass,
+} from './dashboardCards'
+import { getHeaderDateLabel } from './headerDateLabel'
 import { signOut } from './signOut'
 
 type NavItem = {
@@ -32,7 +47,8 @@ const navItems: NavItem[] = [
   { label: 'Account Manager', icon: <Briefcase size={16} /> },
   { label: 'Clients & Sites', icon: <UsersRound size={16} /> },
   { label: 'Site Visits', icon: <ClipboardList size={16} /> },
-  { label: 'Measurement', icon: <Calculator size={16} /> },
+  { label: 'Invoice', icon: <Calculator size={16} /> },
+  { label: 'Reports', icon: <FileBarChart size={16} /> },
   { label: 'Settings', icon: <Building2 size={16} /> },
   { label: 'Log Out', icon: <LogOut size={16} /> },
 ]
@@ -117,55 +133,16 @@ type AddSiteVisitProps = {
   onNavigate: (path: string) => void
 }
 
-function SummaryMiniCard({
-  title,
-  value,
-  icon,
-  toneClass,
-  mobileCardTint,
-}: {
-  title: string
-  value: string
-  icon: ReactNode
-  toneClass: string
-  mobileCardTint: string
-}) {
-  return (
-    <div
-      className={[
-        'w-full rounded-xl p-3 shadow-sm ring-1 ring-black/5',
-        mobileCardTint,
-        'md:rounded-2xl md:bg-white md:p-5 md:shadow-[0_10px_30px_rgba(16,24,40,0.06)]',
-      ].join(' ')}
-    >
-      <div className="flex items-start gap-2 md:gap-4">
-        <div
-          className={[
-            'grid h-9 w-9 shrink-0 place-items-center rounded-xl md:h-12 md:w-12 md:rounded-2xl',
-            toneClass,
-          ].join(' ')}
-        >
-          <span className="[&>svg]:h-4 [&>svg]:w-4 md:[&>svg]:h-5 md:[&>svg]:w-5">{icon}</span>
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="text-[11px] font-semibold leading-tight text-neutral-700 md:text-sm">{title}</div>
-          <div className="mt-0.5 text-base font-extrabold leading-tight tracking-tight text-neutral-950 md:mt-1 md:text-2xl">
-            {value}
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
   const location = useLocation()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+  const headerDateLabel = getHeaderDateLabel()
   const [showAddForm, setShowAddForm] = useState(false)
   const [client, setClient] = useState('Amit Developers')
   const [site, setSite] = useState('Sai Residency')
-  const [visitDate] = useState('20 May 2025')
+  const [visitDate] = useState(() => getHeaderDateLabel())
   const [machine, setMachine] = useState('Total Station')
+  const [engineerName, setEngineerName] = useState('')
   const [workDetails, setWorkDetails] = useState(
     'Topographic survey for layout planning and road alignment.',
   )
@@ -200,7 +177,8 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
     { label: 'Accounts', path: '/account-manager', icon: Briefcase },
     { label: 'Clients', path: '/clients-sites', icon: UsersRound },
     { label: 'Sites', path: '/site-visits', icon: MapPin },
-    { label: 'Measure', path: '/measurement-rate-calculator', icon: Calculator },
+    { label: 'Invoice', path: '/invoice', icon: Calculator },
+    { label: 'Reports', path: '/reports', icon: FileBarChart },
     { label: 'Settings', path: '/settings', icon: Building2 },
   ] as const
 
@@ -216,7 +194,8 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
       'Account Manager': '/account-manager',
       'Clients & Sites': '/clients-sites',
       'Site Visits': '/site-visits',
-      Measurement: '/measurement-rate-calculator',
+      Invoice: '/invoice',
+      Reports: '/reports',
       Settings: '/settings',
     }
     const nextPath = routeMap[label]
@@ -245,19 +224,23 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
       <div className="flex min-h-0 flex-1 w-full max-w-none">
         <aside className="fixed inset-y-0 left-0 z-20 hidden w-[280px] flex-col bg-gradient-to-b from-[#050505] via-[#0b0b0b] to-[#040404] pb-20 text-white lg:flex">
           <div className="px-6 pt-7">
-            <div className="flex items-center gap-3">
-              <img
-                src="/samarth-logo.png"
-                alt="Samarth Land Surveyors"
-                className="h-25 w-auto"
-                draggable={false}
-              />
-            </div>
+            <CollaborationBrandMark variant="desktopSidebar" />
           </div>
 
           <nav className="mt-5 flex-1 px-3">
             <div className="space-y-1">
               {navItems.map((item) => {
+                if (item.label === 'Account Manager') {
+                  return (
+                    <Fragment key="account-manager">
+                      <AccountManagerSidebarBlock
+                        pathname={location.pathname}
+                        onNavigate={onNavigate}
+                        onAfterNavigate={() => setIsSidebarOpen(false)}
+                      />
+                    </Fragment>
+                  )
+                }
                 const active = item.label === 'Site Visits'
                 const isLogout = item.label === 'Log Out'
                 return (
@@ -320,6 +303,17 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
           <nav className="mt-4 flex-1 px-3">
             <div className="space-y-1">
               {navItems.map((item) => {
+                if (item.label === 'Account Manager') {
+                  return (
+                    <Fragment key="account-manager-mobile">
+                      <AccountManagerSidebarBlock
+                        pathname={location.pathname}
+                        onNavigate={onNavigate}
+                        onAfterNavigate={() => setIsSidebarOpen(false)}
+                      />
+                    </Fragment>
+                  )
+                }
                 const active = item.label === 'Site Visits'
                 const isLogout = item.label === 'Log Out'
                 return (
@@ -365,12 +359,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                   <Menu size={18} strokeWidth={2.25} className="text-white" />
                 </button>
                 <div className="flex min-w-0 justify-center px-1">
-                  <img
-                    src="/samarth-logo.png"
-                    alt="Samarth Land Surveyors"
-                    className="h-14 max-h-[68px] w-auto max-w-full object-contain object-center sm:h-[72px] sm:max-h-[72px]"
-                    draggable={false}
-                  />
+                  <CollaborationBrandMark variant="mobileHeader" />
                 </div>
                 <button
                   type="button"
@@ -388,10 +377,10 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                 <button
                   type="button"
                   className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-white/20 bg-neutral-900 px-2.5 text-[11px] font-semibold text-white transition hover:bg-neutral-800"
-                  aria-label="Select date"
+                  aria-label="Current date"
                 >
                   <Calendar size={13} className="text-[#f39b03]" />
-                  <span className="whitespace-nowrap">20 May 2025</span>
+                  <span className="whitespace-nowrap">{headerDateLabel}</span>
                 </button>
               </div>
             </div>
@@ -414,10 +403,10 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                 <button
                   type="button"
                   className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-neutral-900 sm:px-4 sm:py-2.5 sm:text-sm"
-                  aria-label="Select date"
+                  aria-label="Current date"
                 >
                   <Calendar size={16} className="text-[#f39b03]" />
-                  <span className="whitespace-nowrap">20 May 2025</span>
+                  <span className="whitespace-nowrap">{headerDateLabel}</span>
                 </button>
                 <div className="hidden items-center gap-3 rounded-xl bg-neutral-100 px-3 py-2 ring-1 ring-black/5 sm:flex sm:px-4 sm:py-2.5">
                   <div className="grid h-9 w-9 place-items-center rounded-xl bg-[#f39b03]/15 text-[#f39b03]">
@@ -436,30 +425,34 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
             <div className="mx-auto w-full max-w-[1200px] space-y-6 md:space-y-8">
               {!showAddForm ? (
                 <section className="grid grid-cols-2 gap-3 md:gap-4 xl:grid-cols-4">
-                  <SummaryMiniCard
+                  <StatCard
                     title="Total Visits"
                     value={String(visitRecords.length)}
+                    subtitle="All records"
                     icon={<ClipboardList className="text-sky-600" />}
                     toneClass="bg-sky-100"
                     mobileCardTint="bg-sky-50/90"
                   />
-                  <SummaryMiniCard
+                  <StatCard
                     title="Visit Revenue"
                     value={`Rs ${totalAmount.toLocaleString('en-IN')}`}
+                    subtitle="This period"
                     icon={<Briefcase className="text-emerald-600" />}
                     toneClass="bg-emerald-100"
                     mobileCardTint="bg-emerald-50/90"
                   />
-                  <SummaryMiniCard
+                  <StatCard
                     title="Received Amount"
                     value={`Rs ${totalAmount.toLocaleString('en-IN')}`}
+                    subtitle="This period"
                     icon={<Calendar className="text-violet-600" />}
                     toneClass="bg-violet-100"
                     mobileCardTint="bg-violet-50/90"
                   />
-                  <SummaryMiniCard
+                  <StatCard
                     title="Pending Visit Amount"
                     value="Rs 0"
+                    subtitle="Outstanding"
                     icon={<MapPin className="text-rose-600" />}
                     toneClass="bg-rose-100"
                     mobileCardTint="bg-rose-50/90"
@@ -478,55 +471,57 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                   </div>
                 </div>
               ) : (
-                <div className="flex flex-col gap-3 rounded-xl bg-white p-3 ring-1 ring-black/5 md:flex-row md:items-center md:justify-between md:gap-4 md:p-4">
+                <CardPanel className="flex flex-col gap-3 p-3 md:flex-row md:items-center md:justify-between md:gap-4 md:p-4">
                   <div className="w-full md:max-w-xs">
-                    <input
-                      type="text"
-                      placeholder="Search account..."
-                      className="h-10 w-full rounded-lg border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
-                    />
+                    <input type="text" placeholder="Search account..." className={toolbarSearchInputClass} />
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      type="button"
-                      className="inline-flex h-10 items-center justify-center rounded-lg border border-neutral-200 bg-white px-3 text-sm font-bold text-neutral-700 transition hover:bg-neutral-50"
-                    >
+                    <button type="button" className={toolbarSecondaryButtonClass}>
                       Filters
                     </button>
-                    <button
-                      type="button"
-                      className="inline-flex h-10 items-center justify-center rounded-lg border border-neutral-200 bg-white px-3 text-sm font-bold text-neutral-700 transition hover:bg-neutral-50"
-                    >
+                    <button type="button" className={toolbarSecondaryButtonClass}>
                       Export
                     </button>
                     <button
                       type="button"
                       onClick={() => setShowAddForm(true)}
-                      className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#f39b03] px-4 text-sm font-extrabold text-white shadow-[0_8px_24px_rgba(16,24,40,0.12)] transition hover:bg-[#e18e03]"
+                      className={toolbarPrimaryButtonClass}
                     >
-                      <Plus size={16} />
+                      <Plus className={toolbarPlusIconClass} />
                       Add new Site visit
                     </button>
                   </div>
-                </div>
+                </CardPanel>
               )}
 
               {!showAddForm ? (
-                <section className="rounded-xl bg-white p-5 shadow-[0_10px_30px_rgba(16,24,40,0.06)] ring-1 ring-black/5 md:rounded-2xl md:p-8">
-                  <div className="flex items-center justify-between gap-3 border-b border-neutral-100 pb-4">
-                    <span className="text-xs font-semibold text-neutral-500">{visitRecords.length} records</span>
-                  </div>
-
-                  <div className="mt-4 md:hidden">
-                    <ul className="flex flex-col gap-2">
+                <CardShell
+                  title="Site visit records"
+                  className="overflow-hidden"
+                  bodyClassName="p-0"
+                  headerEnd={
+                    <span className="text-xs font-semibold text-neutral-600">
+                      {visitRecords.length} records
+                    </span>
+                  }
+                >
+                  <div className="md:hidden">
+                    <ul className="flex flex-col gap-2 px-3 pb-1.5 pt-1.5">
                       {visitRecords.map((record) => (
                         <li key={`${record.id}-mobile`}>
-                          <button
-                            type="button"
+                          <div
+                            role="button"
+                            tabIndex={0}
                             onClick={() => onNavigate(getVisitDetailsPath(record))}
-                            className="w-full rounded-lg bg-white p-3 text-left shadow-sm ring-1 ring-black/5"
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter' || event.key === ' ') {
+                                event.preventDefault()
+                                onNavigate(getVisitDetailsPath(record))
+                              }
+                            }}
+                            className="w-full rounded-xl border border-neutral-200 bg-white p-3 text-left shadow-sm ring-1 ring-black/5"
                           >
-                            <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-start justify-between gap-2">
                               <div className="min-w-0">
                                 <div className="truncate text-xs font-extrabold text-neutral-900">
                                   {record.client} - {record.site}
@@ -537,75 +532,145 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                               </div>
                               <span className="shrink-0 text-xs font-extrabold text-emerald-600">Rs {record.amount}</span>
                             </div>
-                          </button>
+                            <div className="mt-2 flex items-center justify-end gap-1.5">
+                              <button
+                                type="button"
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-[#f39b03]/12 text-[#f39b03] transition hover:bg-[#f39b03]/20"
+                                aria-label={`View ${record.id}`}
+                                onClick={(event) => {
+                                  event.stopPropagation()
+                                  onNavigate(getVisitDetailsPath(record))
+                                }}
+                              >
+                                <Eye size={15} />
+                              </button>
+                              <button
+                                type="button"
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-neutral-200 bg-white text-neutral-900 transition hover:bg-neutral-50"
+                                aria-label={`Open ${record.id}`}
+                                onClick={(event) => {
+                                  event.stopPropagation()
+                                  onNavigate(getVisitDetailsPath(record))
+                                }}
+                              >
+                                <ArrowRight size={15} />
+                              </button>
+                            </div>
+                          </div>
                         </li>
                       ))}
+                      {visitRecords.length === 0 ? (
+                        <li className="rounded-xl border border-neutral-200 bg-white px-3 py-5 text-center text-xs font-semibold text-neutral-600">
+                          No visit records found.
+                        </li>
+                      ) : null}
                     </ul>
                   </div>
 
-                  <div className="mt-4 hidden overflow-x-auto md:block">
+                  <div className="hidden overflow-x-auto md:block">
                     <table className="w-full min-w-[980px] border-collapse">
                       <thead className="bg-neutral-50">
                         <tr className="text-left text-xs font-extrabold uppercase tracking-wide text-neutral-500">
-                          <th className="px-4 py-3">Visit ID</th>
-                          <th className="px-4 py-3">Client</th>
-                          <th className="px-4 py-3">Site</th>
-                          <th className="px-4 py-3">Date</th>
-                          <th className="px-4 py-3">Machine</th>
-                          <th className="px-4 py-3 text-right">Amount</th>
-                          <th className="px-4 py-3 text-center">Action</th>
+                          <th className="px-6 py-4">Visit ID</th>
+                          <th className="px-4 py-4">Client</th>
+                          <th className="px-4 py-4">Site</th>
+                          <th className="px-4 py-4">Date</th>
+                          <th className="px-4 py-4">Machine</th>
+                          <th className="px-4 py-4 text-right">Amount</th>
+                          <th className="px-4 py-4 text-center">Action</th>
                         </tr>
                       </thead>
                       <tbody className="text-sm font-semibold text-neutral-800">
                         {visitRecords.map((record) => (
                           <tr
                             key={record.id}
-                            className="cursor-pointer border-t border-neutral-200 hover:bg-neutral-50/70"
+                            className="border-t border-neutral-200 hover:bg-neutral-50/60"
                             onClick={() => onNavigate(getVisitDetailsPath(record))}
+                            role="button"
+                            tabIndex={0}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter' || event.key === ' ') {
+                                event.preventDefault()
+                                onNavigate(getVisitDetailsPath(record))
+                              }
+                            }}
                           >
-                            <td className="px-4 py-3 font-extrabold text-neutral-900">{record.id}</td>
-                            <td className="px-4 py-3">{record.client}</td>
-                            <td className="px-4 py-3">{record.site}</td>
-                            <td className="px-4 py-3">{record.date}</td>
-                            <td className="px-4 py-3">{record.machine}</td>
-                            <td className="px-4 py-3 text-right font-extrabold text-emerald-600">
-                              Rs {record.amount}
-                            </td>
-                            <td className="px-4 py-3 text-center">
-                              <button
-                                type="button"
-                                onClick={(event) => {
-                                  event.stopPropagation()
-                                  onNavigate(getVisitDetailsPath(record))
-                                }}
-                                className="inline-flex h-9 items-center justify-center rounded-xl border border-neutral-200 bg-white px-3 text-xs font-extrabold text-neutral-800 transition hover:bg-neutral-50"
-                              >
-                                View
-                              </button>
+                            <td className="px-6 py-4 font-extrabold text-neutral-950">{record.id}</td>
+                            <td className="px-4 py-4 text-neutral-700">{record.client}</td>
+                            <td className="px-4 py-4 text-neutral-700">{record.site}</td>
+                            <td className="px-4 py-4 text-neutral-700">{record.date}</td>
+                            <td className="px-4 py-4 text-neutral-700">{record.machine}</td>
+                            <td className="px-4 py-4 text-right font-extrabold text-emerald-600">Rs {record.amount}</td>
+                            <td className="px-4 py-4">
+                              <div className="flex items-center justify-center gap-2">
+                                <button
+                                  type="button"
+                                  className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-[#f39b03]/12 text-[#f39b03] transition hover:bg-[#f39b03]/20"
+                                  aria-label={`View ${record.id}`}
+                                  onClick={(event) => {
+                                    event.stopPropagation()
+                                    onNavigate(getVisitDetailsPath(record))
+                                  }}
+                                >
+                                  <Eye size={16} />
+                                </button>
+                                <button
+                                  type="button"
+                                  className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-neutral-200 bg-white text-neutral-900 transition hover:bg-neutral-50"
+                                  aria-label={`Open ${record.id}`}
+                                  onClick={(event) => {
+                                    event.stopPropagation()
+                                    onNavigate(getVisitDetailsPath(record))
+                                  }}
+                                >
+                                  <ArrowRight size={16} />
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         ))}
+                        {visitRecords.length === 0 ? (
+                          <tr className="border-t border-neutral-200">
+                            <td className="px-6 py-8 text-sm font-semibold text-neutral-600" colSpan={7}>
+                              No visit records found.
+                            </td>
+                          </tr>
+                        ) : null}
                       </tbody>
                     </table>
                   </div>
-                </section>
+                </CardShell>
               ) : (
                 <form
                   id={formId}
                   className="space-y-6"
                   onSubmit={(e) => {
                     e.preventDefault()
+                    const visitId = `SV-${Math.floor(1000 + Math.random() * 9000)}`
+                    const params = new URLSearchParams({
+                      mode: 'visit',
+                      visitId,
+                      client,
+                      name: site,
+                      date: visitDate,
+                      machine,
+                      amount,
+                      paymentMode,
+                      notes,
+                      work: workDetails,
+                      engineerName,
+                      contactPerson: engineerName,
+                    })
+                    setShowAddForm(false)
+                    onNavigate(`/site-details?${params.toString()}`)
                   }}
                 >
-                <section className="rounded-xl bg-white p-5 shadow-[0_10px_30px_rgba(16,24,40,0.06)] ring-1 ring-black/5 md:rounded-2xl md:p-8">
-                  <div className="border-b border-neutral-100 pb-4">
-                    <h3 className="text-sm font-extrabold tracking-tight text-neutral-950">Visit Details</h3>
-                    <p className="mt-1 text-xs font-semibold text-neutral-500">
-                      Core information for this survey visit.
-                    </p>
-                  </div>
+                <CardShell title="Visit Details">
+                  <p className="-mt-1 mb-6 text-xs font-semibold text-neutral-500">
+                    Core information for this survey visit.
+                  </p>
 
-                  <div className="mt-6 grid grid-cols-1 gap-5 md:grid-cols-2 md:gap-6">
+                  <div className="grid grid-cols-1 gap-5 md:grid-cols-2 md:gap-6">
                     <label className="grid gap-2">
                       <span className="text-xs font-bold text-neutral-700">Client</span>
                       <div className="relative">
@@ -694,6 +759,16 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                       </div>
                     </label>
 
+                    <label className="grid gap-2">
+                      <span className="text-xs font-bold text-neutral-700">Engg. Name</span>
+                      <input
+                        value={engineerName}
+                        onChange={(e) => setEngineerName(e.target.value)}
+                        placeholder="Enter engineer name"
+                        className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
+                      />
+                    </label>
+
                     <label className="grid gap-2 md:col-span-2">
                       <span className="text-xs font-bold text-neutral-700">Work Details / Description</span>
                       <textarea
@@ -748,15 +823,12 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                       />
                     </label>
                   </div>
-                </section>
+                </CardShell>
 
-                <section className="rounded-xl bg-white p-5 shadow-[0_10px_30px_rgba(16,24,40,0.06)] ring-1 ring-black/5 md:rounded-2xl md:p-8">
-                  <div className="border-b border-neutral-100 pb-4">
-                    <h3 className="text-sm font-extrabold tracking-tight text-neutral-950">Site Visit Photos</h3>
-                    <p className="mt-1 text-xs font-semibold text-neutral-500">Upload photos from site visit</p>
-                  </div>
+                <CardShell title="Site Visit Photos">
+                  <p className="-mt-1 mb-6 text-xs font-semibold text-neutral-500">Upload photos from site visit</p>
 
-                  <div className="mt-6">
+                  <div>
                     <input
                       ref={fileInputRef}
                       type="file"
@@ -821,7 +893,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                       </button>
                     </div>
                   </div>
-                </section>
+                </CardShell>
 
                 <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <button
@@ -853,8 +925,9 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
         <div className="mx-auto flex w-full max-w-lg items-stretch justify-between gap-0 px-1 pt-1.5 pb-1">
           {mobileBottomNav.map((item) => {
             const active =
-              item.path === '/site-visits' &&
-              (location.pathname === '/site-visits' || location.pathname === '/add-site-visit')
+              (item.path === '/site-visits' &&
+                (location.pathname === '/site-visits' || location.pathname === '/add-site-visit')) ||
+              (item.path === '/invoice' && location.pathname === '/invoice')
             const Icon = item.icon
             return (
               <button

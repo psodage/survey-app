@@ -7,22 +7,43 @@ import {
   Calculator,
   CircleUserRound,
   Eye,
+  FileBarChart,
   FileText,
-  Filter,
   LayoutGrid,
   LogOut,
   Mail,
   MapPin,
   Menu,
   Phone,
+  IndianRupee,
   ReceiptIndianRupee,
-  Search,
+  Plus,
   UsersRound,
   Wallet,
   X,
 } from 'lucide-react'
-import { useMemo, useState, type ReactNode } from 'react'
-import { useLocation, type NavigateFunction } from 'react-router-dom'
+import { Fragment, useMemo, useState, type ReactNode } from 'react'
+import { Navigate, useLocation, useParams, useSearchParams, type NavigateFunction } from 'react-router-dom'
+import { AccountManagerSidebarBlock } from './AccountManagerSidebarBlock'
+import { CollaborationBrandMark } from './CollaborationBrandMark'
+import {
+  accountRowsByManagerId,
+  clientNamesForManager,
+  getAccountManagerById,
+  initialTransactionsByManagerId,
+  siteOptionsByClient,
+  type LedgerTransaction,
+} from './accountManagersData'
+import {
+  CardPanel,
+  CardShell,
+  StatCard,
+  toolbarPlusIconClass,
+  toolbarPrimaryButtonClass,
+  toolbarSearchInputClass,
+  toolbarSecondaryButtonClass,
+} from './dashboardCards'
+import { getHeaderDateLabel } from './headerDateLabel'
 import { signOut } from './signOut'
 
 type NavItem = {
@@ -35,126 +56,10 @@ const navItems: NavItem[] = [
   { label: 'Account Manager', icon: <Briefcase size={16} /> },
   { label: 'Clients & Sites', icon: <UsersRound size={16} /> },
   { label: 'Site Visits', icon: <FileText size={16} /> },
-  { label: 'Measurement', icon: <Calculator size={16} /> },
+  { label: 'Invoice', icon: <Calculator size={16} /> },
+  { label: 'Reports', icon: <FileBarChart size={16} /> },
   { label: 'Settings', icon: <Building2 size={16} /> },
   { label: 'Log Out', icon: <LogOut size={16} /> },
-]
-
-type SummaryCardProps = {
-  title: string
-  value: string
-  subtitle: string
-  icon: ReactNode
-  toneClass: string
-  /** Full-card soft tint on mobile only (md+ uses white card) */
-  mobileCardTint: string
-  onClick?: () => void
-  ariaLabel?: string
-}
-
-function SummaryCard({
-  title,
-  value,
-  subtitle,
-  icon,
-  toneClass,
-  mobileCardTint,
-  onClick,
-  ariaLabel,
-}: SummaryCardProps) {
-  const classes = [
-    'w-full rounded-xl p-3 shadow-sm ring-1 ring-black/5',
-    mobileCardTint,
-    'md:rounded-2xl md:bg-white md:p-5 md:shadow-[0_10px_30px_rgba(16,24,40,0.06)]',
-    onClick ? 'cursor-pointer transition hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f39b03]/50' : '',
-  ].join(' ')
-
-  const content = (
-    <div className="flex items-start gap-2 md:gap-4">
-      <div
-        className={[
-          'grid h-9 w-9 shrink-0 place-items-center rounded-xl md:h-12 md:w-12 md:rounded-2xl',
-          toneClass,
-        ].join(' ')}
-      >
-        <span className="[&>svg]:h-4 [&>svg]:w-4 md:scale-100 md:[&>svg]:h-5 md:[&>svg]:w-5">
-          {icon}
-        </span>
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="text-[11px] font-semibold leading-tight text-neutral-700 md:text-sm">{title}</div>
-        <div className="mt-0.5 text-base font-extrabold leading-tight tracking-tight text-neutral-950 md:mt-1 md:text-2xl">
-          {value}
-        </div>
-        <div className="mt-0.5 text-[10px] font-medium leading-snug text-neutral-500 md:mt-1 md:text-xs">{subtitle}</div>
-      </div>
-    </div>
-  )
-
-  return onClick ? (
-    <button type="button" onClick={onClick} aria-label={ariaLabel ?? title} className={classes}>
-      {content}
-    </button>
-  ) : (
-    <div className={classes}>{content}</div>
-  )
-}
-
-const accountRows = [
-  {
-    name: 'Amit Developers',
-    phone: '+91 8643001010',
-    totalRevenue: '₹2,25,000',
-    received: '₹1,40,000',
-    pending: '₹85,000',
-    debit: '₹10,000',
-    credit: '₹1,50,000',
-  },
-  {
-    name: 'Shree Krishna Infra',
-    phone: '+91 7026016077',
-    totalRevenue: '₹2,10,000',
-    received: '₹1,45,000',
-    pending: '₹65,000',
-    debit: '₹7,500',
-    credit: '₹1,52,500',
-  },
-  {
-    name: 'Vishwakarma Properties',
-    phone: '+91 9595975566',
-    totalRevenue: '₹1,85,000',
-    received: '₹1,20,000',
-    pending: '₹65,000',
-    debit: '₹5,000',
-    credit: '₹1,25,000',
-  },
-  {
-    name: 'Gajanan Projects',
-    phone: '+91 7058129002',
-    totalRevenue: '₹1,70,000',
-    received: '₹95,000',
-    pending: '₹75,000',
-    debit: '₹9,000',
-    credit: '₹1,04,000',
-  },
-  {
-    name: 'Sai Realities',
-    phone: '+91 9011122334',
-    totalRevenue: '₹1,55,000',
-    received: '₹1,05,500',
-    pending: '₹49,500',
-    debit: '₹6,500',
-    credit: '₹1,12,000',
-  },
-  {
-    name: 'Green Valley Constructions',
-    phone: '+91 9988776655',
-    totalRevenue: '₹1,30,000',
-    received: '₹80,000',
-    pending: '₹50,000',
-    debit: '₹4,000',
-    credit: '₹84,000',
-  },
 ]
 
 function parseCurrency(value: string) {
@@ -167,54 +72,49 @@ function formatINR(value: number) {
 
 type TransactionType = 'debit' | 'credit'
 
-type Transaction = {
-  id: string
-  type: TransactionType
-  amount: number
-  date: string // yyyy-mm-dd
-  reason?: string
-  client?: string
-  site?: string
-}
-
-const clientOptions = ['Amit Developers', 'Shree Krishna Infra', 'Vishwakarma Properties', 'Gajanan Projects']
-const siteOptionsByClient: Record<string, string[]> = {
-  'Amit Developers': ['Wakad Site', 'Baner Site'],
-  'Shree Krishna Infra': ['Hinjewadi Site'],
-  'Vishwakarma Properties': ['Kothrud Site'],
-  'Gajanan Projects': ['Ravet Site'],
-}
+type Transaction = LedgerTransaction
 
 type AccountManagerProps = {
   onNavigate: NavigateFunction
-  viewMode?: 'all' | 'debits' | 'credits' | 'pending' | 'net'
 }
 
-export default function AccountManager({ onNavigate, viewMode = 'all' }: AccountManagerProps) {
+export default function AccountManager({ onNavigate }: AccountManagerProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+  const { managerId: managerIdFromRoute } = useParams<{ managerId: string }>()
+  const manager = managerIdFromRoute ? getAccountManagerById(managerIdFromRoute) : undefined
+  const managerId = manager?.id ?? ''
+  const [searchParams] = useSearchParams()
+  const viewParam = searchParams.get('view')
+  const viewMode: 'all' | 'debits' | 'credits' | 'pending' | 'net' =
+    viewParam === 'debits'
+      ? 'debits'
+      : viewParam === 'credits'
+        ? 'credits'
+        : viewParam === 'pending'
+          ? 'pending'
+          : viewParam === 'net'
+            ? 'net'
+            : 'all'
 
   const location = useLocation()
   const navState = location.state as
     | {
         selectedYear?: string
-        transactions?: Transaction[]
       }
     | undefined
 
   const [selectedYear] = useState(() => navState?.selectedYear ?? '2025')
-  const currentDateLabel = new Date().toLocaleDateString('en-GB', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  })
+  const currentDateLabel = getHeaderDateLabel()
+  const accountRows = accountRowsByManagerId[managerId] ?? []
+  const clientOptions = clientNamesForManager(managerId)
   const totalPending = accountRows.reduce((sum, row) => sum + parseCurrency(row.pending), 0)
   const [isAddOpen, setIsAddOpen] = useState(false)
-  const defaultTransactions: Transaction[] = [
-    { id: 't1', type: 'debit', amount: 1500, date: '2025-05-20', reason: 'Petrol' },
-    { id: 't2', type: 'credit', amount: 12000, date: '2025-05-18', client: 'Amit Developers', site: 'Wakad Site' },
-  ]
 
-  const [transactions, setTransactions] = useState<Transaction[]>(() => navState?.transactions ?? defaultTransactions)
+  const [transactionsByManager, setTransactionsByManager] = useState<Record<string, Transaction[]>>(() => ({
+    ...initialTransactionsByManagerId,
+  }))
+  const transactions = transactionsByManager[managerId] ?? initialTransactionsByManagerId[managerId] ?? []
+
   const [draftTx, setDraftTx] = useState<Transaction>(() => ({
     id: '',
     type: 'debit',
@@ -256,25 +156,38 @@ export default function AccountManager({ onNavigate, viewMode = 'all' }: Account
     }
   }, [tableTransactions])
 
+  if (!managerIdFromRoute || !manager) {
+    return <Navigate to={{ pathname: '/account-manager', search: location.search }} replace />
+  }
+
   const pageTitle =
     viewMode === 'debits'
-      ? 'Debit Transactions'
+      ? `${manager.shortName} · Debit transactions`
       : viewMode === 'credits'
-        ? 'Credit Transactions'
+        ? `${manager.shortName} · Credit transactions`
         : viewMode === 'pending'
-          ? 'Pending Amount'
+          ? `${manager.shortName} · Pending amount`
+          : viewMode === 'net'
+            ? `${manager.shortName} · Net balance`
+            : `${manager.shortName} · Account manager`
+
+  const ledgerCardTitle =
+    viewMode === 'pending'
+      ? 'Pending Amount by Client'
+      : viewMode === 'debits'
+        ? 'Debit Transactions'
+        : viewMode === 'credits'
+          ? 'Credit Transactions'
           : viewMode === 'net'
             ? 'Net Balance'
-            : 'Account Manager'
+            : 'Transactions'
 
   const isAccountManagerRoute = location.pathname.startsWith('/account-manager')
 
   const handleSummaryCardClick = (kind: 'debits' | 'credits' | 'pending' | 'net') => {
-    const state = { selectedYear, transactions }
-    if (kind === 'debits') onNavigate('/account-manager/debits', { state })
-    else if (kind === 'credits') onNavigate('/account-manager/credits', { state })
-    else if (kind === 'pending') onNavigate('/account-manager/pending', { state })
-    else onNavigate('/account-manager/net-balance', { state })
+    const qs = new URLSearchParams()
+    qs.set('view', kind)
+    onNavigate(`/account-manager/${managerId}?${qs.toString()}`, { state: { selectedYear } })
     setIsSidebarOpen(false)
   }
 
@@ -290,7 +203,8 @@ export default function AccountManager({ onNavigate, viewMode = 'all' }: Account
       'Account Manager': '/account-manager',
       'Clients & Sites': '/clients-sites',
       'Site Visits': '/site-visits',
-      Measurement: '/measurement-rate-calculator',
+      Invoice: '/invoice',
+      Reports: '/reports',
       Settings: '/settings',
     }
     const nextPath = routeMap[label]
@@ -303,7 +217,8 @@ export default function AccountManager({ onNavigate, viewMode = 'all' }: Account
     { label: 'Accounts', path: '/account-manager', icon: Briefcase },
     { label: 'Clients', path: '/clients-sites', icon: UsersRound },
     { label: 'Sites', path: '/site-visits', icon: MapPin },
-    { label: 'Measure', path: '/measurement-rate-calculator', icon: Calculator },
+    { label: 'Invoice', path: '/invoice', icon: Calculator },
+    { label: 'Reports', path: '/reports', icon: FileBarChart },
     { label: 'Settings', path: '/settings', icon: Building2 },
   ] as const
 
@@ -312,20 +227,24 @@ export default function AccountManager({ onNavigate, viewMode = 'all' }: Account
       <div className="flex min-h-0 flex-1 w-full max-w-none">
         <aside className="fixed inset-y-0 left-0 z-20 hidden w-[280px] flex-col bg-gradient-to-b from-[#050505] via-[#0b0b0b] to-[#040404] pb-20 text-white lg:flex">
           <div className="px-6 pt-7">
-            <div className="flex items-center gap-3">
-              <img
-                src="/samarth-logo.png"
-                alt="Samarth Land Surveyors"
-                className="h-25 w-auto"
-                draggable={false}
-              />
-            </div>
+            <CollaborationBrandMark variant="desktopSidebar" />
           </div>
 
           <nav className="mt-5 flex-1 px-3">
             <div className="space-y-1">
               {navItems.map((item) => {
-                const active = item.label === 'Account Manager' ? isAccountManagerRoute : false
+                if (item.label === 'Account Manager') {
+                  return (
+                    <Fragment key="account-manager">
+                      <AccountManagerSidebarBlock
+                        pathname={location.pathname}
+                        onNavigate={(path) => onNavigate(path)}
+                        onAfterNavigate={() => setIsSidebarOpen(false)}
+                      />
+                    </Fragment>
+                  )
+                }
+                const active = false
                 const isLogout = item.label === 'Log Out'
                 return (
                   <button
@@ -423,13 +342,18 @@ export default function AccountManager({ onNavigate, viewMode = 'all' }: Account
 
           <div className="mt-5 px-5">
             <div className="text-[11px] font-extrabold uppercase tracking-wide text-white/45">Quick navigation</div>
+            <div className="mt-2 space-y-2">
+              <AccountManagerSidebarBlock
+                pathname={location.pathname}
+                onNavigate={(path) => onNavigate(path)}
+                onAfterNavigate={() => setIsSidebarOpen(false)}
+              />
+            </div>
             <div className="mt-2 grid grid-cols-2 gap-2">
               {[
                 { label: 'Dashboard', path: '/dashboard', icon: LayoutGrid },
-                { label: 'Accounts', path: '/account-manager', icon: Briefcase },
                 { label: 'Clients', path: '/clients-sites', icon: UsersRound },
                 { label: 'Visits', path: '/site-visits', icon: MapPin },
-                { label: 'Measurement', path: '/measurement-rate-calculator', icon: Calculator },
               ].map(({ label, path, icon: Icon }) => (
                 <button
                   type="button"
@@ -440,9 +364,7 @@ export default function AccountManager({ onNavigate, viewMode = 'all' }: Account
                   }}
                   className={[
                     'flex flex-col items-center gap-1.5 rounded-xl px-2 py-3 text-[11px] font-bold ring-1 transition',
-                    path === '/account-manager'
-                      ? 'bg-white/10 text-[#f39b03] ring-[#f39b03]/35'
-                      : 'bg-white/5 text-white/85 ring-white/10 hover:bg-white/10',
+                    'bg-white/5 text-white/85 ring-white/10 hover:bg-white/10',
                   ].join(' ')}
                 >
                   <Icon size={18} />
@@ -478,12 +400,7 @@ export default function AccountManager({ onNavigate, viewMode = 'all' }: Account
                   <Menu size={18} strokeWidth={2.25} className="text-white" />
                 </button>
                 <div className="flex min-w-0 justify-center px-1">
-                  <img
-                    src="/samarth-logo.png"
-                    alt="Samarth Land Surveyors"
-                    className="h-14 max-h-[68px] w-auto max-w-full object-contain object-center sm:h-[72px] sm:max-h-[72px]"
-                    draggable={false}
-                  />
+                  <CollaborationBrandMark variant="mobileHeader" />
                 </div>
                 <button
                   type="button"
@@ -511,7 +428,7 @@ export default function AccountManager({ onNavigate, viewMode = 'all' }: Account
 
             {/* Desktop / tablet */}
             <div className="relative hidden w-full items-center justify-between gap-4 border-b border-neutral-200 bg-white px-4 py-2.5 shadow-[0_6px_20px_rgba(16,24,40,0.05)] sm:px-6 md:flex md:px-6 md:py-4 lg:px-8">
-              <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
+              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:gap-3">
                 <button
                   type="button"
                   className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white shadow-sm ring-1 ring-black/5 hover:bg-neutral-50 md:h-10 md:w-10 md:shadow-[0_10px_30px_rgba(16,24,40,0.06)] lg:hidden"
@@ -520,9 +437,9 @@ export default function AccountManager({ onNavigate, viewMode = 'all' }: Account
                 >
                   <Menu size={18} className="text-neutral-900" />
                 </button>
-                <div className="min-w-0 truncate text-lg font-extrabold tracking-tight text-neutral-950 sm:text-xl">
+                <h1 className="min-w-0 max-w-[min(100%,28rem)] truncate text-lg font-extrabold tracking-tight text-neutral-950 sm:text-xl">
                   {pageTitle}
-                </div>
+                </h1>
               </div>
 
               <div className="flex shrink-0 items-center gap-2 sm:gap-3">
@@ -550,120 +467,143 @@ export default function AccountManager({ onNavigate, viewMode = 'all' }: Account
           </header>
 
           <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-white p-4 pb-[calc(3.65rem+max(12px,env(safe-area-inset-bottom,0px)))] sm:px-6 sm:pt-6 sm:pb-[calc(3.65rem+max(12px,env(safe-area-inset-bottom,0px)))] md:p-6 md:pb-24 lg:p-8 lg:pb-28">
+            <CardShell
+              className="mb-4 md:mb-0 md:hidden"
+              title="Account manager"
+              leadingIcon={<Briefcase size={18} strokeWidth={2} />}
+              headerEnd={
+                <button
+                  type="button"
+                  onClick={() => onNavigate(`/account-manager${location.search}`)}
+                  className="rounded-lg bg-neutral-900 px-3 py-2 text-[11px] font-bold text-white shadow-sm ring-1 ring-black/10 transition hover:bg-neutral-800 md:text-xs"
+                >
+                  Change manager
+                </button>
+              }
+              bodyClassName="p-4 sm:p-5 md:p-6"
+            >
+              <div className="flex flex-col gap-0.5">
+                <p className="text-base font-extrabold tracking-tight text-neutral-950">{manager.name}</p>
+                <p className="text-sm font-semibold text-neutral-600">{manager.phone}</p>
+              </div>
+            </CardShell>
             <section className="grid grid-cols-2 gap-3 md:gap-4 xl:grid-cols-4">
-              <SummaryCard
-                title="Total Debit"
-                value={formatINR(totalDebit)}
-                subtitle="This Financial Year"
-                icon={<ReceiptIndianRupee size={20} className="text-rose-600" />}
-                toneClass="bg-rose-100"
-                mobileCardTint="bg-rose-50/90"
+              <button
+                type="button"
                 onClick={() => handleSummaryCardClick('debits')}
-                ariaLabel="Open debit transactions"
-              />
-              <SummaryCard
-                title="Total Credit"
-                value={formatINR(totalCredit)}
-                subtitle="This Financial Year"
-                icon={<Wallet size={20} className="text-emerald-600" />}
-                toneClass="bg-emerald-100"
-                mobileCardTint="bg-emerald-50/90"
+                className="w-full cursor-pointer rounded-xl bg-transparent p-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f39b03]/70"
+                aria-label="Open debit transactions"
+              >
+                <StatCard
+                  title="Total Debit"
+                  value={formatINR(totalDebit)}
+                  subtitle="This Financial Year"
+                  icon={<ReceiptIndianRupee size={20} className="text-rose-600" />}
+                  toneClass="bg-rose-100"
+                  mobileCardTint="bg-rose-50/90"
+                />
+              </button>
+              <button
+                type="button"
                 onClick={() => handleSummaryCardClick('credits')}
-                ariaLabel="Open credit transactions"
-              />
-              <SummaryCard
-                title="Net Balance"
-                value={formatINR(netBalance)}
-                subtitle="This Financial Year"
-                icon={<Briefcase size={20} className="text-neutral-700 md:text-[#f39b03]" />}
-                toneClass="bg-neutral-200 md:bg-[#f39b03]/12"
-                mobileCardTint="bg-neutral-900/[0.07]"
+                className="w-full cursor-pointer rounded-xl bg-transparent p-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f39b03]/70"
+                aria-label="Open credit transactions"
+              >
+                <StatCard
+                  title="Total Credit"
+                  value={formatINR(totalCredit)}
+                  subtitle="This Financial Year"
+                  icon={<Wallet size={20} className="text-emerald-600" />}
+                  toneClass="bg-emerald-100"
+                  mobileCardTint="bg-emerald-50/90"
+                />
+              </button>
+              <button
+                type="button"
                 onClick={() => handleSummaryCardClick('net')}
-                ariaLabel="Open net balance details"
-              />
-              <SummaryCard
-                title="Pending Amount"
-                value={formatINR(totalPending)}
-                subtitle="This Financial Year"
-                icon={<BarChart3 size={20} className="text-rose-600" />}
-                toneClass="bg-rose-100"
-                mobileCardTint="bg-rose-50/90"
+                className="w-full cursor-pointer rounded-xl bg-transparent p-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f39b03]/70"
+                aria-label="Open net balance details"
+              >
+                <StatCard
+                  title="Net Balance"
+                  value={formatINR(netBalance)}
+                  subtitle="This Financial Year"
+                  icon={<Briefcase size={20} className="text-neutral-700 md:text-[#f39b03]" />}
+                  toneClass="bg-neutral-200 md:bg-[#f39b03]/12"
+                  mobileCardTint="bg-neutral-900/[0.07]"
+                />
+              </button>
+              <button
+                type="button"
                 onClick={() => handleSummaryCardClick('pending')}
-                ariaLabel="Open pending clients"
-              />
-            
+                className="w-full cursor-pointer rounded-xl bg-transparent p-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f39b03]/70"
+                aria-label="Open pending clients"
+              >
+                <StatCard
+                  title="Pending Amount"
+                  value={formatINR(totalPending)}
+                  subtitle="This Financial Year"
+                  icon={<BarChart3 size={20} className="text-rose-600" />}
+                  toneClass="bg-rose-100"
+                  mobileCardTint="bg-rose-50/90"
+                />
+              </button>
             </section>
 
             {viewMode !== 'pending' ? (
-              <section className="mt-4 rounded-xl bg-white p-2.5 shadow-sm ring-1 ring-black/5 sm:p-4 md:mt-6 md:rounded-2xl md:p-5 md:shadow-[0_10px_30px_rgba(16,24,40,0.06)]">
-              <div className="flex flex-col gap-2.5 md:gap-4 lg:flex-row lg:items-center lg:justify-between">
-                <div className="relative w-full md:max-w-none lg:max-w-xl">
-                  <Search
-                    aria-hidden
-                    className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-neutral-400 md:h-[17px] md:w-[17px]"
-                  />
-                  <input
-                    type="text"
-                    placeholder="Search account..."
-                    className="h-9 w-full rounded-lg border border-neutral-200 bg-neutral-50 pl-9 pr-3 text-xs font-medium text-neutral-800 outline-none transition focus:border-[#f39b03] focus:bg-white focus:ring-2 focus:ring-[#f39b03]/20 md:h-11 md:rounded-xl md:pl-10 md:pr-4 md:text-sm"
-                  />
-                </div>
-
-                <div className="flex w-full flex-col gap-2 md:w-auto md:flex-row md:flex-wrap md:items-center md:justify-end md:gap-2 lg:gap-2">
-                  <div className="flex w-full items-stretch md:w-auto">
-                    <button
-                      type="button"
-                      className="inline-flex h-9 flex-1 items-center justify-start gap-2 rounded-lg border border-neutral-200 bg-white px-3 text-xs font-semibold text-neutral-700 transition hover:border-neutral-300 hover:bg-neutral-50 md:h-11 md:flex-initial md:rounded-xl md:px-4 md:text-sm"
-                    >
-                      <Filter className="h-4 w-4 shrink-0 md:h-4 md:w-4" aria-hidden />
+              <section className="mt-4 md:mt-6">
+                <CardPanel className="flex flex-col gap-3 p-3 md:flex-row md:items-center md:justify-between md:gap-4 md:p-4">
+                  <div className="w-full md:max-w-xs">
+                    <input type="text" placeholder="Search account..." className={toolbarSearchInputClass} />
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button type="button" className={toolbarSecondaryButtonClass}>
                       Filters
                     </button>
-                    <div className="flex flex-1 items-center justify-center md:flex-initial">
-                      <button
-                        type="button"
-                        className="inline-flex h-9 items-center gap-2 rounded-lg border border-neutral-200 bg-white px-3 text-xs font-semibold text-neutral-700 transition hover:border-neutral-300 hover:bg-neutral-50 md:h-11 md:rounded-xl md:px-4 md:text-sm"
-                        aria-label="Export filtered transactions as PDF"
-                        title="Download PDF of transactions shown for the selected year"
-                        onClick={async () => {
-                          const { exportFilteredTransactionsPdf } = await import('./exportTransactionsPdf')
-                          exportFilteredTransactionsPdf({
-                            year: selectedYear,
-                            transactions: tableTransactions,
-                            totalDebit: exportTotals.totalDebit,
-                            totalCredit: exportTotals.totalCredit,
-                            netBalance: exportTotals.netBalance,
-                          })
-                        }}
-                      >
-                        Export
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      className={toolbarSecondaryButtonClass}
+                      aria-label="Export filtered transactions as PDF"
+                      title="Download PDF of transactions shown for the selected year"
+                      onClick={async () => {
+                        const { exportFilteredTransactionsPdf } = await import('./exportTransactionsPdf')
+                        exportFilteredTransactionsPdf({
+                          year: selectedYear,
+                          transactions: tableTransactions,
+                          totalDebit: exportTotals.totalDebit,
+                          totalCredit: exportTotals.totalCredit,
+                          netBalance: exportTotals.netBalance,
+                        })
+                      }}
+                    >
+                      Export
+                    </button>
+                    <button
+                      type="button"
+                      className={toolbarPrimaryButtonClass}
+                      onClick={() => {
+                        setDraftTx({
+                          id: '',
+                          type: 'debit',
+                          amount: 0,
+                          date: new Date().toISOString().slice(0, 10),
+                          reason: '',
+                        })
+                        setIsAddOpen(true)
+                      }}
+                    >
+                      <Plus className={toolbarPlusIconClass} />
+                      Add Transaction
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    className="flex h-9 w-full shrink-0 items-center justify-center rounded-lg bg-[#f39b03] px-4 text-xs font-bold text-white shadow-sm transition hover:bg-[#e18e03] md:inline-flex md:h-11 md:w-auto md:rounded-xl md:px-5 md:text-sm"
-                    onClick={() => {
-                      setDraftTx({
-                        id: '',
-                        type: 'debit',
-                        amount: 0,
-                        date: new Date().toISOString().slice(0, 10),
-                        reason: '',
-                      })
-                      setIsAddOpen(true)
-                    }}
-                  >
-                    + Add Transaction
-                  </button>
-                </div>
-              </div>
-            </section>
+                </CardPanel>
+              </section>
             ) : null}
 
             {viewMode !== 'pending' && isAddOpen ? (
               <div className="fixed inset-0 z-[60] grid place-items-center bg-black/50 px-4 py-6">
                 <div className="w-full max-w-lg rounded-2xl bg-white p-4 shadow-xl ring-1 ring-black/10 sm:p-5">
-                  <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
                       <div className="truncate text-base font-extrabold text-neutral-900">Add Transaction</div>
                       <div className="mt-0.5 text-xs font-semibold text-neutral-500">
@@ -704,7 +644,10 @@ export default function AccountManager({ onNavigate, viewMode = 'all' }: Account
                         site: draftTx.type === 'credit' ? trimmedSite : undefined,
                       }
 
-                      setTransactions((prev) => [next, ...prev])
+                      setTransactionsByManager((prev) => ({
+                        ...prev,
+                        [managerId]: [next, ...(prev[managerId] ?? [])],
+                      }))
                       setIsAddOpen(false)
                     }}
                   >
@@ -824,194 +767,204 @@ export default function AccountManager({ onNavigate, viewMode = 'all' }: Account
               </div>
             ) : null}
 
-            <section className="mt-4 overflow-hidden rounded-lg bg-white shadow-sm ring-1 ring-black/5 md:mt-6 md:rounded-2xl md:shadow-[0_10px_30px_rgba(16,24,40,0.06)]">
-              <div className="md:hidden">
-                {viewMode === 'pending' ? (
-                  <ul className="flex flex-col gap-2 px-3 pb-1.5 pt-1.5">
-                    {accountRows.map((row) => (
-                      <li key={row.name}>
-                        <div className="flex items-center justify-between gap-3 rounded-lg bg-white p-3 shadow-sm ring-1 ring-black/5">
-                          <div className="min-w-0">
-                            <div className="truncate text-xs font-bold text-neutral-900">{row.name}</div>
-                            <div className="mt-0.5 text-[10px] font-semibold text-neutral-500">{row.phone}</div>
-                          </div>
-                          <div className="shrink-0 text-right">
-                            <div className="text-xs font-extrabold text-rose-600">{row.pending}</div>
-                            <div className="mt-0.5 text-[10px] font-semibold text-neutral-500">
-                              Net: {formatINR(parseCurrency(row.credit) - parseCurrency(row.debit))}
+            <section className="mt-4 md:mt-6">
+              <CardShell title={ledgerCardTitle} className="overflow-hidden" bodyClassName="p-0">
+                <div className="md:hidden">
+                  {viewMode === 'pending' ? (
+                    <ul className="flex flex-col gap-2 px-3 pb-1.5 pt-1.5">
+                      {accountRows.map((row) => (
+                        <li key={row.name}>
+                          <div className="flex w-full items-center justify-between gap-2 rounded-xl border border-neutral-200 bg-white p-3 shadow-sm ring-1 ring-black/5">
+                            <div className="flex min-w-0 items-center gap-2">
+                              <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#f39b03]/12 text-[#f39b03]">
+                                <IndianRupee size={18} />
+                              </div>
+                              <div className="min-w-0">
+                                <div className="truncate text-xs font-extrabold text-neutral-900">{row.name}</div>
+                                <div className="mt-0.5 text-[10px] font-semibold text-neutral-500">{row.phone}</div>
+                              </div>
+                            </div>
+                            <div className="shrink-0 text-right">
+                              <div className="text-xs font-extrabold text-rose-600">{row.pending}</div>
+                              <div className="mt-0.5 text-[10px] font-semibold text-neutral-500">
+                                Net {formatINR(parseCurrency(row.credit) - parseCurrency(row.debit))}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <ul className="flex flex-col gap-2 px-3 pb-1.5 pt-1.5">
-                    {tableTransactions.map((tx) => (
-                      <li key={tx.id}>
-                        <div className="flex items-center gap-2 rounded-lg bg-white p-2 shadow-sm ring-1 ring-black/5">
-                          <div
-                            className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#f39b03]/15 text-[11px] font-extrabold text-[#c97702] ring-1 ring-[#f39b03]/25"
-                            aria-hidden
-                          >
-                            {tx.type === 'debit' ? 'DR' : 'CR'}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="truncate text-xs font-bold text-neutral-900">
-                              {tx.type === 'debit' ? tx.reason : tx.client}
-                            </div>
-                            <div className="mt-0.5 text-[10px] font-semibold text-neutral-500">
-                              {tx.type === 'credit' ? tx.site : tx.date}
-                            </div>
-                          </div>
-                          <div className="flex shrink-0 items-center gap-1.5">
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <ul className="flex flex-col gap-2 px-3 pb-1.5 pt-1.5">
+                      {tableTransactions.map((tx) => (
+                        <li key={tx.id}>
+                          <div className="flex items-center gap-2 rounded-xl border border-neutral-200 bg-white p-3 shadow-sm ring-1 ring-black/5">
                             <div
+                              className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#f39b03]/15 text-[11px] font-extrabold text-[#c97702] ring-1 ring-[#f39b03]/25"
+                              aria-hidden
+                            >
+                              {tx.type === 'debit' ? 'DR' : 'CR'}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="truncate text-xs font-bold text-neutral-900">
+                                {tx.type === 'debit' ? tx.reason : tx.client}
+                              </div>
+                              <div className="mt-0.5 text-[10px] font-semibold text-neutral-500">
+                                {tx.type === 'credit' ? tx.site : tx.date}
+                              </div>
+                            </div>
+                            <div className="flex shrink-0 items-center gap-1.5">
+                              <div
+                                className={[
+                                  'text-right text-xs font-extrabold leading-tight',
+                                  tx.type === 'debit' ? 'text-rose-600' : 'text-emerald-600',
+                                ].join(' ')}
+                              >
+                                {formatINR(tx.amount)}
+                              </div>
+                              <button
+                                type="button"
+                                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#f39b03]/12 text-[#f39b03] transition hover:bg-[#f39b03]/20"
+                                aria-label="View transaction"
+                              >
+                                <Eye size={15} />
+                              </button>
+                            </div>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+
+                <div className="hidden overflow-x-auto md:block">
+                  {viewMode === 'pending' ? (
+                    <table className="w-full min-w-[980px] border-collapse">
+                      <thead className="bg-neutral-50">
+                        <tr className="text-left text-xs font-extrabold uppercase tracking-wide text-neutral-500">
+                          <th className="px-6 py-4">Client</th>
+                          <th className="px-4 py-4">Phone</th>
+                          <th className="px-4 py-4">Pending Amount (₹)</th>
+                          <th className="px-4 py-4">Debit (₹)</th>
+                          <th className="px-4 py-4">Credit (₹)</th>
+                          <th className="px-4 py-4">Net</th>
+                        </tr>
+                      </thead>
+                      <tbody className="text-sm font-semibold text-neutral-800">
+                        {accountRows.map((row) => {
+                          const debit = parseCurrency(row.debit)
+                          const credit = parseCurrency(row.credit)
+                          return (
+                            <tr key={row.name} className="border-t border-neutral-200 hover:bg-neutral-50/60">
+                              <td className="px-6 py-4 font-extrabold text-neutral-950">{row.name}</td>
+                              <td className="px-4 py-4 text-neutral-700">{row.phone}</td>
+                              <td className="px-4 py-4 font-extrabold text-rose-600">{row.pending}</td>
+                              <td className="px-4 py-4 font-extrabold text-rose-600">{formatINR(debit)}</td>
+                              <td className="px-4 py-4 font-extrabold text-emerald-600">{formatINR(credit)}</td>
+                              <td className="px-4 py-4 font-extrabold text-neutral-950">{formatINR(credit - debit)}</td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <table className="w-full min-w-[980px] border-collapse">
+                      <thead className="bg-neutral-50">
+                        <tr className="text-left text-xs font-extrabold uppercase tracking-wide text-neutral-500">
+                          <th className="px-6 py-4">Type</th>
+                          <th className="px-4 py-4">Amount (₹)</th>
+                          <th className="px-4 py-4">Reason / Client</th>
+                          <th className="px-4 py-4">Site</th>
+                          <th className="px-4 py-4">Date</th>
+                          <th className="px-4 py-4 text-center">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody className="text-sm font-semibold text-neutral-800">
+                        {tableTransactions.map((tx) => (
+                          <tr key={tx.id} className="border-t border-neutral-200 hover:bg-neutral-50/60">
+                            <td className="px-6 py-4">
+                              <span
+                                className={[
+                                  'inline-flex items-center rounded-full px-3 py-1 text-xs font-extrabold ring-1',
+                                  tx.type === 'debit'
+                                    ? 'bg-rose-50 text-rose-700 ring-rose-200'
+                                    : 'bg-emerald-50 text-emerald-700 ring-emerald-200',
+                                ].join(' ')}
+                              >
+                                {tx.type === 'debit' ? 'Debit' : 'Credit'}
+                              </span>
+                            </td>
+                            <td
                               className={[
-                                'text-right text-xs font-extrabold leading-tight',
+                                'px-4 py-4 font-extrabold',
                                 tx.type === 'debit' ? 'text-rose-600' : 'text-emerald-600',
                               ].join(' ')}
                             >
                               {formatINR(tx.amount)}
-                            </div>
-                            <button
-                              type="button"
-                              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#f39b03]/12 text-[#f39b03] transition hover:bg-[#f39b03]/20"
-                              aria-label="View transaction"
-                            >
-                              <Eye size={15} />
-                            </button>
-                          </div>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-
-              <div className="hidden overflow-x-auto md:block">
-                {viewMode === 'pending' ? (
-                  <table className="w-full min-w-[980px] border-collapse">
-                    <thead className="bg-neutral-50">
-                      <tr className="text-left text-xs font-extrabold uppercase tracking-wide text-neutral-500">
-                        <th className="px-5 py-4">Client</th>
-                        <th className="px-4 py-4">Phone</th>
-                        <th className="px-4 py-4">Pending Amount (₹)</th>
-                        <th className="px-4 py-4">Debit (₹)</th>
-                        <th className="px-4 py-4">Credit (₹)</th>
-                        <th className="px-4 py-4">Net</th>
-                      </tr>
-                    </thead>
-                    <tbody className="text-sm font-semibold text-neutral-800">
-                      {accountRows.map((row) => {
-                        const debit = parseCurrency(row.debit)
-                        const credit = parseCurrency(row.credit)
-                        return (
-                          <tr key={row.name} className="border-t border-neutral-200 hover:bg-neutral-50/70">
-                            <td className="px-5 py-4 font-bold text-neutral-900">{row.name}</td>
-                            <td className="px-4 py-4 font-bold text-neutral-700">{row.phone}</td>
-                            <td className="px-4 py-4 font-extrabold text-rose-600">{row.pending}</td>
-                            <td className="px-4 py-4 font-bold text-rose-600">{formatINR(debit)}</td>
-                            <td className="px-4 py-4 font-bold text-emerald-600">{formatINR(credit)}</td>
-                            <td className="px-4 py-4 font-extrabold text-neutral-900">{formatINR(credit - debit)}</td>
+                            </td>
+                            <td className="px-4 py-4 font-extrabold text-neutral-950">
+                              {tx.type === 'debit' ? tx.reason : tx.client}
+                            </td>
+                            <td className="px-4 py-4 text-neutral-700">{tx.type === 'credit' ? tx.site : '-'}</td>
+                            <td className="px-4 py-4 text-neutral-700">{tx.date}</td>
+                            <td className="px-4 py-4">
+                              <div className="flex items-center justify-center gap-2">
+                                <button
+                                  type="button"
+                                  className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-[#f39b03]/12 text-[#f39b03] transition hover:bg-[#f39b03]/20"
+                                  aria-label="View transaction"
+                                >
+                                  <Eye size={16} />
+                                </button>
+                              </div>
+                            </td>
                           </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                ) : (
-                  <table className="w-full min-w-[980px] border-collapse">
-                    <thead className="bg-neutral-50">
-                      <tr className="text-left text-xs font-extrabold uppercase tracking-wide text-neutral-500">
-                        <th className="px-5 py-4">Type</th>
-                        <th className="px-4 py-4">Amount (₹)</th>
-                        <th className="px-4 py-4">Reason / Client</th>
-                        <th className="px-4 py-4">Site</th>
-                        <th className="px-4 py-4">Date</th>
-                        <th className="px-4 py-4 text-center">Action</th>
-                      </tr>
-                    </thead>
-                    <tbody className="text-sm font-semibold text-neutral-800">
-                      {tableTransactions.map((tx) => (
-                        <tr key={tx.id} className="border-t border-neutral-200 hover:bg-neutral-50/70">
-                          <td className="px-5 py-4">
-                            <span
-                              className={[
-                                'inline-flex items-center rounded-full px-2.5 py-1 text-xs font-extrabold',
-                                tx.type === 'debit'
-                                  ? 'bg-rose-50 text-rose-700 ring-1 ring-rose-200'
-                                  : 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200',
-                              ].join(' ')}
-                            >
-                              {tx.type === 'debit' ? 'Debit' : 'Credit'}
-                            </span>
-                          </td>
-                          <td
-                            className={[
-                              'px-4 py-4 font-extrabold',
-                              tx.type === 'debit' ? 'text-rose-600' : 'text-emerald-600',
-                            ].join(' ')}
-                          >
-                            {formatINR(tx.amount)}
-                          </td>
-                          <td className="px-4 py-4 font-bold text-neutral-900">
-                            {tx.type === 'debit' ? tx.reason : tx.client}
-                          </td>
-                          <td className="px-4 py-4 font-bold text-neutral-700">
-                            {tx.type === 'credit' ? tx.site : '-'}
-                          </td>
-                          <td className="px-4 py-4 font-bold text-neutral-700">{tx.date}</td>
-                          <td className="px-4 py-4 text-center">
-                            <button
-                              type="button"
-                              className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-[#f39b03]/12 text-[#f39b03] transition hover:bg-[#f39b03]/20"
-                              aria-label="View transaction"
-                            >
-                              <Eye size={16} />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
 
-              {viewMode !== 'pending' ? (
-                <div className="flex items-center justify-between gap-2 border-t border-neutral-200 px-3 py-2.5 sm:px-4 md:gap-3 md:px-6 md:py-4">
-                  <button
-                    type="button"
-                    className="rounded-md border border-neutral-200 bg-white px-2 py-1 text-xs font-semibold text-neutral-600 hover:bg-neutral-50 md:rounded-lg md:px-3 md:py-1.5 md:text-sm"
-                  >
-                    Previous
-                  </button>
-                  <div className="flex items-center gap-1 md:gap-2">
+                {viewMode !== 'pending' ? (
+                  <div className="flex flex-col gap-3 border-t border-neutral-200 px-4 py-4 sm:px-6 md:flex-row md:items-center md:justify-between">
                     <button
                       type="button"
-                      className="grid h-8 min-w-[2rem] place-items-center rounded-md bg-[#f39b03] text-xs font-bold text-white md:h-9 md:w-9 md:rounded-lg md:text-sm"
+                      className="inline-flex h-9 items-center justify-center rounded-xl border border-neutral-200 bg-white px-4 text-sm font-extrabold text-neutral-800 hover:bg-neutral-50"
                     >
-                      1
+                      Previous
                     </button>
+                    <div className="flex items-center justify-center gap-2">
+                      <button
+                        type="button"
+                        className="grid h-9 w-9 place-items-center rounded-xl bg-[#f39b03] text-sm font-extrabold text-white"
+                        aria-label="Page 1"
+                      >
+                        1
+                      </button>
+                      <button
+                        type="button"
+                        className="grid h-9 w-9 place-items-center rounded-xl border border-neutral-200 bg-white text-sm font-extrabold text-neutral-800 hover:bg-neutral-50"
+                        aria-label="Page 2"
+                      >
+                        2
+                      </button>
+                      <button
+                        type="button"
+                        className="grid h-9 w-9 place-items-center rounded-xl border border-neutral-200 bg-white text-sm font-extrabold text-neutral-800 hover:bg-neutral-50"
+                        aria-label="Page 3"
+                      >
+                        3
+                      </button>
+                    </div>
                     <button
                       type="button"
-                      className="grid h-8 min-w-[2rem] place-items-center rounded-md border border-neutral-200 bg-white text-xs font-bold text-neutral-700 hover:bg-neutral-50 md:h-9 md:w-9 md:rounded-lg md:text-sm"
+                      className="inline-flex h-9 items-center justify-center rounded-xl border border-neutral-200 bg-white px-4 text-sm font-extrabold text-neutral-800 hover:bg-neutral-50"
                     >
-                      2
-                    </button>
-                    <button
-                      type="button"
-                      className="grid h-8 min-w-[2rem] place-items-center rounded-md border border-neutral-200 bg-white text-xs font-bold text-neutral-700 hover:bg-neutral-50 md:h-9 md:w-9 md:rounded-lg md:text-sm"
-                    >
-                      3
+                      Next
                     </button>
                   </div>
-                  <button
-                    type="button"
-                    className="rounded-md border border-neutral-200 bg-white px-2 py-1 text-xs font-semibold text-neutral-600 hover:bg-neutral-50 md:rounded-lg md:px-3 md:py-1.5 md:text-sm"
-                  >
-                    Next
-                  </button>
-                </div>
-              ) : null}
+                ) : null}
+              </CardShell>
             </section>
           </div>
         </main>

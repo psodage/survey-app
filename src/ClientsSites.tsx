@@ -2,7 +2,6 @@ import {
   Bell,
   ArrowRight,
   ArrowLeft,
-  Calculator,
   Calendar,
   CircleUserRound,
   Download,
@@ -15,17 +14,31 @@ import {
   Briefcase,
   ClipboardList,
   Building2,
+  Calculator,
   Eye,
+  FileBarChart,
   Mail,
   MapPin,
   Phone,
   X,
   IndianRupee,
 } from 'lucide-react'
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useLocation } from 'react-router-dom'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
+import {
+  CardPanel,
+  CardShell,
+  StatCard,
+  toolbarPlusIconClass,
+  toolbarPrimaryButtonClass,
+  toolbarSearchInputClass,
+  toolbarSecondaryButtonClass,
+} from './dashboardCards'
+import { AccountManagerSidebarBlock } from './AccountManagerSidebarBlock'
+import { CollaborationBrandMark } from './CollaborationBrandMark'
+import { getHeaderDateLabel } from './headerDateLabel'
 import { signOut } from './signOut'
 
 type NavItem = {
@@ -37,7 +50,8 @@ const navItems: NavItem[] = [
   { label: 'Account Manager', icon: <Briefcase size={16} /> },
   { label: 'Clients & Sites', icon: <UsersRound size={16} /> },
   { label: 'Site Visits', icon: <ClipboardList size={16} /> },
-  { label: 'Measurement', icon: <Calculator size={16} /> },
+  { label: 'Invoice', icon: <Calculator size={16} /> },
+  { label: 'Reports', icon: <FileBarChart size={16} /> },
   { label: 'Settings', icon: <Building2 size={16} /> },
   { label: 'Log Out', icon: <LogOut size={16} /> },
 ]
@@ -160,47 +174,6 @@ const clientSites: Record<string, SiteRow[]> = {
   ],
 }
 
-function SummaryMiniCard({
-  title,
-  value,
-  icon,
-  toneClass,
-  mobileCardTint,
-}: {
-  title: string
-  value: string
-  icon: ReactNode
-  toneClass: string
-  mobileCardTint: string
-}) {
-  return (
-    <div
-      className={[
-        'w-full rounded-xl p-3 shadow-sm ring-1 ring-black/5',
-        mobileCardTint,
-        'md:rounded-2xl md:bg-white md:p-5 md:shadow-[0_10px_30px_rgba(16,24,40,0.06)]',
-      ].join(' ')}
-    >
-      <div className="flex items-start gap-2 md:gap-4">
-        <div
-          className={[
-            'grid h-9 w-9 shrink-0 place-items-center rounded-xl md:h-12 md:w-12 md:rounded-2xl',
-            toneClass,
-          ].join(' ')}
-        >
-          <span className="[&>svg]:h-4 [&>svg]:w-4 md:[&>svg]:h-5 md:[&>svg]:w-5">{icon}</span>
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="text-[11px] font-semibold leading-tight text-neutral-700 md:text-sm">{title}</div>
-          <div className="mt-0.5 text-base font-extrabold leading-tight tracking-tight text-neutral-950 md:mt-1 md:text-2xl">
-            {value}
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 type ClientsSitesProps = {
   onNavigate: (path: string) => void
 }
@@ -208,13 +181,19 @@ type ClientsSitesProps = {
 export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [query, setQuery] = useState('')
+  const [clients, setClients] = useState<ClientRow[]>(clientRows)
   const [selectedClientName, setSelectedClientName] = useState<string | null>(null)
+  const [isAddClientModalOpen, setIsAddClientModalOpen] = useState(false)
+  const [newClientName, setNewClientName] = useState('')
+  const [newClientPhone, setNewClientPhone] = useState('')
+  const [addClientError, setAddClientError] = useState('')
   const location = useLocation()
 
   const searchParams = new URLSearchParams(location.search)
   const summary = searchParams.get('summary') ?? ''
   const requestedClient = searchParams.get('client') ?? ''
   const showAllSites = summary === 'total-sites'
+  const headerDateLabel = getHeaderDateLabel()
 
   useEffect(() => {
     // If we arrived here via `?summary=...` (Dashboard tiles), ensure we show the
@@ -226,18 +205,19 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
 
   useEffect(() => {
     if (!requestedClient || summary) return
-    const matchedClient = clientRows.find((client) => client.name === requestedClient)
+    const matchedClient = clients.find((client) => client.name === requestedClient)
     if (!matchedClient) return
     setSelectedClientName(matchedClient.name)
     setQuery('')
-  }, [requestedClient, summary])
+  }, [requestedClient, summary, clients])
 
   const mobileBottomNav = [
     { label: 'Dashboard', path: '/dashboard', icon: LayoutGrid },
     { label: 'Accounts', path: '/account-manager', icon: Briefcase },
     { label: 'Clients', path: '/clients-sites', icon: UsersRound },
     { label: 'Sites', path: '/site-visits', icon: MapPin },
-    { label: 'Measure', path: '/measurement-rate-calculator', icon: Calculator },
+    { label: 'Invoice', path: '/invoice', icon: Calculator },
+    { label: 'Reports', path: '/reports', icon: FileBarChart },
     { label: 'Settings', path: '/settings', icon: Building2 },
   ] as const
 
@@ -253,7 +233,8 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
       'Account Manager': '/account-manager',
       'Clients & Sites': '/clients-sites',
       'Site Visits': '/site-visits',
-      Measurement: '/measurement-rate-calculator',
+      Invoice: '/invoice',
+      Reports: '/reports',
       Settings: '/settings',
     }
     const nextPath = routeMap[label]
@@ -263,8 +244,8 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
 
   const selectedClient = useMemo(() => {
     if (!selectedClientName) return null
-    return clientRows.find((c) => c.name === selectedClientName) ?? null
-  }, [selectedClientName])
+    return clients.find((c) => c.name === selectedClientName) ?? null
+  }, [selectedClientName, clients])
 
   const selectedSites = useMemo(() => {
     if (!selectedClientName) return []
@@ -299,7 +280,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
 
   const filteredRows = useMemo(() => {
     const q = query.trim().toLowerCase()
-    const baseRows = !q ? [...clientRows] : clientRows.filter((r) => r.name.toLowerCase().includes(q) || r.phone.includes(q))
+    const baseRows = !q ? [...clients] : clients.filter((r) => r.name.toLowerCase().includes(q) || r.phone.includes(q))
 
     if (summary === 'pending') {
       return baseRows
@@ -317,7 +298,61 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
     }
 
     return baseRows
-  }, [query, summary])
+  }, [query, summary, clients])
+
+  const resetAddClientForm = () => {
+    setNewClientName('')
+    setNewClientPhone('')
+    setAddClientError('')
+  }
+
+  const handleOpenAddClientModal = () => {
+    resetAddClientForm()
+    setIsAddClientModalOpen(true)
+  }
+
+  const handleCloseAddClientModal = () => {
+    setIsAddClientModalOpen(false)
+    resetAddClientForm()
+  }
+
+  const handleCreateClient = () => {
+    const name = newClientName.trim()
+    const phone = newClientPhone.trim()
+
+    if (!name) {
+      setAddClientError('Client name is required.')
+      return
+    }
+    if (!phone) {
+      setAddClientError('Phone number is required.')
+      return
+    }
+    if (!/^\d{10}$/.test(phone)) {
+      setAddClientError('Phone number must be 10 digits.')
+      return
+    }
+
+    const duplicate = clients.some((client) => client.name.toLowerCase() === name.toLowerCase())
+    if (duplicate) {
+      setAddClientError('A client with this name already exists.')
+      return
+    }
+
+    const nextClient: ClientRow = {
+      name,
+      phone,
+      sites: 0,
+      revenue: '₹0',
+      received: '₹0',
+      pending: '₹0',
+    }
+
+    setClients((prev) => [nextClient, ...prev])
+    setSelectedClientName(null)
+    setQuery('')
+    handleCloseAddClientModal()
+  }
 
   const getSiteDetailsPath = (clientName: string, site: SiteRow) => {
     const params = new URLSearchParams({
@@ -431,19 +466,23 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
         {/* Sidebar */}
         <aside className="fixed inset-y-0 left-0 z-20 hidden w-[280px] flex-col bg-gradient-to-b from-[#050505] via-[#0b0b0b] to-[#040404] pb-20 text-white lg:flex">
           <div className="px-6 pt-7">
-            <div className="flex items-center gap-3">
-              <img
-                src="/samarth-logo.png"
-                alt="Samarth Land Surveyors"
-                className="h-25 w-auto"
-                draggable={false}
-              />
-            </div>
+            <CollaborationBrandMark variant="desktopSidebar" />
           </div>
 
           <nav className="mt-5 flex-1 px-3">
             <div className="space-y-1">
               {navItems.map((item) => {
+                if (item.label === 'Account Manager') {
+                  return (
+                    <Fragment key="account-manager">
+                      <AccountManagerSidebarBlock
+                        pathname={location.pathname}
+                        onNavigate={onNavigate}
+                        onAfterNavigate={() => setIsSidebarOpen(false)}
+                      />
+                    </Fragment>
+                  )
+                }
                 const active = item.label === 'Clients & Sites'
                 const isLogout = item.label === 'Log Out'
                 return (
@@ -511,6 +550,17 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
           <nav className="mt-4 flex-1 px-3">
             <div className="space-y-1">
               {navItems.map((item) => {
+                if (item.label === 'Account Manager') {
+                  return (
+                    <Fragment key="account-manager-mobile">
+                      <AccountManagerSidebarBlock
+                        pathname={location.pathname}
+                        onNavigate={onNavigate}
+                        onAfterNavigate={() => setIsSidebarOpen(false)}
+                      />
+                    </Fragment>
+                  )
+                }
                 const active = item.label === 'Clients & Sites'
                 const isLogout = item.label === 'Log Out'
                 return (
@@ -558,12 +608,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                   <Menu size={18} strokeWidth={2.25} className="text-white" />
                 </button>
                 <div className="flex min-w-0 justify-center px-1">
-                  <img
-                    src="/samarth-logo.png"
-                    alt="Samarth Land Surveyors"
-                    className="h-14 max-h-[68px] w-auto max-w-full object-contain object-center sm:h-[72px] sm:max-h-[72px]"
-                    draggable={false}
-                  />
+                  <CollaborationBrandMark variant="mobileHeader" />
                 </div>
                 {selectedClient ? (
                   <button
@@ -592,13 +637,13 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                 <h1 className="min-w-0 truncate text-left text-base font-extrabold leading-tight tracking-tight text-white">
                   Clients &amp; Sites
                 </h1>
-                <button 
+                <button
                   type="button"
                   className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-white/20 bg-neutral-900 px-2.5 text-[11px] font-semibold text-white transition hover:bg-neutral-800"
-                  aria-label="Select date"
+                  aria-label="Current date"
                 >
                   <Calendar size={13} className="text-[#f39b03]" />
-                  <span className="whitespace-nowrap">20 May 2025</span>
+                  <span className="whitespace-nowrap">{headerDateLabel}</span>
                 </button>
               </div>
             </div>
@@ -621,10 +666,10 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                 <button
                   type="button"
                   className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-neutral-900 sm:px-4 sm:py-2.5 sm:text-sm"
-                  aria-label="Select date"
+                  aria-label="Current date"
                 >
                   <Calendar size={16} className="text-[#f39b03]" />
-                  <span className="whitespace-nowrap">20 May 2025</span>
+                  <span className="whitespace-nowrap">{headerDateLabel}</span>
                 </button>
                 <div className="hidden items-center gap-3 rounded-xl bg-neutral-100 px-3 py-2 ring-1 ring-black/5 sm:flex sm:px-4 sm:py-2.5">
                   <div className="grid h-9 w-9 place-items-center rounded-xl bg-[#f39b03]/15 text-[#f39b03]">
@@ -639,18 +684,18 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
             </div>
           </header>
 
-          <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-white p-4 pb-[calc(3.65rem+max(12px,env(safe-area-inset-bottom,0px)))] sm:px-6 sm:pt-6 sm:pb-[calc(3.65rem+max(12px,env(safe-area-inset-bottom,0px)))] md:p-6 md:pb-24 lg:p-8 lg:pb-28">
+          <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-white px-4 pt-2 pb-[calc(3.65rem+max(12px,env(safe-area-inset-bottom,0px)))] sm:px-6 sm:pt-3 sm:pb-[calc(3.65rem+max(12px,env(safe-area-inset-bottom,0px)))] md:px-6 md:pt-4 md:pb-24 lg:px-8 lg:pt-4 lg:pb-28">
             {selectedClient ? (
-              <section className="mt-4 flex flex-col items-stretch gap-3 md:mt-6 md:flex-row md:items-center md:justify-between md:gap-4">
+              <section className="flex flex-col items-stretch gap-2 md:flex-row md:items-center md:justify-between md:gap-4">
                 <div className="min-w-0">
                   
-                  <div className="mt-3 text-sm font-semibold text-neutral-600 md:mt-2 md:text-base">
+                  <div className="mt-1 text-sm font-semibold text-neutral-600 md:mt-0 md:text-base">
                     Client:{' '}
                     <span className="text-3xl font-extrabold leading-tight tracking-tight text-neutral-900 md:text-2xl">
                       {selectedClient.name}
                     </span>
                   </div>
-                  <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] font-semibold text-neutral-600 md:mt-2 md:gap-3 md:text-xs">
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] font-semibold text-neutral-600 md:mt-1.5 md:gap-3 md:text-xs">
                     <span className="inline-flex items-center rounded-lg bg-neutral-100 px-2.5 py-1 text-neutral-700 ring-1 ring-neutral-200">
                       Phone: {selectedClient.phone}
                     </span>
@@ -678,7 +723,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                       Export Client Report
                     </button>
                   </div>
-                  <div className="mt-2 flex justify-end md:mt-2">
+                  <div className="mt-1.5 flex justify-end md:mt-1.5">
                     <button
                       type="button"
                       className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-white px-4 text-xs font-extrabold text-neutral-800 shadow-sm transition hover:bg-neutral-50 md:h-11 md:px-4 md:text-sm"
@@ -692,17 +737,18 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
             ) : null}
 
             {/* Top summary cards */}
-            <section className="mt-4 grid grid-cols-2 gap-3 md:mt-6 md:grid-cols-4 md:gap-4">
+            <section className="mt-3 grid grid-cols-2 gap-3 md:mt-4 md:grid-cols-4 md:gap-4">
               <button
                 type="button"
                 className="cursor-pointer bg-transparent p-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f39b03]/70"
                 onClick={() => handleSummaryCardClick(selectedClient ? 'received' : 'total-clients')}
                 aria-label={selectedClient ? 'Open Received Amount records' : 'Open Total Clients records'}
               >
-                <SummaryMiniCard
+                <StatCard
                   title={selectedClient ? 'Total Received Amount' : 'Total Clients'}
                   value={selectedClient ? selectedClient.received : '32'}
-                  icon={<UsersRound className="text-sky-600" />}
+                  subtitle={selectedClient ? 'Current Client' : 'All Clients'}
+                  icon={<UsersRound size={20} className="text-sky-600" />}
                   toneClass="bg-sky-100"
                   mobileCardTint="bg-sky-50/90"
                 />
@@ -713,10 +759,11 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                 onClick={() => handleSummaryCardClick('total-sites')}
                 aria-label="Open Total Sites records"
               >
-                <SummaryMiniCard
+                <StatCard
                   title="Total Sites"
                   value={selectedClient ? String(selectedClient.sites) : '48'}
-                  icon={<MapPin className="text-violet-600" />}
+                  subtitle={selectedClient ? 'Current Client' : 'All Sites'}
+                  icon={<MapPin size={20} className="text-violet-600" />}
                   toneClass="bg-violet-100"
                   mobileCardTint="bg-violet-50/90"
                 />
@@ -727,10 +774,11 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                 onClick={() => handleSummaryCardClick('total-revenue')}
                 aria-label="Open Total Revenue records"
               >
-                <SummaryMiniCard
+                <StatCard
                   title="Total Revenue"
                   value={selectedClient ? selectedClient.revenue : '₹12,75,000'}
-                  icon={<IndianRupee className="text-emerald-600" />}
+                  subtitle="This Financial Year"
+                  icon={<IndianRupee size={20} className="text-emerald-600" />}
                   toneClass="bg-emerald-100"
                   mobileCardTint="bg-emerald-50/90"
                 />
@@ -741,10 +789,11 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                 onClick={() => handleSummaryCardClick('pending')}
                 aria-label="Open Pending Amount records"
               >
-                <SummaryMiniCard
+                <StatCard
                   title="Pending Amount"
                   value={selectedClient ? selectedClient.pending : '₹4,29,500'}
-                  icon={<Briefcase className="text-rose-600" />}
+                  subtitle="This Financial Year"
+                  icon={<Briefcase size={20} className="text-rose-600" />}
                   toneClass="bg-rose-100"
                   mobileCardTint="bg-rose-50/90"
                 />
@@ -752,48 +801,55 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
             </section>
 
             {!selectedClient ? (
-              /* Search + Filter */
-              <section className="mt-4 flex flex-col items-stretch gap-2 md:mt-5 md:flex-row md:items-center md:justify-between md:gap-4">
-                <div className="w-full md:max-w-xl">
+              <CardPanel className="my-3 flex flex-col gap-3 p-3 md:my-4 md:flex-row md:items-center md:justify-between md:gap-4 md:p-4">
+                <div className="w-full md:max-w-xs">
                   <input
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     type="text"
                     placeholder={showAllSites ? 'Search sites…' : 'Search clients…'}
-                    className="h-11 w-full rounded-xl border border-neutral-200 bg-neutral-50 px-4 text-sm font-semibold text-neutral-800 outline-none transition focus:border-[#f39b03] focus:bg-white focus:ring-2 focus:ring-[#f39b03]/20"
+                    className={toolbarSearchInputClass}
                   />
                 </div>
-                <div className="flex w-full items-center gap-2 md:w-auto">
-                  {!showAllSites ? (
-                    <button
-                      type="button"
-                      className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 text-xs font-extrabold text-neutral-800 shadow-sm transition hover:bg-neutral-50 md:flex-none md:px-4 md:text-sm"
-                      onClick={handleExportAllClientsReport}
-                    >
-                      <Download size={14} className="text-neutral-700 md:h-4 md:w-4" />
-                      Export All Clients
-                    </button>
-                  ) : null}
-                  <button
-                    type="button"
-                    className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 text-xs font-extrabold text-neutral-800 shadow-sm transition hover:bg-neutral-50 md:flex-none md:px-4 md:text-sm"
-                  >
-                    <Filter size={14} className="text-neutral-700 md:h-4 md:w-4" />
-                    Filter
+                <div className="flex w-full flex-wrap items-center justify-between gap-2 md:w-auto md:justify-start">
+                  <button type="button" className={toolbarSecondaryButtonClass}>
+                    Filters
                   </button>
+                  {!showAllSites ? (
+                    <div className="flex shrink-0 items-center gap-2">
+                      <button
+                        type="button"
+                        className={toolbarSecondaryButtonClass}
+                        onClick={handleExportAllClientsReport}
+                      >
+                        Export All Clients
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleOpenAddClientModal}
+                        className={toolbarPrimaryButtonClass}
+                      >
+                        <Plus className={toolbarPlusIconClass} />
+                        Add New Client
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
-              </section>
+              </CardPanel>
             ) : null}
 
             {selectedClient ? (
               /* Client detail: sites table */
-              <section className="mt-4 overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-black/5 md:mt-6 md:rounded-2xl md:shadow-[0_10px_30px_rgba(16,24,40,0.06)]">
-                <div className="flex items-center justify-between gap-3 border-b border-neutral-200 px-6 py-4">
-                  <div className="text-sm font-extrabold tracking-tight text-neutral-900">Sites</div>
-                  <div className="text-xs font-semibold text-neutral-600">
+              <CardShell
+                title="Sites"
+                className="mt-3 overflow-hidden md:mt-4"
+                bodyClassName="p-0"
+                headerEnd={
+                  <span className="text-xs font-semibold text-neutral-600">
                     {selectedSites.length} sites for {selectedClient.name}
-                  </div>
-                </div>
+                  </span>
+                }
+              >
                 <div className="md:hidden">
                   <ul className="flex flex-col gap-2 px-3 pb-1.5 pt-1.5">
                     {selectedSites.map((site) => (
@@ -950,17 +1006,19 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                     </tbody>
                   </table>
                 </div>
-              </section>
+              </CardShell>
             ) : showAllSites ? (
               /* All sites list */
-              <section className="mt-4 overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-black/5 md:mt-6 md:rounded-2xl md:shadow-[0_10px_30px_rgba(16,24,40,0.06)]">
-                <div className="flex items-center justify-between gap-3 border-b border-neutral-200 px-6 py-4">
-                  <div className="text-sm font-extrabold tracking-tight text-neutral-900">All Sites</div>
-                  <div className="text-xs font-semibold text-neutral-600">
+              <CardShell
+                title="All Sites"
+                className="mt-3 overflow-hidden md:mt-4"
+                bodyClassName="p-0"
+                headerEnd={
+                  <span className="text-xs font-semibold text-neutral-600">
                     {filteredAllSites.length} total sites
-                  </div>
-                </div>
-
+                  </span>
+                }
+              >
                 <div className="md:hidden">
                   <ul className="flex flex-col gap-2 px-3 pb-1.5 pt-1.5">
                     {filteredAllSites.map((site) => (
@@ -1120,10 +1178,17 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                     </tbody>
                   </table>
                 </div>
-              </section>
+              </CardShell>
             ) : (
               /* Clients list table */
-              <section className="mt-4 overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-black/5 md:mt-6 md:rounded-2xl md:shadow-[0_10px_30px_rgba(16,24,40,0.06)]">
+              <CardShell
+                title="Clients"
+                className="mt-3 overflow-hidden md:mt-4"
+                bodyClassName="p-0"
+                headerEnd={
+                  <span className="text-xs font-semibold text-neutral-600">{filteredRows.length} clients</span>
+                }
+              >
                 <div className="md:hidden">
                   <ul className="flex flex-col gap-2 px-3 pb-1.5 pt-1.5">
                     {filteredRows.map((row) => (
@@ -1264,11 +1329,89 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                     </button>
                   </div>
                 </div>
-              </section>
+              </CardShell>
             )}
           </div>
         </main>
       </div>
+
+      {isAddClientModalOpen ? (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/50"
+            aria-label="Close add client modal"
+            onClick={handleCloseAddClientModal}
+          />
+          <div className="relative z-[71] w-full max-w-md rounded-2xl bg-white p-5 shadow-[0_20px_50px_rgba(0,0,0,0.35)] ring-1 ring-black/10 sm:p-6">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-extrabold tracking-tight text-neutral-950">Add New Client</h2>
+                <p className="mt-1 text-xs font-semibold text-neutral-600">Create a client to start tracking sites and payments.</p>
+              </div>
+              <button
+                type="button"
+                className="grid h-9 w-9 place-items-center rounded-xl bg-neutral-100 text-neutral-700 transition hover:bg-neutral-200"
+                onClick={handleCloseAddClientModal}
+                aria-label="Close"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-3">
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-extrabold text-neutral-800">Client Name</span>
+                <input
+                  type="text"
+                  value={newClientName}
+                  onChange={(event) => {
+                    setNewClientName(event.target.value)
+                    if (addClientError) setAddClientError('')
+                  }}
+                  placeholder="Enter client name"
+                  className="h-11 w-full rounded-xl border border-neutral-200 bg-neutral-50 px-3 text-sm font-semibold text-neutral-900 outline-none transition focus:border-[#f39b03] focus:bg-white focus:ring-2 focus:ring-[#f39b03]/20"
+                />
+              </label>
+
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-extrabold text-neutral-800">Phone Number</span>
+                <input
+                  type="tel"
+                  value={newClientPhone}
+                  onChange={(event) => {
+                    const sanitized = event.target.value.replace(/\D/g, '').slice(0, 10)
+                    setNewClientPhone(sanitized)
+                    if (addClientError) setAddClientError('')
+                  }}
+                  placeholder="10-digit mobile number"
+                  className="h-11 w-full rounded-xl border border-neutral-200 bg-neutral-50 px-3 text-sm font-semibold text-neutral-900 outline-none transition focus:border-[#f39b03] focus:bg-white focus:ring-2 focus:ring-[#f39b03]/20"
+                />
+              </label>
+
+              {addClientError ? <p className="text-xs font-semibold text-rose-600">{addClientError}</p> : null}
+            </div>
+
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={handleCloseAddClientModal}
+                className="inline-flex h-10 items-center justify-center rounded-xl border border-neutral-200 bg-white px-4 text-xs font-extrabold text-neutral-800 transition hover:bg-neutral-50 md:text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleCreateClient}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#f39b03] px-4 text-xs font-extrabold text-white transition hover:bg-[#e18e03] md:text-sm"
+              >
+                <Plus size={14} />
+                Create Client
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <nav
         className="fixed inset-x-0 bottom-0 z-50 flex w-full flex-col border-t border-white/10 bg-black [transform:translate3d(0,0,0)] md:hidden"
