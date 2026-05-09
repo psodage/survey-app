@@ -401,7 +401,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
 
           <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-white p-4 pb-[calc(3.65rem+max(12px,env(safe-area-inset-bottom,0px)))] sm:px-6 sm:pt-6 sm:pb-[calc(3.65rem+max(12px,env(safe-area-inset-bottom,0px)))] md:p-6 md:pb-24 lg:p-8 lg:pb-28">
             {/* Summary cards */}
-            <section className="grid grid-cols-2 gap-3 md:gap-4 xl:grid-cols-4">
+            <section className="grid grid-cols-2 gap-2 md:gap-4 xl:grid-cols-4">
               <button
                 type="button"
                 onClick={() => handleSummaryCardClick('total-revenue')}
@@ -467,7 +467,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
             {/* Quick Actions */}
             <section className="mt-4 md:mt-6">
               <CardShell title="Quick Actions">
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-3">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-4 xl:grid-cols-3">
                   {[
                     { title: 'Add Site', path: '/add-site', icon: <Building2 size={18} /> },
                     { title: 'Add Site Visit', path: '/add-site-visit', icon: <ClipboardList size={18} /> },
@@ -477,10 +477,10 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                       key={a.title}
                       type="button"
                       onClick={() => onNavigate(a.path)}
-                      className="group flex items-center justify-between gap-3 rounded-xl border border-neutral-200 bg-white px-4 py-3 text-left shadow-sm ring-1 ring-black/5 transition hover:border-[#f39b03]/40 hover:shadow-[0_16px_40px_rgba(16,24,40,0.08)] md:gap-4 md:rounded-2xl md:px-5 md:py-4 md:shadow-[0_10px_30px_rgba(16,24,40,0.04)] md:ring-0"
+                      className="group flex items-center justify-between gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-left shadow-sm ring-1 ring-black/5 transition hover:border-[#f39b03]/40 hover:shadow-[0_16px_40px_rgba(16,24,40,0.08)] md:gap-4 md:rounded-2xl md:px-5 md:py-4 md:shadow-[0_10px_30px_rgba(16,24,40,0.04)] md:ring-0"
                     >
-                      <div className="flex min-w-0 items-center gap-2.5 md:gap-3">
-                        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#f39b03]/12 text-[#f39b03] md:h-11 md:w-11 md:rounded-2xl">
+                      <div className="flex min-w-0 items-center gap-2 md:gap-3">
+                        <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#f39b03]/12 text-[#f39b03] md:h-11 md:w-11 md:rounded-2xl">
                           {a.icon}
                         </div>
                         <div className="truncate text-xs font-extrabold text-neutral-900 md:text-sm">
@@ -543,7 +543,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                       <button
                         type="button"
                         onClick={() => onNavigate(getVisitDetailsPath(visit))}
-                        className="w-full rounded-lg bg-white p-2.5 text-left shadow-sm ring-1 ring-black/5"
+                        className="w-full rounded-lg bg-white p-2 text-left shadow-sm ring-1 ring-black/5"
                       >
                         <div className="truncate text-xs font-bold text-neutral-900">{visit.site}</div>
                         <div className="mt-0.5 truncate text-[10px] font-semibold text-neutral-600">
@@ -572,16 +572,16 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                   </button>
                 }
               >
-                <ul className="flex flex-col gap-2 md:gap-3">
+                <ul className="flex flex-col gap-1.5 md:gap-3">
                   {pendingAmountByClient.map(([name, amt]) => (
                     <li key={name}>
                       <button
                         type="button"
                         onClick={() => onNavigate(getClientDetailsPath(name))}
-                        className="flex w-full items-center justify-between gap-2 rounded-lg bg-white px-2.5 py-2 text-left shadow-sm ring-1 ring-black/5 transition hover:bg-neutral-50 md:rounded-2xl md:border md:border-neutral-200 md:px-4 md:py-3 md:shadow-[0_10px_30px_rgba(16,24,40,0.04)] md:ring-0"
+                        className="flex w-full items-center justify-between gap-2 rounded-lg bg-white px-2.5 py-1.5 text-left shadow-sm ring-1 ring-black/5 transition hover:bg-neutral-50 md:rounded-2xl md:border md:border-neutral-200 md:px-4 md:py-3 md:shadow-[0_10px_30px_rgba(16,24,40,0.04)] md:ring-0"
                       >
                         <div className="flex min-w-0 items-center gap-2 md:gap-3">
-                          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#f39b03]/12 text-[#f39b03] md:h-10 md:w-10 md:rounded-2xl">
+                          <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#f39b03]/12 text-[#f39b03] md:h-10 md:w-10 md:rounded-2xl">
                             <IndianRupee size={18} />
                           </div>
                           <div className="truncate text-xs font-extrabold text-neutral-900 md:text-sm">

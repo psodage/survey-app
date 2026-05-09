@@ -219,7 +219,7 @@ export default function AddSite({ onNavigate }: AddSiteProps) {
           </header>
 
           <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-white p-4 pb-24 sm:px-6 sm:pt-6 md:p-6 lg:p-8">
-            <CardPanel className="mx-auto max-w-3xl p-5 md:p-8">
+            <CardPanel className="mx-auto max-w-3xl p-4 md:p-8">
               <div className="mb-5 flex items-center justify-between gap-3 border-b border-neutral-200 pb-4">
                 <div>
                   <h1 className="text-xl font-extrabold tracking-tight text-neutral-950 md:text-2xl">Add New Site</h1>

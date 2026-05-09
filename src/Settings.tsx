@@ -547,7 +547,7 @@ export default function Settings({ onNavigate }: SettingsProps) {
                     </div>
 
                     <div className="md:col-span-1">
-                      <div className="rounded-xl border border-neutral-200 bg-white p-3 shadow-sm">
+                      <div className="rounded-xl border border-neutral-200 bg-white p-2.5 shadow-sm md:p-3">
                         <div className="text-xs font-extrabold tracking-tight text-neutral-900">Logo Upload</div>
                         <div className="mt-3 aspect-[4/3] overflow-hidden rounded-xl bg-neutral-50 ring-1 ring-black/5">
                           <img
@@ -734,13 +734,13 @@ export default function Settings({ onNavigate }: SettingsProps) {
                 <CardShell title="Backup & Storage">
                   <div className="grid gap-4">
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                      <div className="rounded-xl border border-neutral-100 bg-white p-3">
+                      <div className="rounded-xl border border-neutral-100 bg-white p-2.5 md:p-3">
                         <div className="text-xs font-extrabold text-neutral-900">Storage Used</div>
                         <div className="mt-1 text-sm font-extrabold text-neutral-950">
                           {storageUsedGb} GB / {storageTotalGb} GB
                         </div>
                       </div>
-                      <div className="rounded-xl border border-neutral-100 bg-white p-3">
+                      <div className="rounded-xl border border-neutral-100 bg-white p-2.5 md:p-3">
                         <div className="text-xs font-extrabold text-neutral-900">Backup Status</div>
                         <div className="mt-1 text-sm font-extrabold text-neutral-950">
                           Last backup: {lastBackupLabel}
@@ -748,7 +748,7 @@ export default function Settings({ onNavigate }: SettingsProps) {
                       </div>
                     </div>
 
-                    <div className="rounded-xl border border-neutral-100 bg-white p-3">
+                    <div className="rounded-xl border border-neutral-100 bg-white p-2.5 md:p-3">
                       <div className="flex items-center justify-between gap-3">
                         <div className="text-xs font-extrabold text-neutral-900">Storage Progress</div>
                         <div className="text-xs font-extrabold text-[#f39b03]">{storagePercent}%</div>
@@ -787,9 +787,9 @@ export default function Settings({ onNavigate }: SettingsProps) {
                 {/* PDF & Invoice Preferences */}
                 <CardShell title="PDF Settings">
                   <div className="grid gap-4">
-                    <div className="rounded-xl border border-neutral-100 bg-white p-3">
+                    <div className="rounded-xl border border-neutral-100 bg-white p-2.5 md:p-3">
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        <div className="rounded-xl bg-white p-3 shadow-sm ring-1 ring-black/5">
+                        <div className="rounded-xl bg-white p-2.5 shadow-sm ring-1 ring-black/5 md:p-3">
                           <div className="text-xs font-extrabold text-neutral-900">Upload Signature</div>
                           <div className="mt-2 text-xs font-semibold text-neutral-500">
                             {signatureLabel}
@@ -810,7 +810,7 @@ export default function Settings({ onNavigate }: SettingsProps) {
                           />
                         </div>
 
-                        <div className="rounded-xl bg-white p-3 shadow-sm ring-1 ring-black/5">
+                        <div className="rounded-xl bg-white p-2.5 shadow-sm ring-1 ring-black/5 md:p-3">
                           <div className="text-xs font-extrabold text-neutral-900">Upload Stamp</div>
                           <div className="mt-2 text-xs font-semibold text-neutral-500">
                             {stampLabel}

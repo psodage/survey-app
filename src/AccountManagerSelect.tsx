@@ -315,7 +315,7 @@ export default function AccountManagerSelect({ onNavigate }: AccountManagerSelec
                   key={m.id}
                   type="button"
                   onClick={() => pickManager(m.id)}
-                  className="group flex w-full flex-col gap-3 rounded-2xl border border-neutral-200 bg-white p-4 text-left shadow-sm ring-1 ring-black/5 transition hover:border-[#f39b03]/40 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f39b03]/70 sm:p-5"
+                  className="group flex w-full flex-col gap-2.5 rounded-2xl border border-neutral-200 bg-white p-3 text-left shadow-sm ring-1 ring-black/5 transition hover:border-[#f39b03]/40 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f39b03]/70 sm:gap-3 sm:p-5"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-[#f39b03]/12 text-sm font-extrabold text-[#c97702] ring-1 ring-[#f39b03]/25">

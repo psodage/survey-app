@@ -8,6 +8,7 @@ import AddSiteVisit from './AddSiteVisit'
 import ClientsSites from './ClientsSites'
 import Dashboard from './Dashboard'
 import Invoice from './Invoice'
+import Reports from './Reports'
 import { SiteDetails } from './SiteDetails'
 import Settings from './Settings'
 import InstallAppPrompt from './components/InstallAppPrompt'
@@ -38,23 +39,6 @@ function AccountManagerIndex({ onNavigate }: { onNavigate: NavigateFunction }) {
     )
   }
   return <AccountManagerSelect onNavigate={onNavigate} />
-}
-
-function PlaceholderPage({ title }: { title: string }) {
-  return (
-    <div className="min-h-screen bg-[#050505] px-4 py-10 text-white sm:px-6 lg:px-8">
-      <div className="mx-auto w-full max-w-5xl rounded-3xl border border-[#f39b03]/30 bg-black/40 p-8 shadow-[0_0_80px_rgba(243,155,3,0.12)] backdrop-blur">
-        <p className="text-xs font-semibold tracking-[0.2em] text-[#f39b03]/90 uppercase">
-          Samarth Land Surveyor
-        </p>
-        <h1 className="mt-3 text-3xl font-extrabold tracking-tight sm:text-4xl">{title}</h1>
-        <p className="mt-4 max-w-2xl text-sm text-white/70 sm:text-base">
-          This section is route-enabled. You can replace this placeholder with the full page content
-          anytime.
-        </p>
-      </div>
-    </div>
-  )
 }
 
 function AppRoutes() {
@@ -141,7 +125,7 @@ function AppRoutes() {
         path="/reports"
         element={
           <ProtectedRoute>
-            <PlaceholderPage title="Reports" />
+            <Reports onNavigate={navigate} />
           </ProtectedRoute>
         }
       />

@@ -487,7 +487,7 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                 <p className="text-sm font-semibold text-neutral-600">{manager.phone}</p>
               </div>
             </CardShell>
-            <section className="grid grid-cols-2 gap-3 md:gap-4 xl:grid-cols-4">
+            <section className="grid grid-cols-2 gap-2 md:gap-4 xl:grid-cols-4">
               <button
                 type="button"
                 onClick={() => handleSummaryCardClick('debits')}
@@ -552,7 +552,7 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
 
             {viewMode !== 'pending' ? (
               <section className="mt-4 md:mt-6">
-                <CardPanel className="flex flex-col gap-3 p-3 md:flex-row md:items-center md:justify-between md:gap-4 md:p-4">
+                <CardPanel className="flex flex-col gap-2.5 p-2.5 md:flex-row md:items-center md:justify-between md:gap-4 md:p-4">
                   <div className="w-full md:max-w-xs">
                     <input type="text" placeholder="Search account..." className={toolbarSearchInputClass} />
                   </div>
@@ -602,7 +602,7 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
 
             {viewMode !== 'pending' && isAddOpen ? (
               <div className="fixed inset-0 z-[60] grid place-items-center bg-black/50 px-4 py-6">
-                <div className="w-full max-w-lg rounded-2xl bg-white p-4 shadow-xl ring-1 ring-black/10 sm:p-5">
+                <div className="w-full max-w-lg rounded-2xl bg-white p-3 shadow-xl ring-1 ring-black/10 sm:p-5">
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
                       <div className="truncate text-base font-extrabold text-neutral-900">Add Transaction</div>
@@ -651,7 +651,7 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                       setIsAddOpen(false)
                     }}
                   >
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-2 gap-2 md:gap-3">
                       <label className="grid gap-1">
                         <span className="text-xs font-bold text-neutral-700">Type</span>
                         <select
@@ -710,7 +710,7 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                         />
                       </label>
                     ) : (
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-2 gap-2 md:gap-3">
                         <label className="grid gap-1">
                           <span className="text-xs font-bold text-neutral-700">Client (Credit)</span>
                           <select
@@ -774,7 +774,7 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                     <ul className="flex flex-col gap-2 px-3 pb-1.5 pt-1.5">
                       {accountRows.map((row) => (
                         <li key={row.name}>
-                          <div className="flex w-full items-center justify-between gap-2 rounded-xl border border-neutral-200 bg-white p-3 shadow-sm ring-1 ring-black/5">
+                          <div className="flex w-full items-center justify-between gap-2 rounded-xl border border-neutral-200 bg-white p-2.5 shadow-sm ring-1 ring-black/5 md:p-3">
                             <div className="flex min-w-0 items-center gap-2">
                               <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#f39b03]/12 text-[#f39b03]">
                                 <IndianRupee size={18} />
@@ -798,7 +798,7 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                     <ul className="flex flex-col gap-2 px-3 pb-1.5 pt-1.5">
                       {tableTransactions.map((tx) => (
                         <li key={tx.id}>
-                          <div className="flex items-center gap-2 rounded-xl border border-neutral-200 bg-white p-3 shadow-sm ring-1 ring-black/5">
+                          <div className="flex items-center gap-2 rounded-xl border border-neutral-200 bg-white p-2.5 shadow-sm ring-1 ring-black/5 md:p-3">
                             <div
                               className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#f39b03]/15 text-[11px] font-extrabold text-[#c97702] ring-1 ring-[#f39b03]/25"
                               aria-hidden

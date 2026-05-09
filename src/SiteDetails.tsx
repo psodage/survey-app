@@ -523,13 +523,13 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                 {detailCards.map((card) => (
                   <div
                     key={card.title}
-                    className={`w-full min-h-[108px] rounded-xl p-3 shadow-sm ring-1 ring-black/5 md:min-h-[126px] ${card.cardTint} md:rounded-2xl md:bg-white md:p-5 md:shadow-[0_10px_30px_rgba(16,24,40,0.06)]`}
+                    className={`w-full min-h-[88px] rounded-xl p-2.5 shadow-sm ring-1 ring-black/5 md:min-h-[126px] ${card.cardTint} md:rounded-2xl md:bg-white md:p-5 md:shadow-[0_10px_30px_rgba(16,24,40,0.06)]`}
                   >
-                    <div className="flex items-start gap-2 md:gap-4">
+                    <div className="flex items-start gap-1.5 md:gap-4">
                       <span
-                        className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl md:h-12 md:w-12 md:rounded-2xl ${card.tone}`}
+                        className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg md:h-12 md:w-12 md:rounded-2xl ${card.tone}`}
                       >
-                        <card.icon size={20} />
+                        <card.icon size={18} />
                       </span>
                       <div className="min-w-0 flex-1">
                         <div className="text-[11px] font-semibold leading-tight text-neutral-700 md:text-sm">

@@ -424,7 +424,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
           <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-white p-4 pb-[calc(3.65rem+max(12px,env(safe-area-inset-bottom,0px)))] sm:px-6 sm:pt-6 sm:pb-[calc(3.65rem+max(12px,env(safe-area-inset-bottom,0px)))] md:p-6 md:pb-24 lg:p-8 lg:pb-28">
             <div className="mx-auto w-full max-w-[1200px] space-y-6 md:space-y-8">
               {!showAddForm ? (
-                <section className="grid grid-cols-2 gap-3 md:gap-4 xl:grid-cols-4">
+                <section className="grid grid-cols-2 gap-2 md:gap-4 xl:grid-cols-4">
                   <StatCard
                     title="Total Visits"
                     value={String(visitRecords.length)}
@@ -471,7 +471,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                   </div>
                 </div>
               ) : (
-                <CardPanel className="flex flex-col gap-3 p-3 md:flex-row md:items-center md:justify-between md:gap-4 md:p-4">
+                <CardPanel className="flex flex-col gap-2.5 p-2.5 md:flex-row md:items-center md:justify-between md:gap-4 md:p-4">
                   <div className="w-full md:max-w-xs">
                     <input type="text" placeholder="Search account..." className={toolbarSearchInputClass} />
                   </div>
@@ -519,7 +519,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                                 onNavigate(getVisitDetailsPath(record))
                               }
                             }}
-                            className="w-full rounded-xl border border-neutral-200 bg-white p-3 text-left shadow-sm ring-1 ring-black/5"
+                            className="w-full rounded-xl border border-neutral-200 bg-white p-2.5 text-left shadow-sm ring-1 ring-black/5 md:p-3"
                           >
                             <div className="flex items-start justify-between gap-2">
                               <div className="min-w-0">
@@ -863,7 +863,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                       </span>
                     </button>
 
-                    <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4 md:gap-4">
+                    <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4 md:gap-4">
                       {photos.map((p) => (
                         <div
                           key={p.id}

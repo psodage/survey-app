@@ -737,7 +737,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
             ) : null}
 
             {/* Top summary cards */}
-            <section className="mt-3 grid grid-cols-2 gap-3 md:mt-4 md:grid-cols-4 md:gap-4">
+            <section className="mt-3 grid grid-cols-2 gap-2 md:mt-4 md:grid-cols-4 md:gap-4">
               <button
                 type="button"
                 className="cursor-pointer bg-transparent p-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f39b03]/70"
@@ -801,7 +801,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
             </section>
 
             {!selectedClient ? (
-              <CardPanel className="my-3 flex flex-col gap-3 p-3 md:my-4 md:flex-row md:items-center md:justify-between md:gap-4 md:p-4">
+              <CardPanel className="my-3 flex flex-col gap-2.5 p-2.5 md:my-4 md:flex-row md:items-center md:justify-between md:gap-4 md:p-4">
                 <div className="w-full md:max-w-xs">
                   <input
                     value={query}
@@ -864,7 +864,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                               onNavigate(getSiteDetailsPath(selectedClient.name, site))
                             }
                           }}
-                          className="w-full rounded-xl border border-neutral-200 bg-white p-3 text-left shadow-sm ring-1 ring-black/5"
+                          className="w-full rounded-xl border border-neutral-200 bg-white p-2.5 text-left shadow-sm ring-1 ring-black/5 md:p-3"
                         >
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0">
@@ -1033,7 +1033,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                               onNavigate(getSiteDetailsPath(site.clientName, site))
                             }
                           }}
-                          className="w-full rounded-xl border border-neutral-200 bg-white p-3 text-left shadow-sm ring-1 ring-black/5"
+                          className="w-full rounded-xl border border-neutral-200 bg-white p-2.5 text-left shadow-sm ring-1 ring-black/5 md:p-3"
                         >
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0">

@@ -2,17 +2,22 @@ import {
   Bell,
   Briefcase,
   Building2,
-  Calendar,
   Calculator,
-  ChevronDown,
+  Calendar,
   CircleUserRound,
   ClipboardList,
+  Clock,
+  Download,
+  Eye,
   FileBarChart,
   LayoutGrid,
   LogOut,
   Mail,
+  MapPin,
   Menu,
   Phone,
+  Plus,
+  Share2,
   UsersRound,
   X,
 } from 'lucide-react'
@@ -20,8 +25,7 @@ import { Fragment, useState, type ReactNode } from 'react'
 import { useLocation } from 'react-router-dom'
 import { AccountManagerSidebarBlock } from './AccountManagerSidebarBlock'
 import { CollaborationBrandMark } from './CollaborationBrandMark'
-import { CardShell } from './dashboardCards'
-import { exportInvoicePdf } from './exportInvoicePdf'
+import { CardShell, StatCard } from './dashboardCards'
 import { getHeaderDateLabel } from './headerDateLabel'
 import { signOut } from './signOut'
 
@@ -30,50 +34,90 @@ type NavItem = {
   icon: ReactNode
 }
 
-const navItems: NavItem[] = [
-  { label: 'Dashboard', icon: <LayoutGrid size={16} /> },
-  { label: 'Account Manager', icon: <Briefcase size={16} /> },
-  { label: 'Clients & Sites', icon: <UsersRound size={16} /> },
-  { label: 'Site Visits', icon: <ClipboardList size={16} /> },
-  { label: 'Invoice', icon: <Calculator size={16} /> },
-  { label: 'Reports', icon: <FileBarChart size={16} /> },
-  { label: 'Settings', icon: <Building2 size={16} /> },
-  { label: 'Log Out', icon: <LogOut size={16} /> },
-]
-
-type InvoiceProps = {
+type ReportsProps = {
   onNavigate: (path: string) => void
 }
 
-function FieldLabel({ label }: { label: string }) {
-  return <label className="mb-1.5 block text-xs font-bold tracking-wide text-neutral-600">{label}</label>
+type ReportRow = {
+  id: string
+  type: string
+  client: string
+  site: string
+  date: string
+  machine: string
+  status: 'Completed' | 'Pending'
 }
 
-export default function Invoice({ onNavigate }: InvoiceProps) {
+const selectClass =
+  'h-11 w-full cursor-pointer appearance-none rounded-xl border border-neutral-200 bg-white px-3 pr-10 text-sm font-semibold text-neutral-900 outline-none transition hover:border-neutral-300 focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20'
+
+function Field({
+  label,
+  children,
+}: {
+  label: string
+  children: ReactNode
+}) {
+  return (
+    <label className="grid gap-2">
+      <span className="text-xs font-bold text-neutral-700">{label}</span>
+      {children}
+    </label>
+  )
+}
+
+export default function Reports({ onNavigate }: ReportsProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const { pathname } = useLocation()
   const headerDateLabel = getHeaderDateLabel()
-  const [formValues, setFormValues] = useState({
-    client: 'RN Construction',
-    site: 'Kolhapur Cancer Centre, Kolhapur',
-    workType: 'Plane Table',
-    totalPoints: '55',
-    ratePerPoint: '80',
-    baseCharge: '1500',
-    extraCharges: '1500',
-    discount: '0',
-    invoiceDate: new Date().toLocaleDateString('en-GB'),
-  })
 
-  const mobileBottomNav = [
-    { label: 'Dashboard', path: '/dashboard', icon: LayoutGrid },
-    { label: 'Accounts', path: '/account-manager', icon: Briefcase },
-    { label: 'Clients', path: '/clients-sites', icon: UsersRound },
-    { label: 'Sites', path: '/site-visits', icon: ClipboardList },
-    { label: 'Invoice', path: '/invoice', icon: Calculator },
-    { label: 'Reports', path: '/reports', icon: FileBarChart },
-    { label: 'Settings', path: '/settings', icon: Building2 },
-  ] as const
+  const [reportType, setReportType] = useState<string>('Site-wise')
+  const [clientFilter, setClientFilter] = useState('')
+  const [siteFilter, setSiteFilter] = useState('')
+  const [fromDate, setFromDate] = useState('')
+  const [toDate, setToDate] = useState('')
+  const [machineType, setMachineType] = useState<string>('Total Station')
+
+  const reportRows: ReportRow[] = [
+    {
+      id: 'RPT-1001',
+      type: 'Site-wise',
+      client: 'Amit Developers',
+      site: 'Sai Residency',
+      date: '20 May 2025',
+      machine: 'Total Station',
+      status: 'Completed',
+    },
+    {
+      id: 'RPT-1002',
+      type: 'Client-wise',
+      client: 'Shree Krishna Infra',
+      site: 'Multiple Sites',
+      date: '18 May 2025',
+      machine: 'DGPS',
+      status: 'Completed',
+    },
+    {
+      id: 'RPT-1003',
+      type: 'Date-wise',
+      client: 'Vishwakarma Properties',
+      site: 'Green Valley Phase 2',
+      date: '16 May 2025',
+      machine: 'Total Station',
+      status: 'Pending',
+    },
+  ]
+
+  const navItems: NavItem[] = [
+    { label: 'Dashboard', icon: <LayoutGrid size={16} /> },
+    { label: 'Account Manager', icon: <Briefcase size={16} /> },
+    { label: 'Clients & Sites', icon: <UsersRound size={16} /> },
+    { label: 'Site Visits', icon: <ClipboardList size={16} /> },
+    { label: 'Invoice', icon: <Calculator size={16} /> },
+    { label: 'Reports', icon: <FileBarChart size={16} /> },
+    { label: 'Settings', icon: <Building2 size={16} /> },
+    { label: 'Log Out', icon: <LogOut size={16} /> },
+  ]
 
   const handleNavClick = async (label: string) => {
     if (label === 'Log Out') {
@@ -96,30 +140,23 @@ export default function Invoice({ onNavigate }: InvoiceProps) {
     setIsSidebarOpen(false)
   }
 
-  const updateFormValue = (field: keyof typeof formValues, value: string) => {
-    setFormValues((prev) => ({ ...prev, [field]: value }))
-  }
+  const mobileBottomNav = [
+    { label: 'Dashboard', path: '/dashboard', icon: LayoutGrid },
+    { label: 'Accounts', path: '/account-manager', icon: Briefcase },
+    { label: 'Clients', path: '/clients-sites', icon: UsersRound },
+    { label: 'Sites', path: '/site-visits', icon: ClipboardList },
+    { label: 'Invoice', path: '/invoice', icon: Calculator },
+    { label: 'Reports', path: '/reports', icon: FileBarChart },
+    { label: 'Settings', path: '/settings', icon: Building2 },
+  ] as const
 
-  const parseMoney = (value: string) => Number(value.replace(/[^\d.-]/g, '')) || 0
-
-  const handleGenerateInvoice = async () => {
-    const totalPoints = Number(formValues.totalPoints) || 0
-    const ratePerPoint = parseMoney(formValues.ratePerPoint)
-    const baseCharge = parseMoney(formValues.baseCharge)
-    const extraCharges = parseMoney(formValues.extraCharges)
-    const discount = parseMoney(formValues.discount)
-
-    await exportInvoicePdf({
-      client: formValues.client,
-      site: formValues.site,
-      workType: formValues.workType,
-      totalPoints,
-      ratePerPoint,
-      baseCharge,
-      extraCharges,
-      discount,
-      invoiceDate: formValues.invoiceDate,
-    })
+  const resetFilters = () => {
+    setReportType('Site-wise')
+    setClientFilter('')
+    setSiteFilter('')
+    setFromDate('')
+    setToDate('')
+    setMachineType('Total Station')
   }
 
   return (
@@ -129,6 +166,7 @@ export default function Invoice({ onNavigate }: InvoiceProps) {
           <div className="px-6 pt-7">
             <CollaborationBrandMark variant="desktopSidebar" />
           </div>
+
           <nav className="mt-5 flex-1 px-3">
             <div className="space-y-1">
               {navItems.map((item) => {
@@ -143,7 +181,7 @@ export default function Invoice({ onNavigate }: InvoiceProps) {
                     </Fragment>
                   )
                 }
-                const active = item.label === 'Invoice'
+                const active = item.label === 'Reports'
                 const isLogout = item.label === 'Log Out'
                 return (
                   <button
@@ -183,6 +221,7 @@ export default function Invoice({ onNavigate }: InvoiceProps) {
             onClick={() => setIsSidebarOpen(false)}
           />
         ) : null}
+
         <aside
           className={[
             'fixed inset-y-0 left-0 z-50 flex w-[280px] flex-col overflow-y-auto bg-gradient-to-b from-[#050505] via-[#0b0b0b] to-[#040404] pb-20 text-white transition-transform duration-300 lg:hidden',
@@ -201,6 +240,7 @@ export default function Invoice({ onNavigate }: InvoiceProps) {
               <X size={18} />
             </button>
           </div>
+
           <div className="mt-6 px-5">
             <div className="rounded-2xl bg-white/5 p-4 ring-1 ring-white/10">
               <div className="flex flex-col items-center text-center">
@@ -232,6 +272,7 @@ export default function Invoice({ onNavigate }: InvoiceProps) {
               </div>
             </div>
           </div>
+
           <div className="mt-5 px-5">
             <div className="text-[11px] font-extrabold uppercase tracking-wide text-white/45">Quick navigation</div>
             <div className="mt-2 space-y-2">
@@ -306,7 +347,7 @@ export default function Invoice({ onNavigate }: InvoiceProps) {
               </div>
               <div className="flex items-center justify-between gap-3 border-t border-white/10 px-4 py-3">
                 <h1 className="min-w-0 truncate text-left text-base font-extrabold leading-tight tracking-tight text-white">
-                  Invoice
+                  Reports
                 </h1>
                 <button
                   type="button"
@@ -330,9 +371,10 @@ export default function Invoice({ onNavigate }: InvoiceProps) {
                   <Menu size={18} className="text-neutral-900" />
                 </button>
                 <div className="min-w-0 truncate text-lg font-extrabold tracking-tight text-neutral-950 sm:text-xl">
-                  Invoice
+                  Reports
                 </div>
               </div>
+
               <div className="flex shrink-0 items-center gap-2 sm:gap-3">
                 <button
                   type="button"
@@ -347,9 +389,7 @@ export default function Invoice({ onNavigate }: InvoiceProps) {
                     <CircleUserRound size={18} />
                   </div>
                   <div className="min-w-0 text-left">
-                    <div className="truncate text-xs font-extrabold text-neutral-900 sm:text-sm">
-                      Er. Shubham Bhoi
-                    </div>
+                    <div className="truncate text-xs font-extrabold text-neutral-900 sm:text-sm">Er. Shubham Bhoi</div>
                     <div className="text-[11px] font-semibold text-neutral-600">Admin</div>
                   </div>
                 </div>
@@ -358,109 +398,212 @@ export default function Invoice({ onNavigate }: InvoiceProps) {
           </header>
 
           <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-white p-3 pb-[calc(3.65rem+max(10px,env(safe-area-inset-bottom,0px)))] sm:px-5 sm:pt-5 sm:pb-[calc(3.65rem+max(10px,env(safe-area-inset-bottom,0px)))] md:p-6 md:pb-24 lg:p-8 lg:pb-28">
-            <section className="mx-auto w-full max-w-[1100px]">
-              <CardShell title="Create Invoice">
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
-                  <div>
-                    <FieldLabel label="Client" />
-                    <input
-                      value={formValues.client}
-                      onChange={(e) => updateFormValue('client', e.target.value)}
-                      className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-semibold text-neutral-700 outline-none focus:border-[#f39b03]"
-                    />
+            <section className="mx-auto w-full max-w-[1600px] space-y-5 md:space-y-8">
+              <div className="grid grid-cols-2 gap-2 md:gap-4 xl:grid-cols-4">
+                <StatCard
+                  title="Total Reports"
+                  value="128"
+                  icon={<FileBarChart size={20} className="text-[#f39b03]" />}
+                  toneClass="bg-[#f39b03]/12"
+                  mobileCardTint="bg-amber-50/90"
+                />
+                <StatCard
+                  title="Site Reports"
+                  value="48"
+                  icon={<MapPin size={20} className="text-emerald-600" />}
+                  toneClass="bg-emerald-100"
+                  mobileCardTint="bg-emerald-50/90"
+                />
+                <StatCard
+                  title="Client Reports"
+                  value="32"
+                  icon={<UsersRound size={20} className="text-sky-600" />}
+                  toneClass="bg-sky-100"
+                  mobileCardTint="bg-sky-50/90"
+                />
+                <StatCard
+                  title="Pending Reports"
+                  value="6"
+                  subtitle="Queued for generation"
+                  icon={<Clock size={20} className="text-orange-600" />}
+                  toneClass="bg-orange-100"
+                  mobileCardTint="bg-orange-50/90"
+                />
+              </div>
+
+              <div className="rounded-xl bg-white p-4 shadow-[0_10px_30px_rgba(16,24,40,0.06)] ring-1 ring-black/5 md:rounded-2xl md:p-6">
+                <div className="text-sm font-extrabold tracking-tight text-neutral-950">Filters</div>
+                <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-12 lg:gap-5">
+                  <div className="lg:col-span-2">
+                    <Field label="Report Type">
+                      <select value={reportType} onChange={(e) => setReportType(e.target.value)} className={selectClass}>
+                        <option>Site-wise</option>
+                        <option>Client-wise</option>
+                        <option>Date-wise</option>
+                        <option>Payment-wise</option>
+                      </select>
+                    </Field>
                   </div>
-                  <div>
-                    <FieldLabel label="Site" />
-                    <input
-                      value={formValues.site}
-                      onChange={(e) => updateFormValue('site', e.target.value)}
-                      className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-semibold text-neutral-700 outline-none focus:border-[#f39b03]"
-                    />
+                  <div className="lg:col-span-2">
+                    <Field label="Client">
+                      <select
+                        value={clientFilter || 'all'}
+                        onChange={(e) => setClientFilter(e.target.value === 'all' ? '' : e.target.value)}
+                        className={selectClass}
+                      >
+                        <option value="all">All clients</option>
+                        <option value="amit">Amit Developers</option>
+                        <option value="krishna">Shree Krishna Infra</option>
+                        <option value="vishwa">Vishwakarma Properties</option>
+                      </select>
+                    </Field>
                   </div>
-                  <div>
-                    <FieldLabel label="Work Type" />
-                    <select
-                      value={formValues.workType}
-                      onChange={(e) => updateFormValue('workType', e.target.value)}
-                      className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-semibold text-neutral-700 outline-none focus:border-[#f39b03]"
-                    >
-                      <option>Plane Table</option>
-                      <option>P.T. &amp; Contour</option>
-                      <option>Stake Out</option>
-                      <option>Line Out</option>
-                      <option>Excavation Points</option>
-                    </select>
+                  <div className="lg:col-span-3">
+                    <Field label="Site">
+                      <select
+                        value={siteFilter || 'all'}
+                        onChange={(e) => setSiteFilter(e.target.value === 'all' ? '' : e.target.value)}
+                        className={selectClass}
+                      >
+                        <option value="all">All sites</option>
+                        <option value="sai">Sai Residency</option>
+                        <option value="green">Green Valley Phase 2</option>
+                        <option value="multiple">Multiple Sites</option>
+                      </select>
+                    </Field>
                   </div>
-                  <div>
-                    <FieldLabel label="Total Points" />
-                    <input
-                      value={formValues.totalPoints}
-                      onChange={(e) => updateFormValue('totalPoints', e.target.value)}
-                      className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-semibold text-neutral-700 outline-none focus:border-[#f39b03]"
-                      placeholder="0"
-                    />
-                  </div>
-                  <div>
-                    <FieldLabel label="Rate Per Point" />
-                    <input
-                      value={formValues.ratePerPoint}
-                      onChange={(e) => updateFormValue('ratePerPoint', e.target.value)}
-                      className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-semibold text-neutral-700 outline-none focus:border-[#f39b03]"
-                      placeholder="₹ 0"
-                    />
-                  </div>
-                  <div>
-                    <FieldLabel label="Base Charge" />
-                    <input
-                      value={formValues.baseCharge}
-                      onChange={(e) => updateFormValue('baseCharge', e.target.value)}
-                      className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-semibold text-neutral-700 outline-none focus:border-[#f39b03]"
-                      placeholder="₹ 0"
-                    />
-                  </div>
-                  <div>
-                    <FieldLabel label="Extra Charges" />
-                    <input
-                      value={formValues.extraCharges}
-                      onChange={(e) => updateFormValue('extraCharges', e.target.value)}
-                      className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-semibold text-neutral-700 outline-none focus:border-[#f39b03]"
-                      placeholder="₹ 0"
-                    />
-                  </div>
-                  <div>
-                    <FieldLabel label="Discount" />
-                    <input
-                      value={formValues.discount}
-                      onChange={(e) => updateFormValue('discount', e.target.value)}
-                      className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-semibold text-neutral-700 outline-none focus:border-[#f39b03]"
-                      placeholder="₹ 0"
-                    />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <FieldLabel label="Invoice Date" />
-                    <div className="relative">
-                      <Calendar size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#f39b03]" />
+                  <div className="lg:col-span-2">
+                    <Field label="From Date">
                       <input
-                        type="text"
-                        value={formValues.invoiceDate}
-                        onChange={(e) => updateFormValue('invoiceDate', e.target.value)}
-                        className="w-full rounded-xl border border-neutral-200 py-2.5 pl-9 pr-8 text-sm font-semibold text-neutral-700 outline-none focus:border-[#f39b03]"
-                        placeholder="DD/MM/YYYY"
+                        type="date"
+                        value={fromDate}
+                        onChange={(e) => setFromDate(e.target.value)}
+                        className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
                       />
-                      <ChevronDown size={14} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-neutral-500" />
+                    </Field>
+                  </div>
+                  <div className="lg:col-span-2">
+                    <Field label="To Date">
+                      <input
+                        type="date"
+                        value={toDate}
+                        onChange={(e) => setToDate(e.target.value)}
+                        className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
+                      />
+                    </Field>
+                  </div>
+                  <div className="flex flex-col justify-end lg:col-span-1">
+                    <Field label="Machine Type">
+                      <select
+                        value={machineType}
+                        onChange={(e) => setMachineType(e.target.value)}
+                        className={selectClass}
+                      >
+                        <option>Total Station</option>
+                        <option>DGPS</option>
+                      </select>
+                    </Field>
+                  </div>
+                  <div className="flex flex-col justify-end lg:col-span-12 xl:col-span-12">
+                    <div className="flex flex-wrap gap-2.5 lg:justify-end">
+                      <button
+                        type="button"
+                        className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[#f39b03] px-5 text-sm font-extrabold text-white shadow-[0_10px_28px_rgba(243,155,3,0.28)] transition hover:bg-[#e18e03] md:flex-none md:min-w-[158px]"
+                      >
+                        <Plus size={18} strokeWidth={2.5} className="shrink-0" />
+                        Generate Report
+                      </button>
+                      <button
+                        type="button"
+                        className="inline-flex h-11 flex-1 items-center justify-center rounded-xl bg-[#f39b03] px-6 text-sm font-extrabold text-white shadow-[0_8px_24px_rgba(243,155,3,0.22)] transition hover:bg-[#e18e03] md:flex-none md:min-w-[140px]"
+                      >
+                        Apply Filter
+                      </button>
+                      <button
+                        type="button"
+                        onClick={resetFilters}
+                        className="inline-flex h-11 flex-1 items-center justify-center rounded-xl border border-neutral-200 bg-white px-6 text-sm font-extrabold text-neutral-800 shadow-sm ring-1 ring-black/5 transition hover:bg-neutral-50 md:flex-none md:min-w-[120px]"
+                      >
+                        Reset
+                      </button>
                     </div>
                   </div>
                 </div>
-                <div className="mt-4 flex justify-end">
-                  <button
-                    type="button"
-                    onClick={handleGenerateInvoice}
-                    className="h-11 rounded-xl bg-[#f39b03] px-5 text-sm font-bold text-white"
-                  >
-                    Generate Invoice (PDF)
-                  </button>
+              </div>
+
+              <CardShell
+                title="Generated Reports"
+                leadingIcon={<FileBarChart size={18} />}
+                bodyClassName="p-0"
+              >
+                <div className="overflow-x-auto">
+                  <table className="min-w-[960px] w-full border-collapse text-left">
+                    <thead className="bg-neutral-50/90 text-[11px] font-extrabold uppercase tracking-wide text-neutral-500">
+                      <tr>
+                        <th className="border-b border-neutral-100 px-4 py-3.5 whitespace-nowrap sm:px-6">Report ID</th>
+                        <th className="border-b border-neutral-100 px-4 py-3.5 whitespace-nowrap">Report Type</th>
+                        <th className="border-b border-neutral-100 px-4 py-3.5 whitespace-nowrap">Client</th>
+                        <th className="border-b border-neutral-100 px-4 py-3.5 whitespace-nowrap">Site</th>
+                        <th className="border-b border-neutral-100 px-4 py-3.5 whitespace-nowrap">Date</th>
+                        <th className="border-b border-neutral-100 px-4 py-3.5 whitespace-nowrap">Machine</th>
+                        <th className="border-b border-neutral-100 px-4 py-3.5 whitespace-nowrap">Status</th>
+                        <th className="border-b border-neutral-100 px-4 py-3.5 whitespace-nowrap sm:px-6">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="text-sm font-semibold text-neutral-800">
+                      {reportRows.map((row) => (
+                        <tr key={row.id} className="border-b border-neutral-100 hover:bg-neutral-50/70">
+                          <td className="px-4 py-3.5 font-extrabold text-neutral-950 sm:px-6">{row.id}</td>
+                          <td className="px-4 py-3.5">{row.type}</td>
+                          <td className="px-4 py-3.5">{row.client}</td>
+                          <td className="px-4 py-3.5 text-neutral-700">{row.site}</td>
+                          <td className="px-4 py-3.5 whitespace-nowrap text-neutral-700">{row.date}</td>
+                          <td className="px-4 py-3.5 whitespace-nowrap text-neutral-700">{row.machine}</td>
+                          <td className="px-4 py-3.5">
+                            <span
+                              className={[
+                                'inline-flex rounded-full px-3 py-1 text-[11px] font-extrabold uppercase tracking-wide',
+                                row.status === 'Completed'
+                                  ? 'bg-emerald-100 text-emerald-800 ring-1 ring-emerald-200/80'
+                                  : 'bg-orange-100 text-orange-800 ring-1 ring-orange-200/90',
+                              ].join(' ')}
+                            >
+                              {row.status}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 sm:px-6">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <button
+                                type="button"
+                                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-neutral-200 bg-white px-2.5 text-[11px] font-bold text-neutral-700 ring-1 ring-black/5 transition hover:border-[#f39b03]/40 hover:text-[#f39b03]"
+                              >
+                                <Eye size={13} strokeWidth={2.25} />
+                                View
+                              </button>
+                              <button
+                                type="button"
+                                className="inline-flex h-9 items-center gap-1 rounded-lg bg-[#f39b03]/12 px-2.5 text-[11px] font-extrabold text-[#f39b03] ring-1 ring-[#f39b03]/22 transition hover:bg-[#f39b03]/18"
+                              >
+                                <Download size={13} strokeWidth={2.25} />
+                                Download PDF
+                              </button>
+                              <button
+                                type="button"
+                                className="inline-flex h-9 items-center gap-1 rounded-lg border border-neutral-200 bg-white px-2.5 text-[11px] font-bold text-neutral-700 ring-1 ring-black/5 transition hover:border-[#f39b03]/40 hover:text-[#f39b03]"
+                              >
+                                <Share2 size={13} strokeWidth={2.25} />
+                                Share
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </CardShell>
+
+           
             </section>
           </div>
         </main>
@@ -472,7 +615,7 @@ export default function Invoice({ onNavigate }: InvoiceProps) {
       >
         <div className="mx-auto flex w-full max-w-lg items-stretch justify-between gap-0 px-1 pt-1.5 pb-1">
           {mobileBottomNav.map((item) => {
-            const active = pathname === item.path
+            const active = item.path === '/reports'
             const Icon = item.icon
             return (
               <button
@@ -571,4 +714,3 @@ export default function Invoice({ onNavigate }: InvoiceProps) {
     </div>
   )
 }
-

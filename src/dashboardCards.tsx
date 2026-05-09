@@ -38,15 +38,15 @@ export function StatCard({
   return (
     <div
       className={[
-        'w-full min-h-[108px] rounded-xl p-3 shadow-sm ring-1 ring-black/5 md:min-h-[126px]',
+        'w-full min-h-[88px] rounded-xl p-2.5 shadow-sm ring-1 ring-black/5 md:min-h-[126px]',
         mobileCardTint,
         'md:rounded-2xl md:bg-white md:p-5 md:shadow-[0_10px_30px_rgba(16,24,40,0.06)]',
       ].join(' ')}
     >
-      <div className="flex items-start gap-2 md:gap-4">
+      <div className="flex items-start gap-1.5 md:gap-4">
         <div
           className={[
-            'grid h-9 w-9 shrink-0 place-items-center rounded-xl md:h-12 md:w-12 md:rounded-2xl',
+            'grid h-8 w-8 shrink-0 place-items-center rounded-lg md:h-12 md:w-12 md:rounded-2xl',
             toneClass,
           ].join(' ')}
         >
@@ -76,7 +76,7 @@ export function CardShell({
   leadingIcon,
   headerEnd,
   className,
-  bodyClassName = 'p-3 sm:p-4 md:p-6',
+  bodyClassName = 'p-2.5 sm:p-3 md:p-6',
   children,
 }: {
   title: string
@@ -91,10 +91,10 @@ export function CardShell({
     <div
       className={['bg-white', surfaceCardClass, className ?? ''].filter(Boolean).join(' ')}
     >
-      <div className="flex items-center justify-between gap-3 border-b border-neutral-100 px-4 py-3 sm:px-6 sm:py-4">
+      <div className="flex items-center justify-between gap-2 border-b border-neutral-100 px-3 py-2.5 sm:px-6 sm:py-3 md:py-4">
         <div className="flex min-w-0 flex-1 items-center gap-2.5">
           {leadingIcon ? (
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#f39b03]/12 text-[#f39b03] ring-1 ring-[#f39b03]/20">
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#f39b03]/12 text-[#f39b03] ring-1 ring-[#f39b03]/20 md:h-9 md:w-9 md:rounded-xl">
               {leadingIcon}
             </span>
           ) : null}
