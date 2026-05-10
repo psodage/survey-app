@@ -6,7 +6,10 @@ import { fileURLToPath } from 'node:url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const root = join(__dirname, '..')
-/** PWA icons: use `logo.jpeg` only (not logo-bg2.png). */
+/**
+ * PWA icons: derived from `src/assets/logo.jpeg` only (not logo-bg2.png).
+ * That file may include Flaticon-licensed graphics — attribution is surfaced in Settings.
+ */
 const source = join(root, 'src', 'assets', 'logo.jpeg')
 const outDir = join(root, 'public', 'icons')
 

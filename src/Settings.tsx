@@ -571,6 +571,20 @@ export default function Settings({ onNavigate }: SettingsProps) {
                         >
                           Change Logo
                         </button>
+                        <p className="mt-3 text-[11px] font-medium leading-relaxed text-neutral-500">
+                          The bundled default logo (<span className="font-semibold text-neutral-700">src/assets/logo.jpeg</span>),
+                          including the artwork used for app icons and PWA install graphics, incorporates material sourced from{' '}
+                          <a
+                            href="https://www.flaticon.com/"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-semibold text-[#f39b03] underline-offset-2 hover:underline"
+                          >
+                            Flaticon
+                          </a>
+                          . Flaticon’s license requires attribution; cite the designer name from your icon download page if you
+                          substitute a different graphic.
+                        </p>
                       </div>
                     </div>
                   </div>
