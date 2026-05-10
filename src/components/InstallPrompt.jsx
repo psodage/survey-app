@@ -35,6 +35,12 @@ export default function InstallPrompt() {
     }
   }, [])
 
+  useEffect(() => {
+    if (!deferredPrompt || dismissed) return
+    const id = window.setTimeout(() => setDismissed(true), 7500)
+    return () => window.clearTimeout(id)
+  }, [deferredPrompt, dismissed])
+
   const handleInstall = async () => {
     if (!deferredPrompt?.prompt) return
     await deferredPrompt.prompt()
