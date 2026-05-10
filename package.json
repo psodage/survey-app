@@ -7,7 +7,7 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "npm run icons && vite build",
     "preview": "vite preview",
     "icons": "node scripts/generate-pwa-icons.mjs"
   },

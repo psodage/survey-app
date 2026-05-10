@@ -12,7 +12,6 @@ import {
   Briefcase,
   ClipboardList,
   Building2,
-  Calculator,
   Eye,
   FileBarChart,
   Mail,
@@ -49,7 +48,6 @@ const navItems: NavItem[] = [
   { label: 'Account Manager', icon: <Briefcase size={16} /> },
   { label: 'Clients & Sites', icon: <UsersRound size={16} /> },
   { label: 'Site Visits', icon: <ClipboardList size={16} /> },
-  { label: 'Invoice', icon: <Calculator size={16} /> },
   { label: 'Reports', icon: <FileBarChart size={16} /> },
   { label: 'Settings', icon: <Building2 size={16} /> },
   { label: 'Log Out', icon: <LogOut size={16} /> },
@@ -221,7 +219,6 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
     { label: 'Accounts', path: '/account-manager', icon: Briefcase },
     { label: 'Clients', path: '/clients-sites', icon: UsersRound },
     { label: 'Sites', path: '/site-visits', icon: MapPin },
-    { label: 'Invoice', path: '/invoice', icon: Calculator },
     { label: 'Reports', path: '/reports', icon: FileBarChart },
     { label: 'Settings', path: '/settings', icon: Building2 },
   ] as const
@@ -238,7 +235,6 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
       'Account Manager': '/account-manager',
       'Clients & Sites': '/clients-sites',
       'Site Visits': '/site-visits',
-      Invoice: '/invoice',
       Reports: '/reports',
       Settings: '/settings',
     }
@@ -1464,7 +1460,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
               <div className="min-w-0 pr-2">
                 <h2 className="text-lg font-extrabold tracking-tight text-neutral-950 sm:text-xl">Add New Site</h2>
                 <p className="mt-1 text-xs font-semibold text-neutral-600">
-                  Create a new site under {selectedClient.name}.
+                  Create a site for {selectedClient.name}. Add visits later to generate reports and invoices from visit details.
                 </p>
               </div>
               <button

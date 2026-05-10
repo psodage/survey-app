@@ -4,7 +4,6 @@ import {
   Briefcase,
   Building2,
   Calendar,
-  Calculator,
   CircleUserRound,
   ClipboardList,
   FileBarChart,
@@ -37,7 +36,6 @@ const navItems: NavItem[] = [
   { label: 'Account Manager', icon: <Briefcase size={16} /> },
   { label: 'Clients & Sites', icon: <UsersRound size={16} /> },
   { label: 'Site Visits', icon: <ClipboardList size={16} /> },
-  { label: 'Invoice', icon: <Calculator size={16} /> },
   { label: 'Reports', icon: <FileBarChart size={16} /> },
   { label: 'Settings', icon: <Building2 size={16} /> },
   { label: 'Log Out', icon: <LogOut size={16} /> },
@@ -126,7 +124,6 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
       'Account Manager': '/account-manager',
       'Clients & Sites': '/clients-sites',
       'Site Visits': '/site-visits',
-      Invoice: '/invoice',
       Reports: '/reports',
       Settings: '/settings',
     }
@@ -140,7 +137,6 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
     { label: 'Accounts', path: '/account-manager', icon: Briefcase },
     { label: 'Clients', path: '/clients-sites', icon: UsersRound },
     { label: 'Sites', path: '/site-visits', icon: MapPin },
-    { label: 'Invoice', path: '/invoice', icon: Calculator },
     { label: 'Reports', path: '/reports', icon: FileBarChart },
     { label: 'Settings', path: '/settings', icon: Building2 },
   ] as const
@@ -284,7 +280,6 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                 { label: 'Dashboard', path: '/dashboard', icon: LayoutGrid },
                 { label: 'Clients', path: '/clients-sites', icon: UsersRound },
                 { label: 'Visits', path: '/site-visits', icon: MapPin },
-                { label: 'Invoice', path: '/invoice', icon: Calculator },
               ].map(({ label, path, icon: Icon }) => (
                 <button
                   type="button"

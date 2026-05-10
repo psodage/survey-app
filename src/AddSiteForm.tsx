@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 
 export const DEFAULT_CLIENT_OPTIONS_FOR_ADD_SITE = [
   'Amit Developers',
@@ -6,10 +6,6 @@ export const DEFAULT_CLIENT_OPTIONS_FOR_ADD_SITE = [
   'Vishwakarma Properties',
   'Gajanan Projects',
 ] as const
-
-function parseAmount(value: string) {
-  return Number(value.replace(/[^\d.-]/g, '')) || 0
-}
 
 export type AddSiteFormProps = {
   clientName: string
@@ -22,32 +18,11 @@ export function AddSiteForm({ clientName, variant = 'page', onCancel, onSuccess 
   const [siteName, setSiteName] = useState('')
   const [locationName, setLocationName] = useState('')
   const [status, setStatus] = useState<'Active' | 'On Hold' | 'Completed'>('Active')
-  const [pendingAmount, setPendingAmount] = useState('')
-  const [totalPoints, setTotalPoints] = useState('')
-  const [ratePerPoint, setRatePerPoint] = useState('')
-  const [baseCharge, setBaseCharge] = useState('')
-  const [extraCharges, setExtraCharges] = useState('')
-  const [discount, setDiscount] = useState('')
-
-  const calculatedTotalAmount = useMemo(() => {
-    const points = parseAmount(totalPoints)
-    const rate = parseAmount(ratePerPoint)
-    const base = parseAmount(baseCharge)
-    const extra = parseAmount(extraCharges)
-    const discountValue = parseAmount(discount)
-    return Math.max(0, base + points * rate + extra - discountValue)
-  }, [baseCharge, discount, extraCharges, ratePerPoint, totalPoints])
 
   const resetFields = () => {
     setSiteName('')
     setLocationName('')
     setStatus('Active')
-    setPendingAmount('')
-    setTotalPoints('')
-    setRatePerPoint('')
-    setBaseCharge('')
-    setExtraCharges('')
-    setDiscount('')
   }
 
   const gridClass =
@@ -69,7 +44,7 @@ export function AddSiteForm({ clientName, variant = 'page', onCancel, onSuccess 
         onSuccess()
       }}
     >
-      <label className="grid gap-2">
+      <label className={['grid gap-2', colSpanWide].join(' ')}>
         <span className="text-xs font-bold text-neutral-700">Client</span>
         <input
           value={clientName}
@@ -111,83 +86,6 @@ export function AddSiteForm({ clientName, variant = 'page', onCancel, onSuccess 
           <option value="On Hold">On Hold</option>
           <option value="Completed">Completed</option>
         </select>
-      </label>
-
-      <label className={['grid gap-2', colSpanWide].join(' ')}>
-        <span className="text-xs font-bold text-neutral-700">Pending Amount (optional)</span>
-        <input
-          value={pendingAmount}
-          onChange={(event) => setPendingAmount(event.target.value)}
-          className={inputClass}
-          placeholder="e.g. 25000"
-        />
-      </label>
-
-      <label className="grid gap-2">
-        <span className="text-xs font-bold text-neutral-700">Total Points</span>
-        <input
-          value={totalPoints}
-          onChange={(event) => setTotalPoints(event.target.value)}
-          inputMode="numeric"
-          className={inputClass}
-          placeholder="0"
-        />
-      </label>
-
-      <label className="grid gap-2">
-        <span className="text-xs font-bold text-neutral-700">Rate Per Point (₹)</span>
-        <input
-          value={ratePerPoint}
-          onChange={(event) => setRatePerPoint(event.target.value)}
-          inputMode="numeric"
-          className={inputClass}
-          placeholder="0"
-        />
-      </label>
-
-      <label className="grid gap-2">
-        <span className="text-xs font-bold text-neutral-700">Base Charge (₹)</span>
-        <input
-          value={baseCharge}
-          onChange={(event) => setBaseCharge(event.target.value)}
-          inputMode="numeric"
-          className={inputClass}
-          placeholder="0"
-        />
-      </label>
-
-      <label className="grid gap-2">
-        <span className="text-xs font-bold text-neutral-700">Extra Charges (₹)</span>
-        <input
-          value={extraCharges}
-          onChange={(event) => setExtraCharges(event.target.value)}
-          inputMode="numeric"
-          className={inputClass}
-          placeholder="0"
-        />
-      </label>
-
-      <label className="grid gap-2">
-        <span className="text-xs font-bold text-neutral-700">Discount (₹)</span>
-        <input
-          value={discount}
-          onChange={(event) => setDiscount(event.target.value)}
-          inputMode="numeric"
-          className={inputClass}
-          placeholder="0"
-        />
-      </label>
-
-      <label className={['grid gap-2', colSpanWide].join(' ')}>
-        <span className="text-xs font-bold text-neutral-700">Total Amount (₹)</span>
-        <input
-          value={calculatedTotalAmount.toLocaleString('en-IN')}
-          readOnly
-          className="h-11 rounded-xl border border-[#f39b03]/30 bg-[#f39b03]/5 px-3 text-sm font-extrabold text-[#b56d00] outline-none"
-        />
-        <p className="text-[11px] font-semibold text-neutral-500">
-          Base Charge + (Total Points × Rate Per Point) + Extra Charges - Discount
-        </p>
       </label>
 
       <div className={['mt-2 flex flex-wrap items-center gap-3', colSpanWide].join(' ')}>

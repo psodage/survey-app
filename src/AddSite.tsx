@@ -3,7 +3,6 @@ import {
   Bell,
   Briefcase,
   Building2,
-  Calculator,
   Calendar,
   CircleUserRound,
   ClipboardList,
@@ -47,7 +46,6 @@ export default function AddSite({ onNavigate }: AddSiteProps) {
     { label: 'Accounts', path: '/account-manager', icon: Briefcase },
     { label: 'Clients', path: '/clients-sites', icon: UsersRound },
     { label: 'Sites', path: '/site-visits', icon: MapPin },
-    { label: 'Invoice', path: '/invoice', icon: Calculator },
     { label: 'Reports', path: '/reports', icon: FileBarChart },
     { label: 'Settings', path: '/settings', icon: Building2 },
   ]
@@ -64,7 +62,6 @@ export default function AddSite({ onNavigate }: AddSiteProps) {
       'Account Manager': '/account-manager',
       'Clients & Sites': '/clients-sites',
       'Site Visits': '/site-visits',
-      Invoice: '/invoice',
       Reports: '/reports',
       Settings: '/settings',
     }
@@ -78,7 +75,6 @@ export default function AddSite({ onNavigate }: AddSiteProps) {
     { label: 'Account Manager', icon: <Briefcase size={16} /> },
     { label: 'Clients & Sites', icon: <UsersRound size={16} /> },
     { label: 'Site Visits', icon: <ClipboardList size={16} /> },
-    { label: 'Invoice', icon: <Calculator size={16} /> },
     { label: 'Reports', icon: <FileBarChart size={16} /> },
     { label: 'Settings', icon: <Building2 size={16} /> },
     { label: 'Log Out', icon: <LogOut size={16} /> },
@@ -198,7 +194,9 @@ export default function AddSite({ onNavigate }: AddSiteProps) {
               <div className="mb-5 flex items-center justify-between gap-3 border-b border-neutral-200 pb-4">
                 <div>
                   <h1 className="text-xl font-extrabold tracking-tight text-neutral-950 md:text-2xl">Add New Site</h1>
-                  <p className="mt-1 text-sm font-semibold text-neutral-500">Create a new site under a client.</p>
+                  <p className="mt-1 text-sm font-semibold text-neutral-500">
+                    Capture the site basics here; visits, reports, and invoices follow from site visit entries.
+                  </p>
                 </div>
                 <button type="button" onClick={() => onNavigate('/clients-sites')} className="inline-flex h-10 items-center gap-2 rounded-xl border border-neutral-200 bg-white px-4 text-sm font-extrabold text-neutral-800 transition hover:bg-neutral-50">
                   <ArrowLeft size={14} />

@@ -15,16 +15,25 @@ import {
   MapPin,
   Menu,
   Phone,
+  Plus,
   UsersRound,
   User2,
   X,
   type LucideIcon,
 } from 'lucide-react'
-import { Fragment, useState, type ReactNode } from 'react'
+import { Fragment, useMemo, useState, type ReactNode } from 'react'
 import { useLocation as useRouterLocation } from 'react-router-dom'
 import { AccountManagerSidebarBlock } from './AccountManagerSidebarBlock'
 import { CollaborationBrandMark } from './CollaborationBrandMark'
-import { CardShell, surfaceCardClass } from './dashboardCards'
+import {
+  CardPanel,
+  CardShell,
+  surfaceCardClass,
+  toolbarPlusIconClass,
+  toolbarPrimaryButtonClass,
+  toolbarSearchInputClass,
+  toolbarSecondaryButtonClass,
+} from './dashboardCards'
 import { exportCombinedSiteInvoicePdf, exportInvoicePdf } from './exportInvoicePdf'
 import { exportVisitRecordPdf } from './exportVisitRecordPdf'
 import { getHeaderDateLabel } from './headerDateLabel'
@@ -40,7 +49,6 @@ const navItems: NavItem[] = [
   { label: 'Account Manager', icon: <Briefcase size={16} /> },
   { label: 'Clients & Sites', icon: <UsersRound size={16} /> },
   { label: 'Site Visits', icon: <ClipboardList size={16} /> },
-  { label: 'Invoice', icon: <Calculator size={16} /> },
   { label: 'Reports', icon: <FileBarChart size={16} /> },
   { label: 'Settings', icon: <Building2 size={16} /> },
   { label: 'Log Out', icon: <LogOut size={16} /> },
@@ -61,6 +69,9 @@ type SiteVisitRecord = {
   notes: string
   work?: string
 }
+
+const toolbarSelectClass =
+  'h-8 min-w-[128px] flex-1 rounded-md border border-neutral-200 bg-white px-2.5 text-xs font-bold text-neutral-700 outline-none transition focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20 md:h-10 md:min-w-[150px] md:rounded-lg md:px-3 md:text-sm sm:flex-initial'
 
 const siteVisitRecords: SiteVisitRecord[] = [
   {
@@ -100,6 +111,9 @@ const siteVisitRecords: SiteVisitRecord[] = [
 
 export function SiteDetails({ onNavigate }: SiteDetailsProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+  const [visitsSearchQuery, setVisitsSearchQuery] = useState('')
+  const [visitMachineFilter, setVisitMachineFilter] = useState('all')
+  const [visitPaymentFilter, setVisitPaymentFilter] = useState('all')
   const { pathname: routerPathname } = useRouterLocation()
   const headerDateLabel = getHeaderDateLabel()
   const params = new URLSearchParams(window.location.search)
@@ -121,6 +135,59 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
   const engineerName = params.get('engineerName') ?? ''
   const contactPerson = params.get('contactPerson') ?? engineerName
   const relatedVisitRecords = siteVisitRecords.filter((record) => record.client === client && record.site === name)
+  const parseVisitAmount = (amount: string) => Number(amount.replace(/[^\d.]/g, '')) || 0
+
+  const visitMachineOptions = useMemo(
+    () => [...new Set(relatedVisitRecords.map((r) => r.machine))].sort(),
+    [relatedVisitRecords],
+  )
+  const visitPaymentOptions = useMemo(
+    () => [...new Set(relatedVisitRecords.map((r) => r.paymentMode))].sort(),
+    [relatedVisitRecords],
+  )
+
+  const filteredVisitRecords = useMemo(() => {
+    let list = relatedVisitRecords
+    if (visitMachineFilter !== 'all') {
+      list = list.filter((r) => r.machine === visitMachineFilter)
+    }
+    if (visitPaymentFilter !== 'all') {
+      list = list.filter((r) => r.paymentMode === visitPaymentFilter)
+    }
+    const q = visitsSearchQuery.trim().toLowerCase()
+    if (!q) return list
+    return list.filter((r) => {
+      const hay = [r.id, r.date, r.machine, r.paymentMode, r.notes, r.amount, r.work ?? ''].join(' ').toLowerCase()
+      return hay.includes(q)
+    })
+  }, [relatedVisitRecords, visitsSearchQuery, visitMachineFilter, visitPaymentFilter])
+
+  const hasActiveVisitFilters =
+    visitsSearchQuery.trim() !== '' || visitMachineFilter !== 'all' || visitPaymentFilter !== 'all'
+
+  const clearVisitFilters = () => {
+    setVisitsSearchQuery('')
+    setVisitMachineFilter('all')
+    setVisitPaymentFilter('all')
+  }
+
+  const handleExportFilteredSiteInvoice = () => {
+    if (filteredVisitRecords.length === 0) return
+    const visits = filteredVisitRecords.map((r) => ({
+      visitId: r.id,
+      date: r.date,
+      machine: r.machine,
+      amount: parseVisitAmount(r.amount),
+      notes: r.notes,
+    }))
+    void exportCombinedSiteInvoicePdf({
+      client,
+      site: name,
+      location: location !== 'Unknown Location' ? location : undefined,
+      invoiceDate: new Date().toLocaleDateString('en-GB'),
+      visits,
+    })
+  }
   const pageTitle = isVisitMode ? 'Site Visit Details' : 'Site Details'
   const backPath = isVisitMode ? '/site-visits' : '/clients-sites'
   const activeNavLabel = isVisitMode ? 'Site Visits' : 'Clients & Sites'
@@ -130,10 +197,10 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
     { label: 'Accounts', path: '/account-manager', icon: Briefcase },
     { label: 'Clients', path: '/clients-sites', icon: UsersRound },
     { label: 'Sites', path: '/site-visits', icon: MapPin },
-    { label: 'Invoice', path: '/invoice', icon: Calculator },
     { label: 'Reports', path: '/reports', icon: FileBarChart },
     { label: 'Settings', path: '/settings', icon: Building2 },
   ] as const
+  const addSiteVisitPath = `/add-site-visit?${new URLSearchParams({ mode: 'add', client, name }).toString()}`
 
   const handleNavClick = async (label: string) => {
     if (label === 'Log Out') {
@@ -148,7 +215,6 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
       'Account Manager': '/account-manager',
       'Clients & Sites': '/clients-sites',
       'Site Visits': '/site-visits',
-      Invoice: '/invoice',
       Reports: '/reports',
       Settings: '/settings',
     }
@@ -163,8 +229,6 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
       : status === 'On Hold'
         ? 'bg-amber-50 text-amber-700 ring-amber-200'
         : 'bg-emerald-50 text-emerald-700 ring-emerald-200'
-
-  const parseVisitAmount = (amount: string) => Number(amount.replace(/[^\d.]/g, '')) || 0
 
   const siteAddressLine = [name, location !== 'Unknown Location' ? location : ''].filter(Boolean).join(', ')
 
@@ -484,7 +548,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                   <ArrowLeft size={16} />
                   Back
                 </button>
-                <div className="truncate text-lg font-extrabold tracking-tight text-neutral-950 sm:text-xl">
+                <div className="min-w-0 truncate text-lg font-extrabold tracking-tight text-neutral-950 sm:text-xl">
                   {pageTitle}
                 </div>
               </div>
@@ -524,7 +588,13 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                 </div>
               </section>
 
-              <section className="grid grid-cols-1 gap-3 md:grid-cols-4 md:gap-4">
+              <section
+                className={
+                  isVisitMode
+                    ? 'grid grid-cols-2 gap-1.5 md:grid-cols-4 md:gap-4'
+                    : 'grid grid-cols-1 gap-3 md:grid-cols-4 md:gap-4'
+                }
+              >
                 {detailCards.map((card) => (
                   <div
                     key={card.title}
@@ -555,6 +625,69 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                   </div>
                 ))}
               </section>
+
+              {!isVisitMode ? (
+                <CardPanel className="flex flex-col gap-2.5 p-2.5 md:flex-row md:items-center md:justify-between md:gap-4 md:p-4">
+                  <div className="w-full md:max-w-[780px]">
+                    <input
+                      type="text"
+                      value={visitsSearchQuery}
+                      onChange={(e) => setVisitsSearchQuery(e.target.value)}
+                      placeholder="Search visit records…"
+                      className={toolbarSearchInputClass}
+                      aria-label="Search visit records"
+                    />
+                  </div>
+                  <div className="flex w-full flex-wrap items-center gap-2 md:w-auto md:justify-end">
+                    <select
+                      value={visitMachineFilter}
+                      onChange={(e) => setVisitMachineFilter(e.target.value)}
+                      className={toolbarSelectClass}
+                      aria-label="Filter by machine"
+                    >
+                      <option value="all">All machines</option>
+                      {visitMachineOptions.map((m) => (
+                        <option key={m} value={m}>
+                          {m}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      value={visitPaymentFilter}
+                      onChange={(e) => setVisitPaymentFilter(e.target.value)}
+                      className={toolbarSelectClass}
+                      aria-label="Filter by payment mode"
+                    >
+                      <option value="all">All payment modes</option>
+                      {visitPaymentOptions.map((p) => (
+                        <option key={p} value={p}>
+                          {p}
+                        </option>
+                      ))}
+                    </select>
+                    <button type="button" className={toolbarSecondaryButtonClass}>
+                      Filters
+                    </button>
+                    {hasActiveVisitFilters ? (
+                      <button type="button" className={toolbarSecondaryButtonClass} onClick={clearVisitFilters}>
+                        Clear
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      className={toolbarSecondaryButtonClass}
+                      disabled={filteredVisitRecords.length === 0}
+                      onClick={handleExportFilteredSiteInvoice}
+                    >
+                      Export
+                    </button>
+                    <button type="button" onClick={() => onNavigate(addSiteVisitPath)} className={toolbarPrimaryButtonClass}>
+                      <Plus className={toolbarPlusIconClass} />
+                      Add new Site visit
+                    </button>
+                  </div>
+                </CardPanel>
+              ) : null}
 
               {isVisitMode ? (
                 <CardShell title="Visit Details" className="overflow-hidden" bodyClassName="p-0">
@@ -635,11 +768,22 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                     <div className="px-4 py-5 text-sm font-semibold text-neutral-600 sm:px-6">
                       No visit records found for this site.
                     </div>
+                  ) : filteredVisitRecords.length === 0 ? (
+                    <div className="px-4 py-5 text-sm font-semibold text-neutral-600 sm:px-6">
+                      No visits match your search or filters.{' '}
+                      <button
+                        type="button"
+                        onClick={clearVisitFilters}
+                        className="font-extrabold text-[#f39b03] underline decoration-[#f39b03]/40 underline-offset-2 hover:text-[#e18e03]"
+                      >
+                        Clear filters
+                      </button>
+                    </div>
                   ) : (
                     <>
                       <div className="md:hidden">
                         <ul className="flex flex-col gap-1.5 p-2 sm:p-3">
-                          {relatedVisitRecords.map((record) => (
+                          {filteredVisitRecords.map((record) => (
                             <li key={`${record.id}-mobile`} className="rounded-lg bg-white p-2 shadow-sm ring-1 ring-black/5">
                               <div className="flex items-center justify-between gap-2">
                                 <div className="min-w-0">
@@ -699,7 +843,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                             </tr>
                           </thead>
                           <tbody className="text-sm font-semibold text-neutral-800">
-                            {relatedVisitRecords.map((record) => (
+                            {filteredVisitRecords.map((record) => (
                               <tr key={record.id} className="border-t border-neutral-200">
                                 <td className="px-4 py-3 font-extrabold text-neutral-900">{record.id}</td>
                                 <td className="px-4 py-3">{record.date}</td>

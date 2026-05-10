@@ -4,7 +4,6 @@ import {
   Briefcase,
   Building2,
   Calendar,
-  Calculator,
   ChevronDown,
   ClipboardList,
   CircleUserRound,
@@ -47,7 +46,6 @@ const navItems: NavItem[] = [
   { label: 'Account Manager', icon: <Briefcase size={16} /> },
   { label: 'Clients & Sites', icon: <UsersRound size={16} /> },
   { label: 'Site Visits', icon: <ClipboardList size={16} /> },
-  { label: 'Invoice', icon: <Calculator size={16} /> },
   { label: 'Reports', icon: <FileBarChart size={16} /> },
   { label: 'Settings', icon: <Building2 size={16} /> },
   { label: 'Log Out', icon: <LogOut size={16} /> },
@@ -155,6 +153,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
   const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search])
   const mode = searchParams.get('mode')
   const requestedClient = searchParams.get('client')
+  const requestedSiteName = searchParams.get('name')
 
   useEffect(() => {
     if (mode !== 'add') return
@@ -162,9 +161,13 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
     if (requestedClient && clientOptions.includes(requestedClient)) {
       setClient(requestedClient)
       const sites = sitesByClient[requestedClient] ?? []
-      setSite(sites[0] ?? '')
+      if (requestedSiteName && sites.includes(requestedSiteName)) {
+        setSite(requestedSiteName)
+      } else {
+        setSite(sites[0] ?? '')
+      }
     }
-  }, [mode, requestedClient])
+  }, [mode, requestedClient, requestedSiteName])
 
   const siteChoices = useMemo(() => sitesByClient[client] ?? [], [client])
   const totalAmount = useMemo(
@@ -177,7 +180,6 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
     { label: 'Accounts', path: '/account-manager', icon: Briefcase },
     { label: 'Clients', path: '/clients-sites', icon: UsersRound },
     { label: 'Sites', path: '/site-visits', icon: MapPin },
-    { label: 'Invoice', path: '/invoice', icon: Calculator },
     { label: 'Reports', path: '/reports', icon: FileBarChart },
     { label: 'Settings', path: '/settings', icon: Building2 },
   ] as const
@@ -194,7 +196,6 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
       'Account Manager': '/account-manager',
       'Clients & Sites': '/clients-sites',
       'Site Visits': '/site-visits',
-      Invoice: '/invoice',
       Reports: '/reports',
       Settings: '/settings',
     }
@@ -925,9 +926,8 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
         <div className="mx-auto flex w-full max-w-lg items-stretch justify-between gap-0 px-1 pt-1.5 pb-1">
           {mobileBottomNav.map((item) => {
             const active =
-              (item.path === '/site-visits' &&
-                (location.pathname === '/site-visits' || location.pathname === '/add-site-visit')) ||
-              (item.path === '/invoice' && location.pathname === '/invoice')
+              item.path === '/site-visits' &&
+              (location.pathname === '/site-visits' || location.pathname === '/add-site-visit')
             const Icon = item.icon
             return (
               <button
