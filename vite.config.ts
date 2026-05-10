@@ -12,11 +12,12 @@ export default defineConfig({
       manifest: {
         name: 'Samarth Land Surveyors',
         short_name: 'Samarth',
+        description: 'Land Survey Management System',
         start_url: '/',
         scope: '/',
         display: 'standalone',
         orientation: 'portrait',
-        theme_color: '#000000',
+        theme_color: '#f39b03',
         background_color: '#000000',
         icons: [
           {
@@ -34,6 +35,7 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,json,woff2}'],
         navigateFallback: '/index.html',
+        navigateFallbackDenylist: [/^\/api/],
         runtimeCaching: [
           {
             urlPattern: ({ request }) => request.destination === 'document',

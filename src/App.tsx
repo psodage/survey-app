@@ -11,7 +11,7 @@ import Invoice from './Invoice'
 import Reports from './Reports'
 import { SiteDetails } from './SiteDetails'
 import Settings from './Settings'
-import InstallAppPrompt from './components/InstallAppPrompt'
+import InstallPrompt from './components/InstallPrompt.jsx'
 import Login from './Login.jsx'
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
@@ -146,7 +146,7 @@ export default function App() {
   return (
     <>
       <AppRoutes />
-      <InstallAppPrompt />
+      <InstallPrompt />
     </>
   )
 }

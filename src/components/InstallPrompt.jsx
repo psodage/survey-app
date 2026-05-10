@@ -1,23 +1,28 @@
 import { useEffect, useState } from 'react'
 
-type BeforeInstallPromptEvent = Event & {
-  prompt: () => Promise<void>
-  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>
+function isRunningAsInstalledPwa() {
+  if (typeof window === 'undefined') return false
+  const mq = window.matchMedia('(display-mode: standalone)')
+  if (mq.matches) return true
+  /** iOS Safari home screen */
+  if (typeof window.navigator !== 'undefined' && window.navigator.standalone === true) return true
+  return false
 }
 
-export default function InstallAppPrompt() {
-  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null)
-  const [isVisible, setIsVisible] = useState(false)
+export default function InstallPrompt() {
+  const [deferredPrompt, setDeferredPrompt] = useState(null)
+  const [dismissed, setDismissed] = useState(false)
 
   useEffect(() => {
-    const onBeforeInstallPrompt = (event: Event) => {
+    if (isRunningAsInstalledPwa()) return
+
+    /** @type {(e: Event) => void} */
+    const onBeforeInstallPrompt = (event) => {
       event.preventDefault()
-      setDeferredPrompt(event as BeforeInstallPromptEvent)
-      setIsVisible(true)
+      setDeferredPrompt(event)
     }
 
     const onInstalled = () => {
-      setIsVisible(false)
       setDeferredPrompt(null)
     }
 
@@ -31,14 +36,15 @@ export default function InstallAppPrompt() {
   }, [])
 
   const handleInstall = async () => {
-    if (!deferredPrompt) return
+    if (!deferredPrompt?.prompt) return
     await deferredPrompt.prompt()
     await deferredPrompt.userChoice
     setDeferredPrompt(null)
-    setIsVisible(false)
   }
 
-  if (!isVisible) return null
+  const installable = Boolean(deferredPrompt) && !dismissed
+
+  if (!installable) return null
 
   return (
     <div className="fixed right-4 bottom-4 z-50 w-[calc(100%-2rem)] max-w-sm rounded-2xl border border-[#f39b03]/40 bg-black/90 p-4 text-white shadow-[0_0_40px_rgba(243,155,3,0.25)] backdrop-blur">
@@ -56,7 +62,7 @@ export default function InstallAppPrompt() {
         </button>
         <button
           type="button"
-          onClick={() => setIsVisible(false)}
+          onClick={() => setDismissed(true)}
           className="rounded-lg border border-white/20 px-3 py-2 text-xs text-white/80 transition hover:border-white/40 hover:text-white"
         >
           Later
