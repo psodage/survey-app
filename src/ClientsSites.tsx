@@ -300,6 +300,10 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
     setSelectedClientName(null)
     setQuery('')
     setSitesSearchQuery('')
+    const nextParams = new URLSearchParams(location.search)
+    nextParams.delete('client')
+    const qs = nextParams.toString()
+    onNavigate(qs ? `/clients-sites?${qs}` : '/clients-sites')
   }
 
   const filteredRows = useMemo(() => {
@@ -634,33 +638,35 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                 <div className="flex min-w-0 justify-center px-1">
                   <CollaborationBrandMark variant="mobileHeader" />
                 </div>
-                {selectedClient ? (
-                  <button
-                    type="button"
-                    className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white/10 text-white ring-1 ring-white/15 transition hover:bg-white/15"
-                    aria-label="Back"
-                    onClick={handleBackFromClientDetails}
-                  >
-                    <ArrowLeft size={18} />
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    className="relative grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white/5 text-white ring-1 ring-white/10 transition hover:bg-white/10"
-                    aria-label="Notifications"
-                  >
-                    <Bell size={18} strokeWidth={2} className="text-white" />
-                    <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-white ring-2 ring-black" />
-                  </button>
-                )}
-              </div>
-              <div className="flex items-center justify-between gap-3 border-t border-white/10 px-4 py-3">
-                <h1 className="min-w-0 truncate text-left text-base font-extrabold leading-tight tracking-tight text-white">
-                  {selectedClient ? 'Client Details' : 'Clients & Sites'}
-                </h1>
                 <button
                   type="button"
-                  className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-white/20 bg-neutral-900 px-2.5 text-[11px] font-semibold text-white transition hover:bg-neutral-800"
+                  className="relative grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white/5 text-white ring-1 ring-white/10 transition hover:bg-white/10"
+                  aria-label="Notifications"
+                >
+                  <Bell size={18} strokeWidth={2} className="text-white" />
+                  <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-white ring-2 ring-black" />
+                </button>
+              </div>
+              <div className="flex items-center justify-between gap-3 border-t border-white/10 px-4 py-3">
+                <div className="flex min-w-0 flex-1 items-center gap-2">
+                  {selectedClient ? (
+                    <button
+                      type="button"
+                      className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-white/10 px-3 py-2 text-xs font-extrabold text-white ring-1 ring-white/15 transition hover:bg-white/15"
+                      aria-label="Back to clients list"
+                      onClick={handleBackFromClientDetails}
+                    >
+                      <ArrowLeft size={16} strokeWidth={2.25} />
+                      Back
+                    </button>
+                  ) : null}
+                  <h1 className="min-w-0 flex-1 truncate text-left text-base font-extrabold leading-tight tracking-tight text-white">
+                    {selectedClient ? 'Client Details' : 'Clients & Sites'}
+                  </h1>
+                </div>
+                <button
+                  type="button"
+                  className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-white/20 bg-neutral-900 px-2.5 text-[11px] font-semibold text-white transition hover:bg-neutral-800"
                   aria-label="Current date"
                 >
                   <Calendar size={13} className="text-[#f39b03]" />
@@ -682,13 +688,14 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                   <button
                     type="button"
                     onClick={handleBackFromClientDetails}
-                    className="inline-flex h-10 shrink-0 items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 text-sm font-extrabold text-neutral-800 transition hover:bg-neutral-50"
+                    aria-label="Back to clients list"
+                    className="inline-flex h-10 shrink-0 items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 text-sm font-extrabold text-neutral-800 shadow-sm ring-1 ring-black/5 transition hover:bg-neutral-50"
                   >
                     <ArrowLeft size={16} />
                     Back
                   </button>
                 ) : null}
-                <div className="truncate text-lg font-extrabold tracking-tight text-neutral-950 sm:text-xl">
+                <div className="min-w-0 truncate text-lg font-extrabold tracking-tight text-neutral-950 sm:text-xl">
                   {selectedClient ? 'Client Details' : 'Clients & Sites'}
                 </div>
               </div>
