@@ -7,13 +7,11 @@ import { fileURLToPath } from 'node:url'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const root = join(__dirname, '..')
 /**
- * PWA launcher icons (`public/icons/*.png`) and the public header/footer logo (`samarth-logo.png`)
- * are derived from `src/assets/logo.jpeg` only (not logo-bg2.png).
+ * PWA icons: derived from `src/assets/logo.jpeg` only (not logo-bg2.png).
  * That file may include Flaticon-licensed graphics — attribution is surfaced in Settings.
  */
 const source = join(root, 'src', 'assets', 'logo.jpeg')
 const outDir = join(root, 'public', 'icons')
-const headerLogoOut = join(root, 'public', 'samarth-logo.png')
 
 /** Matches white background on the brand JPEG */
 const BG = '#ffffff'
@@ -32,16 +30,7 @@ const resize = async (size, outfile) =>
     .png()
     .toFile(outfile)
 
-/** Distinct filenames so CDN/browser SW caches don’t keep stale launcher artwork after rebranding. */
-await resize(192, join(outDir, 'pwa-icon-192.png'))
-await resize(512, join(outDir, 'pwa-icon-512.png'))
+await resize(192, join(outDir, 'icon-192.png'))
+await resize(512, join(outDir, 'icon-512.png'))
 
-/** Retina-friendly raster for `<img src="/samarth-logo.png">`; matches PWA/mark brand source. */
-await sharp(source)
-  .resize({ height: 160, fit: 'inside', background: BG, position: 'centre' })
-  .png()
-  .toFile(headerLogoOut)
-
-console.info(
-  'Wrote public/icons/pwa-icon-*.png and public/samarth-logo.png from src/assets/logo.jpeg',
-)
+console.info('Wrote public/icons/icon-192.png and public/icons/icon-512.png from src/assets/logo.jpeg')
