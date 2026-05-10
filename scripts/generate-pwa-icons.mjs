@@ -32,8 +32,9 @@ const resize = async (size, outfile) =>
     .png()
     .toFile(outfile)
 
-await resize(192, join(outDir, 'icon-192.png'))
-await resize(512, join(outDir, 'icon-512.png'))
+/** Distinct filenames so CDN/browser SW caches don’t keep stale launcher artwork after rebranding. */
+await resize(192, join(outDir, 'pwa-icon-192.png'))
+await resize(512, join(outDir, 'pwa-icon-512.png'))
 
 /** Retina-friendly raster for `<img src="/samarth-logo.png">`; matches PWA/mark brand source. */
 await sharp(source)
@@ -42,5 +43,5 @@ await sharp(source)
   .toFile(headerLogoOut)
 
 console.info(
-  'Wrote public/icons/icon-*.png and public/samarth-logo.png from src/assets/logo.jpeg',
+  'Wrote public/icons/pwa-icon-*.png and public/samarth-logo.png from src/assets/logo.jpeg',
 )
