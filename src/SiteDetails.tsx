@@ -11,8 +11,10 @@ import {
   FileBarChart,
   LayoutGrid,
   LogOut,
+  Mail,
   MapPin,
   Menu,
+  Phone,
   UsersRound,
   User2,
   X,
@@ -38,6 +40,7 @@ const navItems: NavItem[] = [
   { label: 'Account Manager', icon: <Briefcase size={16} /> },
   { label: 'Clients & Sites', icon: <UsersRound size={16} /> },
   { label: 'Site Visits', icon: <ClipboardList size={16} /> },
+  { label: 'Invoice', icon: <Calculator size={16} /> },
   { label: 'Reports', icon: <FileBarChart size={16} /> },
   { label: 'Settings', icon: <Building2 size={16} /> },
   { label: 'Log Out', icon: <LogOut size={16} /> },
@@ -127,6 +130,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
     { label: 'Accounts', path: '/account-manager', icon: Briefcase },
     { label: 'Clients', path: '/clients-sites', icon: UsersRound },
     { label: 'Sites', path: '/site-visits', icon: MapPin },
+    { label: 'Invoice', path: '/invoice', icon: Calculator },
     { label: 'Reports', path: '/reports', icon: FileBarChart },
     { label: 'Settings', path: '/settings', icon: Building2 },
   ] as const
@@ -144,6 +148,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
       'Account Manager': '/account-manager',
       'Clients & Sites': '/clients-sites',
       'Site Visits': '/site-visits',
+      Invoice: '/invoice',
       Reports: '/reports',
       Settings: '/settings',
     }
@@ -226,7 +231,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
   const detailCards: { title: string; value: string; icon: LucideIcon; tone: string; cardTint: string }[] = isVisitMode
     ? [
         {
-          title: 'Client',
+          title: 'Client Name',
           value: client,
           icon: User2,
           tone: 'bg-sky-100 text-sky-700',
@@ -519,7 +524,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                 </div>
               </section>
 
-              <section className="grid grid-cols-1 gap-3 md:grid-cols-2 md:gap-4">
+              <section className="grid grid-cols-1 gap-3 md:grid-cols-4 md:gap-4">
                 {detailCards.map((card) => (
                   <div
                     key={card.title}
@@ -606,16 +611,6 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                       <Calculator size={15} className="text-[#f39b03]" />
                       Individual invoice
                     </button>
-                    {relatedVisitRecords.length > 0 ? (
-                      <button
-                        type="button"
-                        onClick={handleCommonSiteInvoice}
-                        className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[#f39b03]/40 bg-[#f39b03]/10 px-4 text-xs font-extrabold text-[#b87402] transition hover:bg-[#f39b03]/15 sm:text-sm"
-                      >
-                        <Calculator size={15} className="text-[#f39b03]" />
-                        Common invoice (all visits)
-                      </button>
-                    ) : null}
                   </div>
                 </CardShell>
               ) : (
@@ -798,8 +793,41 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
             className="h-9 w-auto shrink-0 sm:h-10"
             draggable={false}
           />
-          <div className="min-w-0 flex-1 text-right text-[11px] font-bold text-white/90">
-            Samarth Land Surveyors
+          <div className="hidden min-w-0 flex-1 items-center justify-end text-xs font-bold text-white/95 md:flex">
+            <div className="flex min-w-0 items-center gap-2 pr-5">
+              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#f39b03]/20 text-[#f39b03] ring-1 ring-[#f39b03]/45">
+                <Phone size={13} />
+              </span>
+              <span className="truncate">Er. SHUBHAM BHOI 8643 00 1010</span>
+            </div>
+            <div className="h-6 w-px bg-white/25" />
+            <div className="flex min-w-0 items-center gap-2 px-5">
+              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#f39b03]/20 text-[#f39b03] ring-1 ring-[#f39b03]/45">
+                <Phone size={13} />
+              </span>
+              <span className="truncate">Er. SANKET KATAKAR 7026 01 6077</span>
+            </div>
+            <div className="h-6 w-px bg-white/25" />
+            <div className="flex min-w-0 items-center gap-2 px-5">
+              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#f39b03]/20 text-[#f39b03] ring-1 ring-[#f39b03]/45">
+                <Phone size={13} />
+              </span>
+              <span className="truncate">Er. SHUBHAM SODAGE 95959755566</span>
+            </div>
+            <div className="h-6 w-px bg-white/25" />
+            <div className="flex min-w-0 items-center gap-2 px-5">
+              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#f39b03]/20 text-[#f39b03] ring-1 ring-[#f39b03]/45">
+                <Phone size={13} />
+              </span>
+              <span className="truncate">Er. PRAJWAL PATIL 7058129002</span>
+            </div>
+            <div className="h-6 w-px bg-white/25" />
+            <div className="flex min-w-0 items-center gap-2 pl-5">
+              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#f39b03]/20 text-[#f39b03] ring-1 ring-[#f39b03]/45">
+                <Mail size={13} />
+              </span>
+              <span className="truncate">samarthlandsurveyors@gmail.com</span>
+            </div>
           </div>
         </div>
       </footer>
