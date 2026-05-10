@@ -8,7 +8,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'samarth-logo.png'],
+      includeAssets: ['favicon.svg'],
       manifest: {
         id: '/',
         name: 'Samrath Land Surveyor',

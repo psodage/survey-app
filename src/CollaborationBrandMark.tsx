@@ -1,3 +1,4 @@
+import { layoutBrandLogo } from './brandLogo'
 import dgpsLogo from './assets/dgps-logo.png'
 
 type CollaborationBrandMarkProps = {
@@ -14,7 +15,7 @@ export function CollaborationBrandMark({ variant }: CollaborationBrandMarkProps)
           aria-label="Samarth Land Surveyors in collaboration with DGPS"
         >
           <img
-            src="/samarth-logo.png"
+            src={layoutBrandLogo}
             alt=""
             draggable={false}
             className="mx-auto h-[4.5rem] w-auto max-w-[92%] object-contain object-center sm:h-[5rem]"
@@ -48,7 +49,7 @@ export function CollaborationBrandMark({ variant }: CollaborationBrandMarkProps)
       aria-label="Samarth Land Surveyors in collaboration with DGPS"
     >
       <img
-        src="/samarth-logo.png"
+        src={layoutBrandLogo}
         alt=""
         draggable={false}
         className="h-[60px] max-h-[64px] w-auto max-w-[42%] shrink object-contain object-center sm:h-[68px] sm:max-h-[72px] sm:max-w-[40%]"

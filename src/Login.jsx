@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { layoutBrandLogo } from './brandLogo'
 
 const features = [
   { icon: Users, title: 'Client & Site', subtitle: 'Management' },
@@ -23,7 +24,7 @@ const features = [
 const LogoBlock = ({ centered = false }) => (
   <div className={`flex items-center ${centered ? 'justify-center' : 'justify-start'}`}>
     <img
-      src="/samarth-logo.png"
+      src={layoutBrandLogo}
       alt="समर्थ LAND SURVEYOR'S"
       className="h-auto w-[170px] object-contain sm:w-[190px] lg:w-[200px]"
       draggable={false}

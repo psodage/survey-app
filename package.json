@@ -7,9 +7,10 @@
   },
   "scripts": {
     "dev": "vite",
+    "icons": "node scripts/generate-pwa-icons.mjs",
+    "prebuild": "node scripts/generate-pwa-icons.mjs",
     "build": "vite build",
-    "preview": "vite preview",
-    "icons": "node scripts/generate-pwa-icons.mjs"
+    "preview": "vite preview"
   },
   "dependencies": {
     "@tailwindcss/postcss": "^4.2.4",

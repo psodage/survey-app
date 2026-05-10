@@ -33,6 +33,7 @@ import {
   toolbarSearchInputClass,
   toolbarSecondaryButtonClass,
 } from './dashboardCards'
+import { layoutBrandLogo } from './brandLogo'
 import { getHeaderDateLabel } from './headerDateLabel'
 import { signOut } from './signOut'
 
@@ -290,7 +291,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
           ].join(' ')}
         >
           <div className="flex items-center justify-between px-6 pt-6">
-            <img src="/samarth-logo.png" alt="Samarth Land Surveyors" className="h-10 w-auto" draggable={false} />
+            <img src={layoutBrandLogo} alt="Samarth Land Surveyors" className="h-10 w-auto" draggable={false} />
             <button
               type="button"
               className="grid h-9 w-9 place-items-center rounded-xl bg-white/10 hover:bg-white/20"
@@ -958,7 +959,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
       <footer className="fixed inset-x-0 bottom-0 z-50 hidden border-t border-white/10 bg-gradient-to-b from-[#050505] via-[#0b0b0b] to-[#040404] text-white shadow-[0_-12px_30px_rgba(0,0,0,0.3)] md:block">
         <div className="mx-auto flex w-full max-w-none items-center justify-between gap-3 px-3 py-2 sm:px-5 sm:py-3">
           <img
-            src="/samarth-logo.png"
+            src={layoutBrandLogo}
             alt="Samarth Land Surveyors"
             className="h-9 w-auto shrink-0 sm:h-10"
             draggable={false}
