@@ -10,6 +10,7 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'samarth-logo.png'],
       manifest: {
+        id: '/',
         name: 'Samarth Land Surveyors',
         short_name: 'Samarth',
         description: 'Land Survey Management System',
@@ -18,22 +19,36 @@ export default defineConfig({
         display: 'standalone',
         orientation: 'portrait',
         theme_color: '#f39b03',
-        background_color: '#000000',
+        background_color: '#ffffff',
         icons: [
           {
             src: '/icons/icon-192.png',
             sizes: '192x192',
             type: 'image/png',
+            purpose: 'any',
+          },
+          {
+            src: '/icons/icon-192.png',
+            sizes: '192x192',
+            type: 'image/png',
+            purpose: 'maskable',
           },
           {
             src: '/icons/icon-512.png',
             sizes: '512x512',
             type: 'image/png',
+            purpose: 'any',
+          },
+          {
+            src: '/icons/icon-512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable',
           },
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,json,woff2}'],
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,json,woff2,webmanifest}'],
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api/],
         runtimeCaching: [

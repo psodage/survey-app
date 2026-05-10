@@ -296,6 +296,12 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
     onNavigate(`/clients-sites${search}`)
   }
 
+  const handleBackFromClientDetails = () => {
+    setSelectedClientName(null)
+    setQuery('')
+    setSitesSearchQuery('')
+  }
+
   const filteredRows = useMemo(() => {
     const q = query.trim().toLowerCase()
     const baseRows = !q ? [...clients] : clients.filter((r) => r.name.toLowerCase().includes(q) || r.phone.includes(q))
@@ -633,10 +639,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                     type="button"
                     className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white/10 text-white ring-1 ring-white/15 transition hover:bg-white/15"
                     aria-label="Back"
-                    onClick={() => {
-                      setSelectedClientName(null)
-                      setQuery('')
-                    }}
+                    onClick={handleBackFromClientDetails}
                   >
                     <ArrowLeft size={18} />
                   </button>
@@ -653,7 +656,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
               </div>
               <div className="flex items-center justify-between gap-3 border-t border-white/10 px-4 py-3">
                 <h1 className="min-w-0 truncate text-left text-base font-extrabold leading-tight tracking-tight text-white">
-                  Clients &amp; Sites
+                  {selectedClient ? 'Client Details' : 'Clients & Sites'}
                 </h1>
                 <button
                   type="button"
@@ -675,8 +678,18 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                 >
                   <Menu size={18} className="text-neutral-900" />
                 </button>
+                {selectedClient ? (
+                  <button
+                    type="button"
+                    onClick={handleBackFromClientDetails}
+                    className="inline-flex h-10 shrink-0 items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 text-sm font-extrabold text-neutral-800 transition hover:bg-neutral-50"
+                  >
+                    <ArrowLeft size={16} />
+                    Back
+                  </button>
+                ) : null}
                 <div className="truncate text-lg font-extrabold tracking-tight text-neutral-950 sm:text-xl">
-                  Clients &amp; Sites
+                  {selectedClient ? 'Client Details' : 'Clients & Sites'}
                 </div>
               </div>
 
@@ -839,7 +852,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                   </button>
                   <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
                     <button type="button" className={toolbarSecondaryButtonClass} onClick={handleExportClientReport}>
-                      Export Client Report
+                      Export All Sites
                     </button>
                     <button type="button" onClick={handleOpenAddSiteModal} className={toolbarPrimaryButtonClass}>
                       <Plus className={toolbarPlusIconClass} />
