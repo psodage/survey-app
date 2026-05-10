@@ -399,7 +399,7 @@ export default function Reports({ onNavigate }: ReportsProps) {
 
           <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-white p-3 pb-[calc(3.65rem+max(10px,env(safe-area-inset-bottom,0px)))] sm:px-5 sm:pt-5 sm:pb-[calc(3.65rem+max(10px,env(safe-area-inset-bottom,0px)))] md:p-6 md:pb-24 lg:p-8 lg:pb-28">
             <section className="mx-auto w-full max-w-[1600px] space-y-5 md:space-y-8">
-              <div className="grid grid-cols-2 gap-2 md:gap-4 xl:grid-cols-4">
+              <div className="grid grid-cols-2 gap-1.5 md:gap-4 xl:grid-cols-4">
                 <StatCard
                   title="Total Reports"
                   value="128"
@@ -492,30 +492,19 @@ export default function Reports({ onNavigate }: ReportsProps) {
                       />
                     </Field>
                   </div>
-                  <div className="flex flex-col justify-end lg:col-span-1">
-                    <Field label="Machine Type">
-                      <select
-                        value={machineType}
-                        onChange={(e) => setMachineType(e.target.value)}
-                        className={selectClass}
-                      >
-                        <option>Total Station</option>
-                        <option>DGPS</option>
-                      </select>
-                    </Field>
-                  </div>
+                 
                   <div className="flex flex-col justify-end lg:col-span-12 xl:col-span-12">
                     <div className="flex flex-wrap gap-2.5 lg:justify-end">
                       <button
                         type="button"
-                        className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[#f39b03] px-5 text-sm font-extrabold text-white shadow-[0_10px_28px_rgba(243,155,3,0.28)] transition hover:bg-[#e18e03] md:flex-none md:min-w-[158px]"
+                        className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[#f39b03] px-5 text-sm font-extrabold text-white transition hover:bg-[#e18e03] md:flex-none md:min-w-[158px]"
                       >
                         <Plus size={18} strokeWidth={2.5} className="shrink-0" />
                         Generate Report
                       </button>
                       <button
                         type="button"
-                        className="inline-flex h-11 flex-1 items-center justify-center rounded-xl bg-[#f39b03] px-6 text-sm font-extrabold text-white shadow-[0_8px_24px_rgba(243,155,3,0.22)] transition hover:bg-[#e18e03] md:flex-none md:min-w-[140px]"
+                        className="inline-flex h-11 flex-1 items-center justify-center rounded-xl bg-[#f39b03] px-6 text-sm font-extrabold text-white transition hover:bg-[#e18e03] md:flex-none md:min-w-[140px]"
                       >
                         Apply Filter
                       </button>

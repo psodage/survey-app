@@ -487,7 +487,7 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                 <p className="text-sm font-semibold text-neutral-600">{manager.phone}</p>
               </div>
             </CardShell>
-            <section className="grid grid-cols-2 gap-2 md:gap-4 xl:grid-cols-4">
+            <section className="grid grid-cols-2 gap-1.5 md:gap-4 xl:grid-cols-4">
               <button
                 type="button"
                 onClick={() => handleSummaryCardClick('debits')}
@@ -553,7 +553,7 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
             {viewMode !== 'pending' ? (
               <section className="mt-4 md:mt-6">
                 <CardPanel className="flex flex-col gap-2.5 p-2.5 md:flex-row md:items-center md:justify-between md:gap-4 md:p-4">
-                  <div className="w-full md:max-w-xs">
+                  <div className="w-full md:max-w-[780px]">
                     <input type="text" placeholder="Search account..." className={toolbarSearchInputClass} />
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
@@ -771,13 +771,13 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
               <CardShell title={ledgerCardTitle} className="overflow-hidden" bodyClassName="p-0">
                 <div className="md:hidden">
                   {viewMode === 'pending' ? (
-                    <ul className="flex flex-col gap-2 px-3 pb-1.5 pt-1.5">
+                    <ul className="flex flex-col gap-1.5 px-3 pb-1.5 pt-1.5">
                       {accountRows.map((row) => (
                         <li key={row.name}>
-                          <div className="flex w-full items-center justify-between gap-2 rounded-xl border border-neutral-200 bg-white p-2.5 shadow-sm ring-1 ring-black/5 md:p-3">
+                          <div className="flex w-full items-center justify-between gap-2 rounded-xl border border-neutral-200 bg-white p-2 shadow-sm ring-1 ring-black/5 md:p-3">
                             <div className="flex min-w-0 items-center gap-2">
-                              <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#f39b03]/12 text-[#f39b03]">
-                                <IndianRupee size={18} />
+                              <div className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-[#f39b03]/12 text-[#f39b03]">
+                                <IndianRupee size={16} />
                               </div>
                               <div className="min-w-0">
                                 <div className="truncate text-xs font-extrabold text-neutral-900">{row.name}</div>
@@ -795,12 +795,12 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                       ))}
                     </ul>
                   ) : (
-                    <ul className="flex flex-col gap-2 px-3 pb-1.5 pt-1.5">
+                    <ul className="flex flex-col gap-1.5 px-3 pb-1.5 pt-1.5">
                       {tableTransactions.map((tx) => (
                         <li key={tx.id}>
-                          <div className="flex items-center gap-2 rounded-xl border border-neutral-200 bg-white p-2.5 shadow-sm ring-1 ring-black/5 md:p-3">
+                          <div className="flex items-center gap-2 rounded-xl border border-neutral-200 bg-white p-2 shadow-sm ring-1 ring-black/5 md:p-3">
                             <div
-                              className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#f39b03]/15 text-[11px] font-extrabold text-[#c97702] ring-1 ring-[#f39b03]/25"
+                              className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#f39b03]/15 text-[10px] font-extrabold text-[#c97702] ring-1 ring-[#f39b03]/25"
                               aria-hidden
                             >
                               {tx.type === 'debit' ? 'DR' : 'CR'}
@@ -824,10 +824,10 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                               </div>
                               <button
                                 type="button"
-                                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#f39b03]/12 text-[#f39b03] transition hover:bg-[#f39b03]/20"
+                                className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#f39b03]/12 text-[#f39b03] transition hover:bg-[#f39b03]/20 md:h-8 md:w-8"
                                 aria-label="View transaction"
                               >
-                                <Eye size={15} />
+                                <Eye size={14} />
                               </button>
                             </div>
                           </div>

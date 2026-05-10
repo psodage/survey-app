@@ -424,7 +424,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
           <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-white p-4 pb-[calc(3.65rem+max(12px,env(safe-area-inset-bottom,0px)))] sm:px-6 sm:pt-6 sm:pb-[calc(3.65rem+max(12px,env(safe-area-inset-bottom,0px)))] md:p-6 md:pb-24 lg:p-8 lg:pb-28">
             <div className="mx-auto w-full max-w-[1200px] space-y-6 md:space-y-8">
               {!showAddForm ? (
-                <section className="grid grid-cols-2 gap-2 md:gap-4 xl:grid-cols-4">
+                <section className="grid grid-cols-2 gap-1.5 md:gap-4 xl:grid-cols-4">
                   <StatCard
                     title="Total Visits"
                     value={String(visitRecords.length)}
@@ -472,8 +472,8 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                 </div>
               ) : (
                 <CardPanel className="flex flex-col gap-2.5 p-2.5 md:flex-row md:items-center md:justify-between md:gap-4 md:p-4">
-                  <div className="w-full md:max-w-xs">
-                    <input type="text" placeholder="Search account..." className={toolbarSearchInputClass} />
+                  <div className="w-full md:max-w-[780px]">
+                    <input type="text" placeholder="Search visits records..." className={toolbarSearchInputClass} />
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <button type="button" className={toolbarSecondaryButtonClass}>
@@ -506,7 +506,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                   }
                 >
                   <div className="md:hidden">
-                    <ul className="flex flex-col gap-2 px-3 pb-1.5 pt-1.5">
+                    <ul className="flex flex-col gap-1.5 px-3 pb-1.5 pt-1.5">
                       {visitRecords.map((record) => (
                         <li key={`${record.id}-mobile`}>
                           <div
@@ -519,7 +519,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                                 onNavigate(getVisitDetailsPath(record))
                               }
                             }}
-                            className="w-full rounded-xl border border-neutral-200 bg-white p-2.5 text-left shadow-sm ring-1 ring-black/5 md:p-3"
+                            className="w-full rounded-xl border border-neutral-200 bg-white p-2 text-left shadow-sm ring-1 ring-black/5 md:p-3"
                           >
                             <div className="flex items-start justify-between gap-2">
                               <div className="min-w-0">
@@ -532,21 +532,21 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                               </div>
                               <span className="shrink-0 text-xs font-extrabold text-emerald-600">Rs {record.amount}</span>
                             </div>
-                            <div className="mt-2 flex items-center justify-end gap-1.5">
+                            <div className="mt-1.5 flex items-center justify-end gap-1.5 md:mt-2">
                               <button
                                 type="button"
-                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-[#f39b03]/12 text-[#f39b03] transition hover:bg-[#f39b03]/20"
+                                className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-[#f39b03]/12 text-[#f39b03] transition hover:bg-[#f39b03]/20 md:h-8 md:w-8"
                                 aria-label={`View ${record.id}`}
                                 onClick={(event) => {
                                   event.stopPropagation()
                                   onNavigate(getVisitDetailsPath(record))
                                 }}
                               >
-                                <Eye size={15} />
+                                <Eye size={14} />
                               </button>
                               <button
                                 type="button"
-                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-neutral-200 bg-white text-neutral-900 transition hover:bg-neutral-50"
+                                className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-neutral-200 bg-white text-neutral-900 transition hover:bg-neutral-50 md:h-8 md:w-8"
                                 aria-label={`Open ${record.id}`}
                                 onClick={(event) => {
                                   event.stopPropagation()
@@ -560,7 +560,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                         </li>
                       ))}
                       {visitRecords.length === 0 ? (
-                        <li className="rounded-xl border border-neutral-200 bg-white px-3 py-5 text-center text-xs font-semibold text-neutral-600">
+                        <li className="rounded-xl border border-neutral-200 bg-white px-3 py-3 text-center text-xs font-semibold text-neutral-600">
                           No visit records found.
                         </li>
                       ) : null}

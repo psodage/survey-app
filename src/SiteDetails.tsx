@@ -523,13 +523,13 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                 {detailCards.map((card) => (
                   <div
                     key={card.title}
-                    className={`w-full min-h-[88px] rounded-xl p-2.5 shadow-sm ring-1 ring-black/5 md:min-h-[126px] ${card.cardTint} md:rounded-2xl md:bg-white md:p-5 md:shadow-[0_10px_30px_rgba(16,24,40,0.06)]`}
+                    className={`w-full min-h-[70px] rounded-xl p-2 shadow-sm ring-1 ring-black/5 md:min-h-[126px] ${card.cardTint} md:rounded-2xl md:bg-white md:p-5 md:shadow-[0_10px_30px_rgba(16,24,40,0.06)]`}
                   >
                     <div className="flex items-start gap-1.5 md:gap-4">
                       <span
-                        className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg md:h-12 md:w-12 md:rounded-2xl ${card.tone}`}
+                        className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg md:h-12 md:w-12 md:rounded-2xl ${card.tone}`}
                       >
-                        <card.icon size={18} />
+                        <card.icon size={16} />
                       </span>
                       <div className="min-w-0 flex-1">
                         <div className="text-[11px] font-semibold leading-tight text-neutral-700 md:text-sm">
@@ -643,9 +643,9 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                   ) : (
                     <>
                       <div className="md:hidden">
-                        <ul className="flex flex-col gap-2 p-3">
+                        <ul className="flex flex-col gap-1.5 p-2 sm:p-3">
                           {relatedVisitRecords.map((record) => (
-                            <li key={`${record.id}-mobile`} className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-black/5">
+                            <li key={`${record.id}-mobile`} className="rounded-lg bg-white p-2 shadow-sm ring-1 ring-black/5">
                               <div className="flex items-center justify-between gap-2">
                                 <div className="min-w-0">
                                   <div className="truncate text-xs font-extrabold text-neutral-900">{record.id}</div>
@@ -653,10 +653,10 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                                 </div>
                                 <span className="shrink-0 text-xs font-extrabold text-emerald-600">Rs {record.amount}</span>
                               </div>
-                              <div className="mt-2 text-[11px] font-semibold text-neutral-600">
+                              <div className="mt-1.5 text-[11px] font-semibold text-neutral-600">
                                 {record.machine} • {record.paymentMode}
                               </div>
-                              <div className="mt-3 flex flex-wrap gap-2">
+                              <div className="mt-2 flex flex-wrap gap-2 md:mt-3">
                                 <button
                                   type="button"
                                   onClick={() =>

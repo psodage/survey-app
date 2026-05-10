@@ -4,8 +4,6 @@ import {
   ArrowLeft,
   Calendar,
   CircleUserRound,
-  Download,
-  Filter,
   LogOut,
   Menu,
   Plus,
@@ -37,6 +35,7 @@ import {
   toolbarSecondaryButtonClass,
 } from './dashboardCards'
 import { AccountManagerSidebarBlock } from './AccountManagerSidebarBlock'
+import { AddSiteForm } from './AddSiteForm'
 import { CollaborationBrandMark } from './CollaborationBrandMark'
 import { getHeaderDateLabel } from './headerDateLabel'
 import { signOut } from './signOut'
@@ -184,6 +183,8 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
   const [clients, setClients] = useState<ClientRow[]>(clientRows)
   const [selectedClientName, setSelectedClientName] = useState<string | null>(null)
   const [isAddClientModalOpen, setIsAddClientModalOpen] = useState(false)
+  const [isAddSiteModalOpen, setIsAddSiteModalOpen] = useState(false)
+  const [sitesSearchQuery, setSitesSearchQuery] = useState('')
   const [newClientName, setNewClientName] = useState('')
   const [newClientPhone, setNewClientPhone] = useState('')
   const [addClientError, setAddClientError] = useState('')
@@ -210,6 +211,10 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
     setSelectedClientName(matchedClient.name)
     setQuery('')
   }, [requestedClient, summary, clients])
+
+  useEffect(() => {
+    setSitesSearchQuery('')
+  }, [selectedClientName])
 
   const mobileBottomNav = [
     { label: 'Dashboard', path: '/dashboard', icon: LayoutGrid },
@@ -251,6 +256,19 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
     if (!selectedClientName) return []
     return clientSites[selectedClientName] ?? []
   }, [selectedClientName])
+
+  const filteredSitesForClient = useMemo(() => {
+    const q = sitesSearchQuery.trim().toLowerCase()
+    if (!q) return selectedSites
+    return selectedSites.filter(
+      (s) =>
+        s.name.toLowerCase().includes(q) ||
+        s.location.toLowerCase().includes(q) ||
+        s.status.toLowerCase().includes(q) ||
+        s.pending.toLowerCase().includes(q) ||
+        s.lastVisit.toLowerCase().includes(q),
+    )
+  }, [selectedSites, sitesSearchQuery])
 
   const allSites = useMemo(() => {
     return Object.entries(clientSites).flatMap(([clientName, sites]) =>
@@ -316,6 +334,14 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
     resetAddClientForm()
   }
 
+  const handleOpenAddSiteModal = () => {
+    setIsAddSiteModalOpen(true)
+  }
+
+  const handleCloseAddSiteModal = () => {
+    setIsAddSiteModalOpen(false)
+  }
+
   const handleCreateClient = () => {
     const name = newClientName.trim()
     const phone = newClientPhone.trim()
@@ -364,14 +390,6 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
       pending: site.pending,
     })
     return `/site-details?${params.toString()}`
-  }
-
-  const getAddSitePath = () => {
-    const params = new URLSearchParams({ mode: 'add' })
-    if (selectedClientName) {
-      params.set('client', selectedClientName)
-    }
-    return `/add-site?${params.toString()}`
   }
 
   const exportClientReport = (client: ClientRow, sites: SiteRow[]) => {
@@ -686,58 +704,26 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
 
           <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-white px-4 pt-2 pb-[calc(3.65rem+max(12px,env(safe-area-inset-bottom,0px)))] sm:px-6 sm:pt-3 sm:pb-[calc(3.65rem+max(12px,env(safe-area-inset-bottom,0px)))] md:px-6 md:pt-4 md:pb-24 lg:px-8 lg:pt-4 lg:pb-28">
             {selectedClient ? (
-              <section className="flex flex-col items-stretch gap-2 md:flex-row md:items-center md:justify-between md:gap-4">
-                <div className="min-w-0">
-                  
-                  <div className="mt-1 text-sm font-semibold text-neutral-600 md:mt-0 md:text-base">
-                    Client:{' '}
-                    <span className="text-3xl font-extrabold leading-tight tracking-tight text-neutral-900 md:text-2xl">
-                      {selectedClient.name}
-                    </span>
-                  </div>
-                  <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] font-semibold text-neutral-600 md:mt-1.5 md:gap-3 md:text-xs">
-                    <span className="inline-flex items-center rounded-lg bg-neutral-100 px-2.5 py-1 text-neutral-700 ring-1 ring-neutral-200">
-                      Phone: {selectedClient.phone}
-                    </span>
-                    <span className="inline-flex items-center rounded-lg bg-neutral-100 px-2.5 py-1 text-neutral-700 ring-1 ring-neutral-200">
-                      Total Sites: {selectedClient.sites}
-                    </span>
-                  </div>
+              <section className="rounded-xl border border-neutral-200 bg-white p-3 shadow-sm ring-1 ring-black/5 md:rounded-2xl md:p-4 md:shadow-[0_10px_30px_rgba(16,24,40,0.06)] md:ring-0">
+                <div className="text-sm font-semibold text-neutral-600">
+                  Client
                 </div>
-                <div className="w-full shrink-0 md:w-auto">
-                  <div className="flex w-full items-center gap-2 md:w-auto md:justify-end">
-                    <button
-                      type="button"
-                      onClick={() => onNavigate(getAddSitePath())}
-                      className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl bg-[#f39b03] px-3 text-xs font-extrabold text-white shadow-[0_10px_30px_rgba(16,24,40,0.12)] transition hover:bg-[#e18e03] md:h-11 md:flex-none md:px-4 md:text-sm"
-                    >
-                      <Plus size={14} className="md:h-4 md:w-4" />
-                      Add New Site
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleExportClientReport}
-                      className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 text-xs font-extrabold text-neutral-800 shadow-sm transition hover:bg-neutral-50 md:h-11 md:flex-none md:px-4 md:text-sm"
-                    >
-                      <Download size={14} className="text-neutral-700 md:h-4 md:w-4" />
-                      Export Client Report
-                    </button>
-                  </div>
-                  <div className="mt-1.5 flex justify-end md:mt-1.5">
-                    <button
-                      type="button"
-                      className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-white px-4 text-xs font-extrabold text-neutral-800 shadow-sm transition hover:bg-neutral-50 md:h-11 md:px-4 md:text-sm"
-                    >
-                      <Filter size={14} className="text-neutral-700 md:h-4 md:w-4" />
-                      Filter
-                    </button>
-                  </div>
+                <div className="mt-0.5 text-2xl font-extrabold leading-tight tracking-tight text-neutral-900 md:text-3xl">
+                  {selectedClient.name}
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] font-semibold text-neutral-600 md:mt-2.5 md:gap-3 md:text-xs">
+                  <span className="inline-flex items-center rounded-lg bg-neutral-100 px-2.5 py-1 text-neutral-700 ring-1 ring-neutral-200">
+                    Phone: {selectedClient.phone}
+                  </span>
+                  <span className="inline-flex items-center rounded-lg bg-neutral-100 px-2.5 py-1 text-neutral-700 ring-1 ring-neutral-200">
+                    Total Sites: {selectedClient.sites}
+                  </span>
                 </div>
               </section>
             ) : null}
 
             {/* Top summary cards */}
-            <section className="mt-3 grid grid-cols-2 gap-2 md:mt-4 md:grid-cols-4 md:gap-4">
+            <section className="mt-3 grid grid-cols-2 gap-1.5 md:mt-4 md:grid-cols-4 md:gap-4">
               <button
                 type="button"
                 className="cursor-pointer bg-transparent p-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f39b03]/70"
@@ -802,7 +788,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
 
             {!selectedClient ? (
               <CardPanel className="my-3 flex flex-col gap-2.5 p-2.5 md:my-4 md:flex-row md:items-center md:justify-between md:gap-4 md:p-4">
-                <div className="w-full md:max-w-xs">
+                <div className="w-full md:max-w-[740px]">
                   <input
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
@@ -836,7 +822,33 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                   ) : null}
                 </div>
               </CardPanel>
-            ) : null}
+            ) : (
+              <CardPanel className="my-3 flex flex-col gap-2.5 p-2.5 md:my-4 md:flex-row md:items-center md:justify-between md:gap-4 md:p-4">
+                <div className="w-full md:max-w-[740px]">
+                  <input
+                    value={sitesSearchQuery}
+                    onChange={(e) => setSitesSearchQuery(e.target.value)}
+                    type="text"
+                    placeholder="Search sites…"
+                    className={toolbarSearchInputClass}
+                  />
+                </div>
+                <div className="flex w-full flex-wrap items-center justify-between gap-2 md:w-auto md:justify-start">
+                  <button type="button" className={toolbarSecondaryButtonClass}>
+                    Filters
+                  </button>
+                  <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                    <button type="button" className={toolbarSecondaryButtonClass} onClick={handleExportClientReport}>
+                      Export Client Report
+                    </button>
+                    <button type="button" onClick={handleOpenAddSiteModal} className={toolbarPrimaryButtonClass}>
+                      <Plus className={toolbarPlusIconClass} />
+                      Add New Site
+                    </button>
+                  </div>
+                </div>
+              </CardPanel>
+            )}
 
             {selectedClient ? (
               /* Client detail: sites table */
@@ -846,13 +858,15 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                 bodyClassName="p-0"
                 headerEnd={
                   <span className="text-xs font-semibold text-neutral-600">
-                    {selectedSites.length} sites for {selectedClient.name}
+                    {sitesSearchQuery.trim()
+                      ? `${filteredSitesForClient.length} matching • ${selectedSites.length} total for ${selectedClient.name}`
+                      : `${selectedSites.length} sites for ${selectedClient.name}`}
                   </span>
                 }
               >
                 <div className="md:hidden">
-                  <ul className="flex flex-col gap-2 px-3 pb-1.5 pt-1.5">
-                    {selectedSites.map((site) => (
+                  <ul className="flex flex-col gap-1.5 px-3 pb-1.5 pt-1.5">
+                    {filteredSitesForClient.map((site) => (
                       <li key={site.name}>
                         <div
                           role="button"
@@ -864,7 +878,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                               onNavigate(getSiteDetailsPath(selectedClient.name, site))
                             }
                           }}
-                          className="w-full rounded-xl border border-neutral-200 bg-white p-2.5 text-left shadow-sm ring-1 ring-black/5 md:p-3"
+                          className="w-full rounded-xl border border-neutral-200 bg-white p-2 text-left shadow-sm ring-1 ring-black/5 md:p-3"
                         >
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0">
@@ -886,23 +900,23 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                               {site.status}
                             </span>
                           </div>
-                          <div className="mt-2 flex items-center justify-between">
+                          <div className="mt-1.5 flex items-center justify-between md:mt-2">
                             <div className="text-xs font-extrabold text-rose-600">{site.pending}</div>
                             <div className="flex items-center gap-1.5">
                               <button
                                 type="button"
-                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-[#f39b03]/12 text-[#f39b03] transition hover:bg-[#f39b03]/20"
+                                className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-[#f39b03]/12 text-[#f39b03] transition hover:bg-[#f39b03]/20 md:h-8 md:w-8"
                                 aria-label={`View ${site.name}`}
                                 onClick={(event) => {
                                   event.stopPropagation()
                                   onNavigate(getSiteDetailsPath(selectedClient.name, site))
                                 }}
                               >
-                                <Eye size={15} />
+                                <Eye size={14} />
                               </button>
                               <button
                                 type="button"
-                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-neutral-200 bg-white text-neutral-900 transition hover:bg-neutral-50"
+                                className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-neutral-200 bg-white text-neutral-900 transition hover:bg-neutral-50 md:h-8 md:w-8"
                                 aria-label={`Open ${site.name}`}
                                 onClick={(event) => {
                                   event.stopPropagation()
@@ -916,9 +930,11 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                         </div>
                       </li>
                     ))}
-                    {selectedSites.length === 0 ? (
-                      <li className="rounded-xl border border-neutral-200 bg-white px-3 py-5 text-center text-xs font-semibold text-neutral-600">
-                        No sites found for this client.
+                    {filteredSitesForClient.length === 0 ? (
+                      <li className="rounded-xl border border-neutral-200 bg-white px-3 py-3 text-center text-xs font-semibold text-neutral-600">
+                        {selectedSites.length === 0
+                          ? 'No sites found for this client.'
+                          : 'No sites match your search.'}
                       </li>
                     ) : null}
                   </ul>
@@ -936,7 +952,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                       </tr>
                     </thead>
                     <tbody className="text-sm font-semibold text-neutral-800">
-                      {selectedSites.map((site) => (
+                      {filteredSitesForClient.map((site) => (
                         <tr
                           key={site.name}
                           className="border-t border-neutral-200 hover:bg-neutral-50/60"
@@ -996,10 +1012,12 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                           </td>
                         </tr>
                       ))}
-                      {selectedSites.length === 0 ? (
+                      {filteredSitesForClient.length === 0 ? (
                         <tr className="border-t border-neutral-200">
                           <td className="px-6 py-8 text-sm font-semibold text-neutral-600" colSpan={6}>
-                            No sites found for this client.
+                            {selectedSites.length === 0
+                              ? 'No sites found for this client.'
+                              : 'No sites match your search.'}
                           </td>
                         </tr>
                       ) : null}
@@ -1020,7 +1038,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                 }
               >
                 <div className="md:hidden">
-                  <ul className="flex flex-col gap-2 px-3 pb-1.5 pt-1.5">
+                  <ul className="flex flex-col gap-1.5 px-3 pb-1.5 pt-1.5">
                     {filteredAllSites.map((site) => (
                       <li key={`${site.clientName}-${site.name}`}>
                         <div
@@ -1033,7 +1051,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                               onNavigate(getSiteDetailsPath(site.clientName, site))
                             }
                           }}
-                          className="w-full rounded-xl border border-neutral-200 bg-white p-2.5 text-left shadow-sm ring-1 ring-black/5 md:p-3"
+                          className="w-full rounded-xl border border-neutral-200 bg-white p-2 text-left shadow-sm ring-1 ring-black/5 md:p-3"
                         >
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0">
@@ -1055,23 +1073,23 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                               {site.status}
                             </span>
                           </div>
-                          <div className="mt-2 flex items-center justify-between">
+                          <div className="mt-1.5 flex items-center justify-between md:mt-2">
                             <div className="text-xs font-extrabold text-rose-600">{site.pending}</div>
                             <div className="flex items-center gap-1.5">
                               <button
                                 type="button"
-                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-[#f39b03]/12 text-[#f39b03] transition hover:bg-[#f39b03]/20"
+                                className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-[#f39b03]/12 text-[#f39b03] transition hover:bg-[#f39b03]/20 md:h-8 md:w-8"
                                 aria-label={`View ${site.name}`}
                                 onClick={(event) => {
                                   event.stopPropagation()
                                   onNavigate(getSiteDetailsPath(site.clientName, site))
                                 }}
                               >
-                                <Eye size={15} />
+                                <Eye size={14} />
                               </button>
                               <button
                                 type="button"
-                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-neutral-200 bg-white text-neutral-900 transition hover:bg-neutral-50"
+                                className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-neutral-200 bg-white text-neutral-900 transition hover:bg-neutral-50 md:h-8 md:w-8"
                                 aria-label={`Open ${site.name}`}
                                 onClick={(event) => {
                                   event.stopPropagation()
@@ -1086,7 +1104,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                       </li>
                     ))}
                     {filteredAllSites.length === 0 ? (
-                      <li className="rounded-xl border border-neutral-200 bg-white px-3 py-5 text-center text-xs font-semibold text-neutral-600">
+                      <li className="rounded-xl border border-neutral-200 bg-white px-3 py-3 text-center text-xs font-semibold text-neutral-600">
                         No sites found.
                       </li>
                     ) : null}
@@ -1190,16 +1208,16 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                 }
               >
                 <div className="md:hidden">
-                  <ul className="flex flex-col gap-2 px-3 pb-1.5 pt-1.5">
+                  <ul className="flex flex-col gap-1.5 px-3 pb-1.5 pt-1.5">
                     {filteredRows.map((row) => (
                       <li key={row.name}>
                         <button
                           type="button"
-                          className="flex w-full items-center gap-2 rounded-xl border border-neutral-200 bg-white p-2 text-left shadow-sm ring-1 ring-black/5"
+                          className="flex w-full items-center gap-2 rounded-xl border border-neutral-200 bg-white px-2 py-1.5 text-left shadow-sm ring-1 ring-black/5"
                           onClick={() => setSelectedClientName(row.name)}
                         >
                           <div
-                            className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#f39b03]/15 text-[11px] font-extrabold text-[#c97702] ring-1 ring-[#f39b03]/25"
+                            className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#f39b03]/15 text-[10px] font-extrabold text-[#c97702] ring-1 ring-[#f39b03]/25"
                             aria-hidden
                           >
                             {getInitials(row.name)}
@@ -1408,6 +1426,43 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                 <Plus size={14} />
                 Create Client
               </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {isAddSiteModalOpen && selectedClient ? (
+        <div className="fixed inset-0 z-[72] flex items-center justify-center p-3 sm:p-4">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/50"
+            aria-label="Close add site modal"
+            onClick={handleCloseAddSiteModal}
+          />
+          <div className="relative z-[73] flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-[0_20px_50px_rgba(0,0,0,0.35)] ring-1 ring-black/10">
+            <div className="flex shrink-0 items-start justify-between gap-3 border-b border-neutral-200 px-4 py-4 sm:px-5 sm:py-5">
+              <div className="min-w-0 pr-2">
+                <h2 className="text-lg font-extrabold tracking-tight text-neutral-950 sm:text-xl">Add New Site</h2>
+                <p className="mt-1 text-xs font-semibold text-neutral-600">
+                  Create a new site under {selectedClient.name}.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-neutral-100 text-neutral-700 transition hover:bg-neutral-200"
+                onClick={handleCloseAddSiteModal}
+                aria-label="Close"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5 sm:py-5">
+              <AddSiteForm
+                clientName={selectedClient.name}
+                variant="modal"
+                onCancel={handleCloseAddSiteModal}
+                onSuccess={handleCloseAddSiteModal}
+              />
             </div>
           </div>
         </div>
