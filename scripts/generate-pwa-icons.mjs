@@ -6,10 +6,11 @@ import { fileURLToPath } from 'node:url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const root = join(__dirname, '..')
+/** PWA icons: use `logo.jpeg` only (not logo-bg2.png). */
 const source = join(root, 'src', 'assets', 'logo.jpeg')
 const outDir = join(root, 'public', 'icons')
 
-/** Matches white background on the brand logo JPEG */
+/** Matches white background on the brand JPEG */
 const BG = '#ffffff'
 
 await access(source)

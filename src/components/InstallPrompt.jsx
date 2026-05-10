@@ -50,7 +50,7 @@ export default function InstallPrompt() {
     <div className="fixed right-4 bottom-4 z-50 w-[calc(100%-2rem)] max-w-sm rounded-2xl border border-[#f39b03]/40 bg-black/90 p-4 text-white shadow-[0_0_40px_rgba(243,155,3,0.25)] backdrop-blur">
       <p className="text-xs font-semibold tracking-[0.18em] text-[#f39b03] uppercase">Install app</p>
       <p className="mt-2 text-sm text-white/85">
-        Add Samarth to your home screen for a full-screen, app-like experience.
+        Add Samrath Land Surveyor to your home screen for a full-screen, app-like experience.
       </p>
       <div className="mt-4 flex items-center gap-2">
         <button

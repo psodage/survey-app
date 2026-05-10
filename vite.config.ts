@@ -11,8 +11,8 @@ export default defineConfig({
       includeAssets: ['favicon.svg', 'samarth-logo.png'],
       manifest: {
         id: '/',
-        name: 'Samarth Land Surveyors',
-        short_name: 'Samarth',
+        name: 'Samrath Land Surveyor',
+        short_name: 'Samrath',
         description: 'Land Survey Management System',
         start_url: '/',
         scope: '/',
