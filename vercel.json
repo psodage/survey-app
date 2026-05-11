@@ -1,19 +1,7 @@
 {
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "headers": [
-    {
-      "source": "/manifest.webmanifest",
-      "headers": [
-        {
-          "key": "Content-Type",
-          "value": "application/manifest+json"
-        }
-      ]
-    }
-  ],
   "rewrites": [
     {
-      "source": "/((?!manifest\\.webmanifest$)(?!sw\\.js$)(?!workbox-[^/]+\\.js$)(?!favicon\\.svg$)(?!icons\\/)(?!assets\\/)(?!api\\/)(?!\\.well-known\\/)(?!.*\\.(png|jpe?g|svg|ico|webp|json|woff2|js|css|map|txt|xml|webmanifest)$).*)",
+      "source": "/(.*)",
       "destination": "/index.html"
     }
   ]
