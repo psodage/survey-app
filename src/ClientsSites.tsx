@@ -13,7 +13,6 @@ import {
   ClipboardList,
   Building2,
   Eye,
-  FileBarChart,
   Mail,
   MapPin,
   Phone,
@@ -49,7 +48,7 @@ const navItems: NavItem[] = [
   { label: 'Account Manager', icon: <Briefcase size={16} /> },
   { label: 'Clients & Sites', icon: <UsersRound size={16} /> },
   { label: 'Site Visits', icon: <ClipboardList size={16} /> },
-  { label: 'Reports', icon: <FileBarChart size={16} /> },
+  // { label: 'Reports', icon: <FileBarChart size={16} /> },
   { label: 'Settings', icon: <Building2 size={16} /> },
   { label: 'Log Out', icon: <LogOut size={16} /> },
 ]
@@ -184,6 +183,8 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
   const [isAddClientModalOpen, setIsAddClientModalOpen] = useState(false)
   const [isAddSiteModalOpen, setIsAddSiteModalOpen] = useState(false)
   const [sitesSearchQuery, setSitesSearchQuery] = useState('')
+  const [clientPendingFilter, setClientPendingFilter] = useState<'all' | 'withPending' | 'cleared'>('all')
+  const [siteStatusFilter, setSiteStatusFilter] = useState<'all' | SiteRow['status']>('all')
   const [newClientName, setNewClientName] = useState('')
   const [newClientPhone, setNewClientPhone] = useState('')
   const [addClientError, setAddClientError] = useState('')
@@ -220,7 +221,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
     { label: 'Accounts', path: '/account-manager', icon: Briefcase },
     { label: 'Clients', path: '/clients-sites', icon: UsersRound },
     { label: 'Sites', path: '/site-visits', icon: MapPin },
-    { label: 'Reports', path: '/reports', icon: FileBarChart },
+    // { label: 'Reports', path: '/reports', icon: FileBarChart },
     { label: 'Settings', path: '/settings', icon: Building2 },
   ] as const
 
@@ -256,16 +257,19 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
 
   const filteredSitesForClient = useMemo(() => {
     const q = sitesSearchQuery.trim().toLowerCase()
-    if (!q) return selectedSites
-    return selectedSites.filter(
-      (s) =>
+    return selectedSites.filter((s) => {
+      const matchesSearch =
+        !q ||
         s.name.toLowerCase().includes(q) ||
         s.location.toLowerCase().includes(q) ||
         s.status.toLowerCase().includes(q) ||
         s.pending.toLowerCase().includes(q) ||
-        s.lastVisit.toLowerCase().includes(q),
-    )
-  }, [selectedSites, sitesSearchQuery])
+        s.lastVisit.toLowerCase().includes(q)
+
+      const matchesStatus = siteStatusFilter === 'all' || s.status === siteStatusFilter
+      return matchesSearch && matchesStatus
+    })
+  }, [selectedSites, siteStatusFilter, sitesSearchQuery])
 
   const allSites = useMemo(() => {
     return Object.entries(clientSites).flatMap(([clientName, sites]) =>
@@ -278,9 +282,16 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
 
   const filteredAllSites = useMemo(() => {
     const q = query.trim().toLowerCase()
-    if (!q) return allSites
-    return allSites.filter((s) => s.name.toLowerCase().includes(q) || s.clientName.toLowerCase().includes(q) || s.location.toLowerCase().includes(q))
-  }, [allSites, query])
+    return allSites.filter((s) => {
+      const matchesSearch =
+        !q ||
+        s.name.toLowerCase().includes(q) ||
+        s.clientName.toLowerCase().includes(q) ||
+        s.location.toLowerCase().includes(q)
+      const matchesStatus = siteStatusFilter === 'all' || s.status === siteStatusFilter
+      return matchesSearch && matchesStatus
+    })
+  }, [allSites, query, siteStatusFilter])
 
   const handleSummaryCardClick = (summary: 'total-clients' | 'total-sites' | 'total-revenue' | 'pending' | 'received') => {
     // Ensure we always open the list view (not a previously selected client detail view).
@@ -305,7 +316,11 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
 
   const filteredRows = useMemo(() => {
     const q = query.trim().toLowerCase()
-    const baseRows = !q ? [...clients] : clients.filter((r) => r.name.toLowerCase().includes(q) || r.phone.includes(q))
+    const baseRows = (!q ? [...clients] : clients.filter((r) => r.name.toLowerCase().includes(q) || r.phone.includes(q))).filter((r) => {
+      if (clientPendingFilter === 'withPending') return parseCurrency(r.pending) > 0
+      if (clientPendingFilter === 'cleared') return parseCurrency(r.pending) === 0
+      return true
+    })
 
     if (summary === 'pending') {
       return baseRows
@@ -323,7 +338,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
     }
 
     return baseRows
-  }, [query, summary, clients])
+  }, [clientPendingFilter, query, summary, clients])
 
   const resetAddClientForm = () => {
     setNewClientName('')
@@ -635,28 +650,28 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                 <div className="flex min-w-0 justify-center px-1">
                   <CollaborationBrandMark variant="mobileHeader" />
                 </div>
-                <button
-                  type="button"
-                  className="relative grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white/5 text-white ring-1 ring-white/10 transition hover:bg-white/10"
-                  aria-label="Notifications"
-                >
-                  <Bell size={18} strokeWidth={2} className="text-white" />
-                  <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-white ring-2 ring-black" />
-                </button>
+                {selectedClient ? (
+                  <button
+                    type="button"
+                    onClick={handleBackFromClientDetails}
+                    className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-white/20 bg-black px-2.5 text-[11px] font-extrabold text-white transition hover:bg-neutral-900"
+                  >
+                    <ArrowLeft size={14} className="text-white" />
+              
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="relative grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white/5 text-white ring-1 ring-white/10 transition hover:bg-white/10"
+                    aria-label="Notifications"
+                  >
+                    <Bell size={18} strokeWidth={2} className="text-white" />
+                    <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-white ring-2 ring-black" />
+                  </button>
+                )}
               </div>
               <div className="flex items-center justify-between gap-3 border-t border-white/10 px-4 py-3">
                 <div className="flex min-w-0 flex-1 items-center gap-2">
-                  {selectedClient ? (
-                    <button
-                      type="button"
-                      className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-white/10 px-3 py-2 text-xs font-extrabold text-white ring-1 ring-white/15 transition hover:bg-white/15"
-                      aria-label="Back to clients list"
-                      onClick={handleBackFromClientDetails}
-                    >
-                      <ArrowLeft size={16} strokeWidth={2.25} />
-                      Back
-                    </button>
-                  ) : null}
                   <h1 className="min-w-0 flex-1 truncate text-left text-base font-extrabold leading-tight tracking-tight text-white">
                     {selectedClient ? 'Client Details' : 'Clients & Sites'}
                   </h1>
@@ -685,8 +700,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                   <button
                     type="button"
                     onClick={handleBackFromClientDetails}
-                    aria-label="Back to clients list"
-                    className="inline-flex h-10 shrink-0 items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 text-sm font-extrabold text-neutral-800 shadow-sm ring-1 ring-black/5 transition hover:bg-neutral-50"
+                    className="inline-flex h-10 items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 text-sm font-extrabold text-neutral-800 transition hover:bg-neutral-50"
                   >
                     <ArrowLeft size={16} />
                     Back
@@ -815,9 +829,33 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                   />
                 </div>
                 <div className="flex w-full flex-wrap items-center justify-between gap-2 md:w-auto md:justify-start">
-                  <button type="button" className={toolbarSecondaryButtonClass}>
-                    Filters
-                  </button>
+                  <select
+                    value={showAllSites ? siteStatusFilter : clientPendingFilter}
+                    onChange={(event) => {
+                      if (showAllSites) {
+                        setSiteStatusFilter(event.target.value as 'all' | SiteRow['status'])
+                      } else {
+                        setClientPendingFilter(event.target.value as 'all' | 'withPending' | 'cleared')
+                      }
+                    }}
+                    className={toolbarSecondaryButtonClass}
+                    aria-label={showAllSites ? 'Filter sites' : 'Filter clients'}
+                  >
+                    {showAllSites ? (
+                      <>
+                        <option value="all">All Statuses</option>
+                        <option value="Active">Active</option>
+                        <option value="On Hold">On Hold</option>
+                        <option value="Completed">Completed</option>
+                      </>
+                    ) : (
+                      <>
+                        <option value="all">All Clients</option>
+                        <option value="withPending">With Pending</option>
+                        <option value="cleared">Cleared</option>
+                      </>
+                    )}
+                  </select>
                   {!showAllSites ? (
                     <div className="flex shrink-0 items-center gap-2">
                       <button
@@ -851,9 +889,17 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                   />
                 </div>
                 <div className="flex w-full flex-wrap items-center justify-between gap-2 md:w-auto md:justify-start">
-                  <button type="button" className={toolbarSecondaryButtonClass}>
-                    Filters
-                  </button>
+                  <select
+                    value={siteStatusFilter}
+                    onChange={(event) => setSiteStatusFilter(event.target.value as 'all' | SiteRow['status'])}
+                    className={toolbarSecondaryButtonClass}
+                    aria-label="Filter sites by status"
+                  >
+                    <option value="all">All Statuses</option>
+                    <option value="Active">Active</option>
+                    <option value="On Hold">On Hold</option>
+                    <option value="Completed">Completed</option>
+                  </select>
                   <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
                     <button type="button" className={toolbarSecondaryButtonClass} onClick={handleExportClientReport}>
                       Export All Sites

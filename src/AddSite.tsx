@@ -20,7 +20,7 @@ import { useLocation } from 'react-router-dom'
 import { AccountManagerSidebarBlock } from './AccountManagerSidebarBlock'
 import { AddSiteForm, DEFAULT_CLIENT_OPTIONS_FOR_ADD_SITE } from './AddSiteForm'
 import { CollaborationBrandMark } from './CollaborationBrandMark'
-import { CardPanel } from './dashboardCards'
+import { CardPanel, toolbarSearchInputClass, toolbarSecondaryButtonClass } from './dashboardCards'
 import { layoutBrandLogo } from './brandLogo'
 import { getHeaderDateLabel } from './headerDateLabel'
 import { signOut } from './signOut'
@@ -38,16 +38,31 @@ export default function AddSite({ onNavigate }: AddSiteProps) {
   const initialClient =
     clientFromQuery && knownClients.includes(clientFromQuery) ? clientFromQuery : knownClients[0]
 
-  const [client] = useState(initialClient)
+  const [selectedClient, setSelectedClient] = useState(initialClient)
+  const [clientSearchQuery, setClientSearchQuery] = useState('')
+  const [clientGroupFilter, setClientGroupFilter] = useState<'all' | 'a-m' | 'n-z'>('all')
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const headerDateLabel = getHeaderDateLabel()
+
+  const filteredClientOptions = useMemo(() => {
+    const normalizedQuery = clientSearchQuery.trim().toLowerCase()
+    return knownClients.filter((clientName) => {
+      const firstChar = clientName.trim().charAt(0).toLowerCase()
+      const matchesGroup =
+        clientGroupFilter === 'all' ||
+        (clientGroupFilter === 'a-m' && firstChar >= 'a' && firstChar <= 'm') ||
+        (clientGroupFilter === 'n-z' && firstChar >= 'n' && firstChar <= 'z')
+      const matchesQuery = normalizedQuery.length === 0 || clientName.toLowerCase().includes(normalizedQuery)
+      return matchesGroup && matchesQuery
+    })
+  }, [clientGroupFilter, clientSearchQuery])
 
   const mobileBottomNav: { label: string; path: string; icon: LucideIcon }[] = [
     { label: 'Dashboard', path: '/dashboard', icon: LayoutGrid },
     { label: 'Accounts', path: '/account-manager', icon: Briefcase },
     { label: 'Clients', path: '/clients-sites', icon: UsersRound },
     { label: 'Sites', path: '/site-visits', icon: MapPin },
-    { label: 'Reports', path: '/reports', icon: FileBarChart },
+    // { label: 'Reports', path: '/reports', icon: FileBarChart },
     { label: 'Settings', path: '/settings', icon: Building2 },
   ]
 
@@ -76,7 +91,7 @@ export default function AddSite({ onNavigate }: AddSiteProps) {
     { label: 'Account Manager', icon: <Briefcase size={16} /> },
     { label: 'Clients & Sites', icon: <UsersRound size={16} /> },
     { label: 'Site Visits', icon: <ClipboardList size={16} /> },
-    { label: 'Reports', icon: <FileBarChart size={16} /> },
+    // { label: 'Reports', icon: <FileBarChart size={16} /> },
     { label: 'Settings', icon: <Building2 size={16} /> },
     { label: 'Log Out', icon: <LogOut size={16} /> },
   ]
@@ -205,8 +220,48 @@ export default function AddSite({ onNavigate }: AddSiteProps) {
                 </button>
               </div>
 
+              <div className="mb-5 grid gap-3 rounded-xl border border-neutral-200 bg-neutral-50/70 p-3 md:grid-cols-[minmax(0,1fr)_190px]">
+                <input
+                  value={clientSearchQuery}
+                  onChange={(event) => setClientSearchQuery(event.target.value)}
+                  type="text"
+                  placeholder="Search client..."
+                  className={toolbarSearchInputClass}
+                />
+                <select
+                  value={clientGroupFilter}
+                  onChange={(event) => setClientGroupFilter(event.target.value as 'all' | 'a-m' | 'n-z')}
+                  className={toolbarSecondaryButtonClass}
+                  aria-label="Filter clients by alphabet range"
+                >
+                  <option value="all">All Clients</option>
+                  <option value="a-m">A to M</option>
+                  <option value="n-z">N to Z</option>
+                </select>
+                <div className="md:col-span-2">
+                  <label className="grid gap-1">
+                    <span className="text-xs font-bold text-neutral-700">Selected Client</span>
+                    <select
+                      value={selectedClient}
+                      onChange={(event) => setSelectedClient(event.target.value)}
+                      className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
+                    >
+                      {filteredClientOptions.length > 0 ? (
+                        filteredClientOptions.map((clientName) => (
+                          <option key={clientName} value={clientName}>
+                            {clientName}
+                          </option>
+                        ))
+                      ) : (
+                        <option value={selectedClient}>No matching clients</option>
+                      )}
+                    </select>
+                  </label>
+                </div>
+              </div>
+
               <AddSiteForm
-                clientName={client}
+                clientName={selectedClient}
                 variant="page"
                 onCancel={() => onNavigate('/clients-sites')}
                 onSuccess={() => onNavigate('/clients-sites')}

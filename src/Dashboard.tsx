@@ -37,7 +37,7 @@ const navItems: NavItem[] = [
   { label: 'Account Manager', icon: <Briefcase size={16} /> },
   { label: 'Clients & Sites', icon: <UsersRound size={16} /> },
   { label: 'Site Visits', icon: <ClipboardList size={16} /> },
-  { label: 'Reports', icon: <FileBarChart size={16} /> },
+  // { label: 'Reports', icon: <FileBarChart size={16} /> },
   { label: 'Settings', icon: <Building2 size={16} /> },
   { label: 'Log Out', icon: <LogOut size={16} /> },
 ]
@@ -59,6 +59,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
       amount: '15,000',
       machine: 'Total Station',
       paymentMode: 'Cash',
+      paymentStatus: 'Paid',
       notes: 'Completed boundary points and levels.',
       work: 'Topographic survey for layout planning and road alignment.',
     },
@@ -70,6 +71,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
       amount: '12,000',
       machine: 'Auto Level',
       paymentMode: 'UPI',
+      paymentStatus: 'Partial',
       notes: 'Checked key reference levels before next stage.',
       work: 'Road level transfer and control point verification.',
     },
@@ -81,6 +83,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
       amount: '18,500',
       machine: 'GPS / GNSS',
       paymentMode: 'Bank Transfer',
+      paymentStatus: 'Pending',
       notes: 'Boundary and utilities alignment completed.',
       work: 'Topographic survey and boundary point marking.',
     },
@@ -102,6 +105,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
       machine: visit.machine,
       amount: visit.amount,
       paymentMode: visit.paymentMode,
+      paymentStatus: visit.paymentStatus,
       notes: visit.notes,
       work: visit.work,
     })
@@ -138,7 +142,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
     { label: 'Accounts', path: '/account-manager', icon: Briefcase },
     { label: 'Clients', path: '/clients-sites', icon: UsersRound },
     { label: 'Sites', path: '/site-visits', icon: MapPin },
-    { label: 'Reports', path: '/reports', icon: FileBarChart },
+    // { label: 'Reports', path: '/reports', icon: FileBarChart },
     { label: 'Settings', path: '/settings', icon: Building2 },
   ] as const
 
@@ -509,6 +513,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                         <th className="px-4 py-3">Site Name</th>
                         <th className="px-4 py-3">Client</th>
                         <th className="px-4 py-3">Visit Date</th>
+                        <th className="px-4 py-3">Pay status</th>
                         <th className="px-4 py-3 text-right">Amount</th>
                       </tr>
                     </thead>
@@ -524,6 +529,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                           </td>
                           <td className="px-4 py-3 text-neutral-700">{visit.client}</td>
                           <td className="px-4 py-3 text-neutral-700">{visit.date}</td>
+                          <td className="px-4 py-3 text-neutral-700">{visit.paymentStatus}</td>
                           <td className="px-4 py-3 text-right font-extrabold text-neutral-900">
                             ₹{visit.amount}
                           </td>
@@ -546,7 +552,9 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                           {visit.client}
                         </div>
                         <div className="mt-1.5 flex items-center justify-between gap-2 text-[10px] font-semibold text-neutral-500">
-                          <span>{visit.date}</span>
+                          <span>
+                            {visit.date} · {visit.paymentStatus}
+                          </span>
                           <span className="shrink-0 text-xs font-extrabold text-neutral-900">₹{visit.amount}</span>
                         </div>
                       </button>

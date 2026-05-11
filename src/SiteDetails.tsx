@@ -8,7 +8,6 @@ import {
   CircleDollarSign,
   ClipboardList,
   Download,
-  FileBarChart,
   LayoutGrid,
   LogOut,
   Mail,
@@ -50,7 +49,7 @@ const navItems: NavItem[] = [
   { label: 'Account Manager', icon: <Briefcase size={16} /> },
   { label: 'Clients & Sites', icon: <UsersRound size={16} /> },
   { label: 'Site Visits', icon: <ClipboardList size={16} /> },
-  { label: 'Reports', icon: <FileBarChart size={16} /> },
+  // { label: 'Reports', icon: <FileBarChart size={16} /> },
   { label: 'Settings', icon: <Building2 size={16} /> },
   { label: 'Log Out', icon: <LogOut size={16} /> },
 ]
@@ -67,6 +66,7 @@ type SiteVisitRecord = {
   machine: string
   amount: string
   paymentMode: string
+  paymentStatus: string
   notes: string
   work?: string
 }
@@ -83,6 +83,7 @@ const siteVisitRecords: SiteVisitRecord[] = [
     machine: 'Total Station',
     amount: '15,000',
     paymentMode: 'Cash',
+    paymentStatus: 'Paid',
     notes: 'Completed boundary points and levels.',
     work: 'Topographic survey for layout planning and road alignment.',
   },
@@ -94,6 +95,7 @@ const siteVisitRecords: SiteVisitRecord[] = [
     machine: 'Auto Level',
     amount: '10,000',
     paymentMode: 'UPI',
+    paymentStatus: 'Pending',
     notes: 'Road level transfer done for internal roads.',
     work: 'Road level transfer and benchmark verification.',
   },
@@ -105,6 +107,7 @@ const siteVisitRecords: SiteVisitRecord[] = [
     machine: 'GPS / GNSS',
     amount: '12,500',
     paymentMode: 'Bank Transfer',
+    paymentStatus: 'Partial',
     notes: 'Control points established for next phase.',
     work: 'Plot boundary staking and control point marking.',
   },
@@ -131,12 +134,32 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
   const machine = params.get('machine') ?? '-'
   const amount = params.get('amount') ?? '0'
   const paymentMode = params.get('paymentMode') ?? '-'
+  const paymentStatus = params.get('paymentStatus') ?? '-'
   const notes = params.get('notes') ?? '-'
   const work = params.get('work') ?? '-'
   const engineerName = params.get('engineerName') ?? ''
   const contactPerson = params.get('contactPerson') ?? engineerName
   const relatedVisitRecords = siteVisitRecords.filter((record) => record.client === client && record.site === name)
   const parseVisitAmount = (amount: string) => Number(amount.replace(/[^\d.]/g, '')) || 0
+
+  const visitPaymentStatusSummary = useMemo(() => {
+    if (relatedVisitRecords.length === 0) return null
+    const counts = new Map<string, number>()
+    for (const r of relatedVisitRecords) {
+      const label = r.paymentStatus?.trim() || '—'
+      counts.set(label, (counts.get(label) ?? 0) + 1)
+    }
+    const preferred = ['Paid', 'Pending', 'Partial']
+    const parts: string[] = []
+    for (const p of preferred) {
+      const n = counts.get(p)
+      if (n) parts.push(`${p} (${n})`)
+    }
+    for (const [label, n] of counts) {
+      if (!preferred.includes(label)) parts.push(`${label} (${n})`)
+    }
+    return parts.join(' · ')
+  }, [relatedVisitRecords])
 
   const visitMachineOptions = useMemo(
     () => [...new Set(relatedVisitRecords.map((r) => r.machine))].sort(),
@@ -158,7 +181,9 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
     const q = visitsSearchQuery.trim().toLowerCase()
     if (!q) return list
     return list.filter((r) => {
-      const hay = [r.id, r.date, r.machine, r.paymentMode, r.notes, r.amount, r.work ?? ''].join(' ').toLowerCase()
+      const hay = [r.id, r.date, r.machine, r.paymentMode, r.paymentStatus, r.notes, r.amount, r.work ?? '']
+        .join(' ')
+        .toLowerCase()
       return hay.includes(q)
     })
   }, [relatedVisitRecords, visitsSearchQuery, visitMachineFilter, visitPaymentFilter])
@@ -189,6 +214,22 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
       visits,
     })
   }
+  const getVisitDetailsPath = (record: SiteVisitRecord) => {
+    const params = new URLSearchParams({
+      mode: 'visit',
+      visitId: record.id,
+      client: record.client,
+      name: record.site,
+      date: record.date,
+      machine: record.machine,
+      amount: record.amount,
+      paymentMode: record.paymentMode,
+      paymentStatus: record.paymentStatus,
+      notes: record.notes,
+      work: record.work ?? '',
+    })
+    return `/site-details?${params.toString()}`
+  }
   const pageTitle = isVisitMode ? 'Site Visit Details' : 'Site Details'
   const backPath = isVisitMode ? '/site-visits' : '/clients-sites'
   const activeNavLabel = isVisitMode ? 'Site Visits' : 'Clients & Sites'
@@ -198,7 +239,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
     { label: 'Accounts', path: '/account-manager', icon: Briefcase },
     { label: 'Clients', path: '/clients-sites', icon: UsersRound },
     { label: 'Sites', path: '/site-visits', icon: MapPin },
-    { label: 'Reports', path: '/reports', icon: FileBarChart },
+    // { label: 'Reports', path: '/reports', icon: FileBarChart },
     { label: 'Settings', path: '/settings', icon: Building2 },
   ] as const
   const addSiteVisitPath = `/add-site-visit?${new URLSearchParams({ mode: 'add', client, name }).toString()}`
@@ -271,6 +312,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
     machine: string
     amount: string
     paymentMode: string
+    paymentStatus?: string
     notes?: string
     work?: string
   }) => {
@@ -282,6 +324,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
       date: record.date,
       machine: record.machine,
       paymentMode: record.paymentMode,
+      paymentStatus: record.paymentStatus,
       amount: record.amount,
       notes: record.notes,
       work: record.work,
@@ -563,9 +606,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                   <Calendar size={16} className="text-[#f39b03]" />
                   <span className="whitespace-nowrap">{headerDateLabel}</span>
                 </button>
-                <span className={['inline-flex items-center rounded-full px-3 py-1 text-xs font-extrabold ring-1', statusTone].join(' ')}>
-                  {statusLabel}
-                </span>
+               
                 <div className="hidden items-center gap-3 rounded-xl bg-neutral-100 px-3 py-2 ring-1 ring-black/5 sm:flex sm:px-4 sm:py-2.5">
                   <div className="grid h-9 w-9 place-items-center rounded-xl bg-[#f39b03]/15 text-[#f39b03]">
                     <CircleUserRound size={18} />
@@ -580,12 +621,23 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
           </header>
 
           <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-white p-4 pb-[calc(3.65rem+max(12px,env(safe-area-inset-bottom,0px)))] sm:px-6 sm:pt-6 sm:pb-[calc(3.65rem+max(12px,env(safe-area-inset-bottom,0px)))] md:p-6 md:pb-24 lg:p-8 lg:pb-28">
-            <div className="space-y-4 md:space-y-6">
+            <div className="mx-auto w-full max-w-6xl space-y-4 md:space-y-6 xl:max-w-7xl">
               <section className={`bg-neutral-900/[0.04] p-4 md:bg-white md:p-6 ${surfaceCardClass}`}>
                 <div className="text-[11px] font-semibold text-neutral-500 md:text-sm">Site Name</div>
                 <div className="mt-1 text-lg font-extrabold tracking-tight text-neutral-950 md:text-3xl">{name}</div>
-                <div className="mt-3 hidden items-center rounded-full bg-[#f39b03]/12 px-3 py-1 text-xs font-extrabold text-[#c97702] ring-1 ring-[#f39b03]/25 md:inline-flex">
-                  {statusLabel}
+                <div className="mt-3 flex flex-col gap-2">
+                  <div className="hidden items-center rounded-full bg-[#f39b03]/12 px-3 py-1 text-xs font-extrabold text-[#c97702] ring-1 ring-[#f39b03]/25 md:inline-flex w-fit">
+                    {statusLabel}
+                  </div>
+                  {isVisitMode ? (
+                    <p className="text-[11px] font-semibold leading-snug text-neutral-800 md:text-sm">
+                      <span className="font-extrabold text-neutral-500">Payment status:</span> {paymentStatus}
+                    </p>
+                  ) : visitPaymentStatusSummary ? (
+                    <p className="text-[11px] font-semibold leading-snug text-neutral-800 md:text-sm">
+                      <span className="font-extrabold text-neutral-500">Payment status:</span> {visitPaymentStatusSummary}
+                    </p>
+                  ) : null}
                 </div>
               </section>
 
@@ -668,6 +720,9 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                     <p>
                       <span className="text-neutral-500">Payment Mode:</span> {paymentMode}
                     </p>
+                    <p>
+                      <span className="text-neutral-500">Payment Status:</span> {paymentStatus}
+                    </p>
                     <p className="sm:col-span-2">
                       <span className="text-neutral-500">Notes:</span> {notes}
                     </p>
@@ -685,6 +740,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                           machine,
                           amount,
                           paymentMode,
+                          paymentStatus,
                           notes,
                           work,
                         })
@@ -718,7 +774,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                 </CardShell>
               ) : (
                 <CardShell
-                  title="Visit Record"
+                  title="Visit "
                   className="overflow-hidden"
                   bodyClassName="p-0"
                   headerEnd={
@@ -734,6 +790,15 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                     ) : null
                   }
                 >
+                  {visitPaymentStatusSummary ? (
+                    <div className="border-b border-neutral-100 bg-neutral-50/90 px-3 py-2.5 sm:px-6">
+                      <p className="text-[11px] font-semibold leading-snug text-neutral-800 md:text-xs">
+                        <span className="font-extrabold text-neutral-500">Payment status</span>
+                        <span className="text-neutral-400"> — </span>
+                        {visitPaymentStatusSummary}
+                      </p>
+                    </div>
+                  ) : null}
                   {relatedVisitRecords.length === 0 ? (
                     <div className="px-4 py-5 text-sm font-semibold text-neutral-600 sm:px-6">
                       No visit records found for this site.
@@ -754,7 +819,19 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                       <div className="md:hidden">
                         <ul className="flex flex-col gap-1.5 p-2 sm:p-3">
                           {filteredVisitRecords.map((record) => (
-                            <li key={`${record.id}-mobile`} className="rounded-lg bg-white p-2 shadow-sm ring-1 ring-black/5">
+                            <li
+                              key={`${record.id}-mobile`}
+                              className="rounded-lg bg-white p-2 shadow-sm ring-1 ring-black/5"
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => onNavigate(getVisitDetailsPath(record))}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter' || event.key === ' ') {
+                                  event.preventDefault()
+                                  onNavigate(getVisitDetailsPath(record))
+                                }
+                              }}
+                            >
                               <div className="flex items-center justify-between gap-2">
                                 <div className="min-w-0">
                                   <div className="truncate text-xs font-extrabold text-neutral-900">{record.id}</div>
@@ -763,22 +840,24 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                                 <span className="shrink-0 text-xs font-extrabold text-emerald-600">Rs {record.amount}</span>
                               </div>
                               <div className="mt-1.5 text-[11px] font-semibold text-neutral-600">
-                                {record.machine} • {record.paymentMode}
+                                {record.machine} • {record.paymentMode} • {record.paymentStatus}
                               </div>
                               <div className="mt-2 flex flex-wrap gap-2 md:mt-3">
                                 <button
                                   type="button"
-                                  onClick={() =>
-                                    handleExportVisitPdf({
+                                  onClick={(event) => {
+                                    event.stopPropagation()
+                                    void handleExportVisitPdf({
                                       visitId: record.id,
                                       date: record.date,
                                       machine: record.machine,
                                       amount: record.amount,
                                       paymentMode: record.paymentMode,
+                                      paymentStatus: record.paymentStatus,
                                       notes: record.notes,
                                       work: record.work,
                                     })
-                                  }
+                                  }}
                                   className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-neutral-200 bg-white px-2.5 text-[10px] font-extrabold text-neutral-800 transition hover:bg-neutral-50"
                                 >
                                   <Download size={12} />
@@ -786,7 +865,10 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => handleIndividualVisitInvoice(record)}
+                                  onClick={(event) => {
+                                    event.stopPropagation()
+                                    handleIndividualVisitInvoice(record)
+                                  }}
                                   className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-[#f39b03]/35 bg-[#f39b03]/10 px-2.5 text-[10px] font-extrabold text-[#b87402] transition hover:bg-[#f39b03]/15"
                                 >
                                   <Calculator size={12} className="text-[#f39b03]" />
@@ -799,13 +881,14 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                       </div>
 
                       <div className="hidden overflow-x-auto md:block">
-                        <table className="w-full min-w-[880px] border-collapse">
+                        <table className="w-full min-w-[980px] border-collapse">
                           <thead className="bg-neutral-50">
                             <tr className="text-left text-xs font-extrabold uppercase tracking-wide text-neutral-500">
                               <th className="px-4 py-3">Visit ID</th>
                               <th className="px-4 py-3">Date</th>
                               <th className="px-4 py-3">Machine</th>
                               <th className="px-4 py-3">Payment</th>
+                              <th className="px-4 py-3">Pay status</th>
                               <th className="px-4 py-3 text-right">Amount</th>
                               <th className="px-4 py-3">Notes</th>
                               <th className="px-4 py-3 text-center">Visit PDF</th>
@@ -814,27 +897,42 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                           </thead>
                           <tbody className="text-sm font-semibold text-neutral-800">
                             {filteredVisitRecords.map((record) => (
-                              <tr key={record.id} className="border-t border-neutral-200">
+                              <tr
+                                key={record.id}
+                                className="border-t border-neutral-200 hover:bg-neutral-50/60"
+                                role="button"
+                                tabIndex={0}
+                                onClick={() => onNavigate(getVisitDetailsPath(record))}
+                                onKeyDown={(event) => {
+                                  if (event.key === 'Enter' || event.key === ' ') {
+                                    event.preventDefault()
+                                    onNavigate(getVisitDetailsPath(record))
+                                  }
+                                }}
+                              >
                                 <td className="px-4 py-3 font-extrabold text-neutral-900">{record.id}</td>
                                 <td className="px-4 py-3">{record.date}</td>
                                 <td className="px-4 py-3">{record.machine}</td>
                                 <td className="px-4 py-3">{record.paymentMode}</td>
+                                <td className="px-4 py-3">{record.paymentStatus}</td>
                                 <td className="px-4 py-3 text-right font-extrabold text-emerald-600">Rs {record.amount}</td>
                                 <td className="px-4 py-3 text-neutral-700">{record.notes}</td>
                                 <td className="px-4 py-3 text-center">
                                   <button
                                     type="button"
-                                    onClick={() =>
-                                      handleExportVisitPdf({
+                                    onClick={(event) => {
+                                      event.stopPropagation()
+                                      void handleExportVisitPdf({
                                         visitId: record.id,
                                         date: record.date,
                                         machine: record.machine,
                                         amount: record.amount,
                                         paymentMode: record.paymentMode,
+                                        paymentStatus: record.paymentStatus,
                                         notes: record.notes,
                                         work: record.work,
                                       })
-                                    }
+                                    }}
                                     className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-neutral-200 bg-white px-2.5 text-[11px] font-extrabold text-neutral-800 transition hover:bg-neutral-50"
                                   >
                                     <Download size={12} />
@@ -844,7 +942,10 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                                 <td className="px-4 py-3 text-center">
                                   <button
                                     type="button"
-                                    onClick={() => handleIndividualVisitInvoice(record)}
+                                    onClick={(event) => {
+                                      event.stopPropagation()
+                                      handleIndividualVisitInvoice(record)
+                                    }}
                                     className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-[#f39b03]/35 bg-[#f39b03]/10 px-2.5 text-[11px] font-extrabold text-[#b87402] transition hover:bg-[#f39b03]/15"
                                   >
                                     <Calculator size={12} className="text-[#f39b03]" />

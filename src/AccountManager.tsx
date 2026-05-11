@@ -56,7 +56,7 @@ const navItems: NavItem[] = [
   { label: 'Account Manager', icon: <Briefcase size={16} /> },
   { label: 'Clients & Sites', icon: <UsersRound size={16} /> },
   { label: 'Site Visits', icon: <FileText size={16} /> },
-  { label: 'Reports', icon: <FileBarChart size={16} /> },
+  // { label: 'Reports', icon: <FileBarChart size={16} /> },
   { label: 'Settings', icon: <Building2 size={16} /> },
   { label: 'Log Out', icon: <LogOut size={16} /> },
 ]
@@ -108,6 +108,9 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
   const clientOptions = clientNamesForManager(managerId)
   const totalPending = accountRows.reduce((sum, row) => sum + parseCurrency(row.pending), 0)
   const [isAddOpen, setIsAddOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [transactionFilter, setTransactionFilter] = useState<'all' | TransactionType>('all')
+  const [pendingFilter, setPendingFilter] = useState<'all' | 'withPending' | 'cleared'>('all')
 
   const [transactionsByManager, setTransactionsByManager] = useState<Record<string, Transaction[]>>(() => ({
     ...initialTransactionsByManagerId,
@@ -145,15 +148,49 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
     return visibleTransactions
   }, [viewMode, visibleTransactions])
 
+  const normalizedSearchQuery = searchQuery.trim().toLowerCase()
+
+  const filteredPendingRows = useMemo(() => {
+    return accountRows.filter((row) => {
+      const matchesSearch =
+        normalizedSearchQuery.length === 0 ||
+        row.name.toLowerCase().includes(normalizedSearchQuery) ||
+        row.phone.toLowerCase().includes(normalizedSearchQuery)
+
+      const pendingAmount = parseCurrency(row.pending)
+      const matchesFilter =
+        pendingFilter === 'all' ||
+        (pendingFilter === 'withPending' && pendingAmount > 0) ||
+        (pendingFilter === 'cleared' && pendingAmount === 0)
+
+      return matchesSearch && matchesFilter
+    })
+  }, [accountRows, normalizedSearchQuery, pendingFilter])
+
+  const filteredTableTransactions = useMemo(() => {
+    return tableTransactions.filter((tx) => {
+      const matchesTypeFilter = transactionFilter === 'all' || tx.type === transactionFilter
+      const matchesSearch =
+        normalizedSearchQuery.length === 0 ||
+        tx.date.toLowerCase().includes(normalizedSearchQuery) ||
+        String(tx.amount).includes(normalizedSearchQuery) ||
+        (tx.reason ?? '').toLowerCase().includes(normalizedSearchQuery) ||
+        (tx.client ?? '').toLowerCase().includes(normalizedSearchQuery) ||
+        (tx.site ?? '').toLowerCase().includes(normalizedSearchQuery)
+
+      return matchesTypeFilter && matchesSearch
+    })
+  }, [tableTransactions, normalizedSearchQuery, transactionFilter])
+
   const exportTotals = useMemo(() => {
-    const debit = tableTransactions.filter((t) => t.type === 'debit').reduce((sum, t) => sum + t.amount, 0)
-    const credit = tableTransactions.filter((t) => t.type === 'credit').reduce((sum, t) => sum + t.amount, 0)
+    const debit = filteredTableTransactions.filter((t) => t.type === 'debit').reduce((sum, t) => sum + t.amount, 0)
+    const credit = filteredTableTransactions.filter((t) => t.type === 'credit').reduce((sum, t) => sum + t.amount, 0)
     return {
       totalDebit: debit,
       totalCredit: credit,
       netBalance: credit - debit,
     }
-  }, [tableTransactions])
+  }, [filteredTableTransactions])
 
   if (!managerIdFromRoute || !manager) {
     return <Navigate to={{ pathname: '/account-manager', search: location.search }} replace />
@@ -215,7 +252,7 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
     { label: 'Accounts', path: '/account-manager', icon: Briefcase },
     { label: 'Clients', path: '/clients-sites', icon: UsersRound },
     { label: 'Sites', path: '/site-visits', icon: MapPin },
-    { label: 'Reports', path: '/reports', icon: FileBarChart },
+    // { label: 'Reports', path: '/reports', icon: FileBarChart },
     { label: 'Settings', path: '/settings', icon: Building2 },
   ] as const
 
@@ -547,55 +584,83 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
               </button>
             </section>
 
-            {viewMode !== 'pending' ? (
-              <section className="mt-4 md:mt-6">
-                <CardPanel className="flex flex-col gap-2.5 p-2.5 md:flex-row md:items-center md:justify-between md:gap-4 md:p-4">
-                  <div className="w-full md:max-w-[780px]">
-                    <input type="text" placeholder="Search account..." className={toolbarSearchInputClass} />
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button type="button" className={toolbarSecondaryButtonClass}>
-                      Filters
-                    </button>
-                    <button
-                      type="button"
+            <section className="mt-4 md:mt-6">
+              <CardPanel className="flex flex-col gap-2.5 p-2.5 md:flex-row md:items-center md:justify-between md:gap-4 md:p-4">
+                <div className="w-full md:max-w-[780px]">
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    placeholder={viewMode === 'pending' ? 'Search client or phone...' : 'Search transactions...'}
+                    className={toolbarSearchInputClass}
+                  />
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {viewMode === 'pending' ? (
+                    <select
+                      value={pendingFilter}
+                      onChange={(event) => setPendingFilter(event.target.value as 'all' | 'withPending' | 'cleared')}
                       className={toolbarSecondaryButtonClass}
-                      aria-label="Export filtered transactions as PDF"
-                      title="Download PDF of transactions shown for the selected year"
-                      onClick={async () => {
-                        const { exportFilteredTransactionsPdf } = await import('./exportTransactionsPdf')
-                        exportFilteredTransactionsPdf({
-                          year: selectedYear,
-                          transactions: tableTransactions,
-                          totalDebit: exportTotals.totalDebit,
-                          totalCredit: exportTotals.totalCredit,
-                          netBalance: exportTotals.netBalance,
-                        })
-                      }}
+                      aria-label="Filter pending rows"
                     >
-                      Export
-                    </button>
-                    <button
-                      type="button"
-                      className={toolbarPrimaryButtonClass}
-                      onClick={() => {
-                        setDraftTx({
-                          id: '',
-                          type: 'debit',
-                          amount: 0,
-                          date: new Date().toISOString().slice(0, 10),
-                          reason: '',
-                        })
-                        setIsAddOpen(true)
-                      }}
+                      <option value="all">All Clients</option>
+                      <option value="withPending">With Pending</option>
+                      <option value="cleared">Cleared</option>
+                    </select>
+                  ) : (
+                    <select
+                      value={transactionFilter}
+                      onChange={(event) => setTransactionFilter(event.target.value as 'all' | TransactionType)}
+                      className={toolbarSecondaryButtonClass}
+                      aria-label="Filter transactions by type"
                     >
-                      <Plus className={toolbarPlusIconClass} />
-                      Add Transaction
-                    </button>
-                  </div>
-                </CardPanel>
-              </section>
-            ) : null}
+                      <option value="all">All Types</option>
+                      <option value="debit">Debit</option>
+                      <option value="credit">Credit</option>
+                    </select>
+                  )}
+                  {viewMode !== 'pending' ? (
+                    <>
+                      <button
+                        type="button"
+                        className={toolbarSecondaryButtonClass}
+                        aria-label="Export filtered transactions as PDF"
+                        title="Download PDF of transactions shown for the selected year"
+                        onClick={async () => {
+                          const { exportFilteredTransactionsPdf } = await import('./exportTransactionsPdf')
+                          exportFilteredTransactionsPdf({
+                            year: selectedYear,
+                            transactions: tableTransactions,
+                            totalDebit: exportTotals.totalDebit,
+                            totalCredit: exportTotals.totalCredit,
+                            netBalance: exportTotals.netBalance,
+                          })
+                        }}
+                      >
+                        Export
+                      </button>
+                      <button
+                        type="button"
+                        className={toolbarPrimaryButtonClass}
+                        onClick={() => {
+                          setDraftTx({
+                            id: '',
+                            type: 'debit',
+                            amount: 0,
+                            date: new Date().toISOString().slice(0, 10),
+                            reason: '',
+                          })
+                          setIsAddOpen(true)
+                        }}
+                      >
+                        <Plus className={toolbarPlusIconClass} />
+                        Add Transaction
+                      </button>
+                    </>
+                  ) : null}
+                </div>
+              </CardPanel>
+            </section>
 
             {viewMode !== 'pending' && isAddOpen ? (
               <div className="fixed inset-0 z-[60] grid place-items-center bg-black/50 px-4 py-6">
@@ -769,7 +834,7 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                 <div className="md:hidden">
                   {viewMode === 'pending' ? (
                     <ul className="flex flex-col gap-1.5 px-3 pb-1.5 pt-1.5">
-                      {accountRows.map((row) => (
+                      {filteredPendingRows.map((row) => (
                         <li key={row.name}>
                           <div className="flex w-full items-center justify-between gap-2 rounded-xl border border-neutral-200 bg-white p-2 shadow-sm ring-1 ring-black/5 md:p-3">
                             <div className="flex min-w-0 items-center gap-2">
@@ -793,7 +858,7 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                     </ul>
                   ) : (
                     <ul className="flex flex-col gap-1.5 px-3 pb-1.5 pt-1.5">
-                      {tableTransactions.map((tx) => (
+                      {filteredTableTransactions.map((tx) => (
                         <li key={tx.id}>
                           <div className="flex items-center gap-2 rounded-xl border border-neutral-200 bg-white p-2 shadow-sm ring-1 ring-black/5 md:p-3">
                             <div
@@ -848,7 +913,7 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                         </tr>
                       </thead>
                       <tbody className="text-sm font-semibold text-neutral-800">
-                        {accountRows.map((row) => {
+                        {filteredPendingRows.map((row) => {
                           const debit = parseCurrency(row.debit)
                           const credit = parseCurrency(row.credit)
                           return (
@@ -877,7 +942,7 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                         </tr>
                       </thead>
                       <tbody className="text-sm font-semibold text-neutral-800">
-                        {tableTransactions.map((tx) => (
+                        {filteredTableTransactions.map((tx) => (
                           <tr key={tx.id} className="border-t border-neutral-200 hover:bg-neutral-50/60">
                             <td className="px-6 py-4">
                               <span

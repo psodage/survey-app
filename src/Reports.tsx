@@ -16,11 +16,10 @@ import {
   Menu,
   Phone,
   Plus,
-  Share2,
   UsersRound,
   X,
 } from 'lucide-react'
-import { Fragment, useState, type ReactNode } from 'react'
+import { Fragment, useMemo, useState, type ReactNode } from 'react'
 import { useLocation } from 'react-router-dom'
 import { AccountManagerSidebarBlock } from './AccountManagerSidebarBlock'
 import { CollaborationBrandMark } from './CollaborationBrandMark'
@@ -77,6 +76,8 @@ export default function Reports({ onNavigate }: ReportsProps) {
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
   const [machineType, setMachineType] = useState<string>('Total Station')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState<'all' | ReportRow['status']>('all')
 
   const reportRows: ReportRow[] = [
     {
@@ -113,7 +114,7 @@ export default function Reports({ onNavigate }: ReportsProps) {
     { label: 'Account Manager', icon: <Briefcase size={16} /> },
     { label: 'Clients & Sites', icon: <UsersRound size={16} /> },
     { label: 'Site Visits', icon: <ClipboardList size={16} /> },
-    { label: 'Reports', icon: <FileBarChart size={16} /> },
+    // { label: 'Reports', icon: <FileBarChart size={16} /> },
     { label: 'Settings', icon: <Building2 size={16} /> },
     { label: 'Log Out', icon: <LogOut size={16} /> },
   ]
@@ -143,7 +144,7 @@ export default function Reports({ onNavigate }: ReportsProps) {
     { label: 'Accounts', path: '/account-manager', icon: Briefcase },
     { label: 'Clients', path: '/clients-sites', icon: UsersRound },
     { label: 'Sites', path: '/site-visits', icon: ClipboardList },
-    { label: 'Reports', path: '/reports', icon: FileBarChart },
+    // { label: 'Reports', path: '/reports', icon: FileBarChart },
     { label: 'Settings', path: '/settings', icon: Building2 },
   ] as const
 
@@ -154,7 +155,52 @@ export default function Reports({ onNavigate }: ReportsProps) {
     setFromDate('')
     setToDate('')
     setMachineType('Total Station')
+    setSearchQuery('')
+    setStatusFilter('all')
   }
+
+  const filteredReportRows = useMemo(() => {
+    const normalizedSearchQuery = searchQuery.trim().toLowerCase()
+
+    const parseReportDate = (value: string) => {
+      const parsed = new Date(value)
+      return Number.isNaN(parsed.getTime()) ? null : parsed
+    }
+
+    const from = fromDate ? new Date(fromDate) : null
+    const to = toDate ? new Date(toDate) : null
+
+    return reportRows.filter((row) => {
+      const matchesSearch =
+        normalizedSearchQuery.length === 0 ||
+        row.id.toLowerCase().includes(normalizedSearchQuery) ||
+        row.client.toLowerCase().includes(normalizedSearchQuery) ||
+        row.site.toLowerCase().includes(normalizedSearchQuery) ||
+        row.machine.toLowerCase().includes(normalizedSearchQuery) ||
+        row.type.toLowerCase().includes(normalizedSearchQuery)
+
+      const matchesReportType = reportType ? row.type === reportType : true
+      const matchesClient = clientFilter ? row.client === clientFilter : true
+      const matchesSite = siteFilter ? row.site === siteFilter : true
+      const matchesMachine = machineType ? row.machine === machineType : true
+      const matchesStatus = statusFilter === 'all' || row.status === statusFilter
+
+      const reportDate = parseReportDate(row.date)
+      const matchesFrom = !from || !reportDate || reportDate >= from
+      const matchesTo = !to || !reportDate || reportDate <= to
+
+      return (
+        matchesSearch &&
+        matchesReportType &&
+        matchesClient &&
+        matchesSite &&
+        matchesMachine &&
+        matchesStatus &&
+        matchesFrom &&
+        matchesTo
+      )
+    })
+  }, [searchQuery, fromDate, toDate, reportRows, reportType, clientFilter, siteFilter, machineType, statusFilter])
 
   return (
     <div className="flex h-[100svh] max-h-[100svh] min-h-[100svh] flex-col overflow-hidden bg-black md:h-dvh md:max-h-dvh md:min-h-dvh md:bg-neutral-100">
@@ -431,6 +477,17 @@ export default function Reports({ onNavigate }: ReportsProps) {
               <div className="rounded-xl bg-white p-4 shadow-[0_10px_30px_rgba(16,24,40,0.06)] ring-1 ring-black/5 md:rounded-2xl md:p-6">
                 <div className="text-sm font-extrabold tracking-tight text-neutral-950">Filters</div>
                 <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-12 lg:gap-5">
+                  <div className="lg:col-span-4">
+                    <Field label="Search">
+                      <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Search by report ID, client, site..."
+                        className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
+                      />
+                    </Field>
+                  </div>
                   <div className="lg:col-span-2">
                     <Field label="Report Type">
                       <select value={reportType} onChange={(e) => setReportType(e.target.value)} className={selectClass}>
@@ -449,9 +506,9 @@ export default function Reports({ onNavigate }: ReportsProps) {
                         className={selectClass}
                       >
                         <option value="all">All clients</option>
-                        <option value="amit">Amit Developers</option>
-                        <option value="krishna">Shree Krishna Infra</option>
-                        <option value="vishwa">Vishwakarma Properties</option>
+                        <option value="Amit Developers">Amit Developers</option>
+                        <option value="Shree Krishna Infra">Shree Krishna Infra</option>
+                        <option value="Vishwakarma Properties">Vishwakarma Properties</option>
                       </select>
                     </Field>
                   </div>
@@ -463,9 +520,30 @@ export default function Reports({ onNavigate }: ReportsProps) {
                         className={selectClass}
                       >
                         <option value="all">All sites</option>
-                        <option value="sai">Sai Residency</option>
-                        <option value="green">Green Valley Phase 2</option>
-                        <option value="multiple">Multiple Sites</option>
+                        <option value="Sai Residency">Sai Residency</option>
+                        <option value="Green Valley Phase 2">Green Valley Phase 2</option>
+                        <option value="Multiple Sites">Multiple Sites</option>
+                      </select>
+                    </Field>
+                  </div>
+                  <div className="lg:col-span-2">
+                    <Field label="Machine">
+                      <select value={machineType} onChange={(e) => setMachineType(e.target.value)} className={selectClass}>
+                        <option>Total Station</option>
+                        <option>DGPS</option>
+                      </select>
+                    </Field>
+                  </div>
+                  <div className="lg:col-span-2">
+                    <Field label="Status">
+                      <select
+                        value={statusFilter}
+                        onChange={(e) => setStatusFilter(e.target.value as 'all' | ReportRow['status'])}
+                        className={selectClass}
+                      >
+                        <option value="all">All Statuses</option>
+                        <option value="Completed">Completed</option>
+                        <option value="Pending">Pending</option>
                       </select>
                     </Field>
                   </div>
@@ -537,7 +615,7 @@ export default function Reports({ onNavigate }: ReportsProps) {
                       </tr>
                     </thead>
                     <tbody className="text-sm font-semibold text-neutral-800">
-                      {reportRows.map((row) => (
+                      {filteredReportRows.map((row) => (
                         <tr key={row.id} className="border-b border-neutral-100 hover:bg-neutral-50/70">
                           <td className="px-4 py-3.5 font-extrabold text-neutral-950 sm:px-6">{row.id}</td>
                           <td className="px-4 py-3.5">{row.type}</td>
@@ -573,17 +651,18 @@ export default function Reports({ onNavigate }: ReportsProps) {
                                 <Download size={13} strokeWidth={2.25} />
                                 Download PDF
                               </button>
-                              <button
-                                type="button"
-                                className="inline-flex h-9 items-center gap-1 rounded-lg border border-neutral-200 bg-white px-2.5 text-[11px] font-bold text-neutral-700 ring-1 ring-black/5 transition hover:border-[#f39b03]/40 hover:text-[#f39b03]"
-                              >
-                                <Share2 size={13} strokeWidth={2.25} />
-                                Share
-                              </button>
+                            
                             </div>
                           </td>
                         </tr>
                       ))}
+                      {filteredReportRows.length === 0 ? (
+                        <tr>
+                          <td colSpan={8} className="px-4 py-8 text-center text-sm font-semibold text-neutral-600">
+                            No reports match the selected filters.
+                          </td>
+                        </tr>
+                      ) : null}
                     </tbody>
                   </table>
                 </div>
@@ -601,7 +680,7 @@ export default function Reports({ onNavigate }: ReportsProps) {
       >
         <div className="mx-auto flex w-full max-w-lg items-stretch justify-between gap-0 px-1 pt-1.5 pb-1">
           {mobileBottomNav.map((item) => {
-            const active = item.path === '/reports'
+            const active = pathname === item.path
             const Icon = item.icon
             return (
               <button

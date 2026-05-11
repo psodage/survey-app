@@ -9,6 +9,7 @@ export type VisitRecordPdfData = {
   date: string
   machine: string
   paymentMode: string
+  paymentStatus?: string
   amount: string
   notes?: string
   work?: string
@@ -128,7 +129,13 @@ export async function exportVisitRecordPdf(data: VisitRecordPdfData) {
   doc.setFontSize(10)
   doc.setTextColor(35, 35, 35)
   doc.text('Other Details :', leftLabel, y)
-  lineValue(doc, leftValueStart, 286, y, `${data.notes ?? '-'}  |  Payment: ${data.paymentMode}  |  Rs ${data.amount}`)
+  lineValue(
+    doc,
+    leftValueStart,
+    286,
+    y,
+    `${data.notes ?? '-'}  |  Payment: ${data.paymentMode}  |  Status: ${data.paymentStatus ?? '-'}  |  Rs ${data.amount}`,
+  )
 
   const signY = 182
   doc.line(12, signY, 90, signY)

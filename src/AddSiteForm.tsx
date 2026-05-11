@@ -17,12 +17,10 @@ export type AddSiteFormProps = {
 export function AddSiteForm({ clientName, variant = 'page', onCancel, onSuccess }: AddSiteFormProps) {
   const [siteName, setSiteName] = useState('')
   const [locationName, setLocationName] = useState('')
-  const [status, setStatus] = useState<'Active' | 'On Hold' | 'Completed'>('Active')
 
   const resetFields = () => {
     setSiteName('')
     setLocationName('')
-    setStatus('Active')
   }
 
   const gridClass =
@@ -73,19 +71,6 @@ export function AddSiteForm({ clientName, variant = 'page', onCancel, onSuccess 
           className={inputClass}
           placeholder="e.g. Baner"
         />
-      </label>
-
-      <label className="grid gap-2">
-        <span className="text-xs font-bold text-neutral-700">Status</span>
-        <select
-          value={status}
-          onChange={(event) => setStatus(event.target.value as 'Active' | 'On Hold' | 'Completed')}
-          className={inputClass}
-        >
-          <option value="Active">Active</option>
-          <option value="On Hold">On Hold</option>
-          <option value="Completed">Completed</option>
-        </select>
       </label>
 
       <div className={['mt-2 flex flex-wrap items-center gap-3', colSpanWide].join(' ')}>

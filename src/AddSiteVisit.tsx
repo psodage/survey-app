@@ -47,7 +47,7 @@ const navItems: NavItem[] = [
   { label: 'Account Manager', icon: <Briefcase size={16} /> },
   { label: 'Clients & Sites', icon: <UsersRound size={16} /> },
   { label: 'Site Visits', icon: <ClipboardList size={16} /> },
-  { label: 'Reports', icon: <FileBarChart size={16} /> },
+  // { label: 'Reports', icon: <FileBarChart size={16} /> },
   { label: 'Settings', icon: <Building2 size={16} /> },
   { label: 'Log Out', icon: <LogOut size={16} /> },
 ]
@@ -72,7 +72,6 @@ const sitesByClient: Record<string, string[]> = {
 }
 
 const machineOptions = ['Total Station', 'Auto Level', 'GPS / GNSS', 'Drone Survey']
-const paymentModes = ['Cash', 'UPI', 'Bank Transfer', 'Cheque']
 
 const initialPhotos = [
   { id: 'p1', src: 'https://picsum.photos/seed/sitevisit1/400/300' },
@@ -89,6 +88,7 @@ type VisitRecord = {
   work: string
   amount: string
   paymentMode: string
+  paymentStatus: string
   notes: string
 }
 
@@ -102,6 +102,7 @@ const visitRecords: VisitRecord[] = [
     work: 'Topographic survey for layout planning and road alignment.',
     amount: '15,000',
     paymentMode: 'Cash',
+    paymentStatus: 'Paid',
     notes: 'Completed boundary points and levels.',
   },
   {
@@ -113,6 +114,7 @@ const visitRecords: VisitRecord[] = [
     work: 'Road level transfer and benchmark verification.',
     amount: '12,500',
     paymentMode: 'UPI',
+    paymentStatus: 'Partial',
     notes: 'Need follow-up visit for final contour check.',
   },
   {
@@ -124,6 +126,7 @@ const visitRecords: VisitRecord[] = [
     work: 'Plot boundary staking and control point marking.',
     amount: '10,000',
     paymentMode: 'Bank Transfer',
+    paymentStatus: 'Pending',
     notes: 'Client asked for revised point sheet.',
   },
 ]
@@ -146,7 +149,6 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
     'Topographic survey for layout planning and road alignment.',
   )
   const [amount, setAmount] = useState('15,000')
-  const [paymentMode, setPaymentMode] = useState('Cash')
   const [notes, setNotes] = useState('Completed boundary points and levels.')
   const [photos, setPhotos] = useState(initialPhotos)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -181,7 +183,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
     { label: 'Accounts', path: '/account-manager', icon: Briefcase },
     { label: 'Clients', path: '/clients-sites', icon: UsersRound },
     { label: 'Sites', path: '/site-visits', icon: MapPin },
-    { label: 'Reports', path: '/reports', icon: FileBarChart },
+    // { label: 'Reports', path: '/reports', icon: FileBarChart },
     { label: 'Settings', path: '/settings', icon: Building2 },
   ] as const
 
@@ -215,6 +217,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
       machine: record.machine,
       amount: record.amount,
       paymentMode: record.paymentMode,
+      paymentStatus: record.paymentStatus,
       notes: record.notes,
       work: record.work,
     })
@@ -529,7 +532,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                                   {record.client} - {record.site}
                                 </div>
                                 <div className="mt-0.5 text-[10px] font-semibold text-neutral-500">
-                                  {record.id} • {record.date}
+                                  {record.id} • {record.date} • {record.paymentStatus}
                                 </div>
                               </div>
                               <span className="shrink-0 text-xs font-extrabold text-emerald-600">Rs {record.amount}</span>
@@ -578,6 +581,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                           <th className="px-4 py-4">Site</th>
                           <th className="px-4 py-4">Date</th>
                           <th className="px-4 py-4">Machine</th>
+                          <th className="px-4 py-4">Pay status</th>
                           <th className="px-4 py-4 text-right">Amount</th>
                           <th className="px-4 py-4 text-center">Action</th>
                         </tr>
@@ -602,6 +606,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                             <td className="px-4 py-4 text-neutral-700">{record.site}</td>
                             <td className="px-4 py-4 text-neutral-700">{record.date}</td>
                             <td className="px-4 py-4 text-neutral-700">{record.machine}</td>
+                            <td className="px-4 py-4 text-neutral-700">{record.paymentStatus}</td>
                             <td className="px-4 py-4 text-right font-extrabold text-emerald-600">Rs {record.amount}</td>
                             <td className="px-4 py-4">
                               <div className="flex items-center justify-center gap-2">
@@ -633,7 +638,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                         ))}
                         {visitRecords.length === 0 ? (
                           <tr className="border-t border-neutral-200">
-                            <td className="px-6 py-8 text-sm font-semibold text-neutral-600" colSpan={7}>
+                            <td className="px-6 py-8 text-sm font-semibold text-neutral-600" colSpan={8}>
                               No visit records found.
                             </td>
                           </tr>
@@ -657,7 +662,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                       date: visitDate,
                       machine,
                       amount,
-                      paymentMode,
+                      paymentStatus: 'Pending',
                       notes,
                       work: workDetails,
                       engineerName,
@@ -790,28 +795,6 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                         inputMode="numeric"
                         className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
                       />
-                    </label>
-
-                    <label className="grid gap-2">
-                      <span className="text-xs font-bold text-neutral-700">Payment Mode</span>
-                      <div className="relative">
-                        <select
-                          value={paymentMode}
-                          onChange={(e) => setPaymentMode(e.target.value)}
-                          className="h-11 w-full cursor-pointer appearance-none rounded-xl border border-neutral-200 bg-white px-3 pr-10 text-sm font-semibold text-neutral-900 outline-none transition hover:border-neutral-300 focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
-                        >
-                          {paymentModes.map((p) => (
-                            <option key={p} value={p}>
-                              {p}
-                            </option>
-                          ))}
-                        </select>
-                        <ChevronDown
-                          size={16}
-                          className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-neutral-500"
-                          aria-hidden
-                        />
-                      </div>
                     </label>
 
                     <label className="grid gap-2 md:col-span-2">
