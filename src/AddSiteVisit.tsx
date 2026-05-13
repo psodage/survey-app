@@ -20,10 +20,11 @@ import {
   Phone,
   X,
 } from 'lucide-react'
-import { Fragment, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Fragment, useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useLocation } from 'react-router-dom'
 import { AccountManagerSidebarBlock } from './AccountManagerSidebarBlock'
 import { CollaborationBrandMark } from './CollaborationBrandMark'
+import { LayoutFooter } from './LayoutFooter'
 import {
   CardPanel,
   CardShell,
@@ -35,6 +36,9 @@ import {
 } from './dashboardCards'
 import { layoutBrandLogo } from './brandLogo'
 import { getHeaderDateLabel } from './headerDateLabel'
+import { toast } from 'sonner'
+import http from './api/http'
+import { useAuth } from './context/AuthContext'
 import { signOut } from './signOut'
 
 type NavItem = {
@@ -52,35 +56,14 @@ const navItems: NavItem[] = [
   { label: 'Log Out', icon: <LogOut size={16} /> },
 ]
 
-const clientOptions = [
-  'Amit Developers',
-  'Shree Krishna Infra',
-  'Vishwakarma Properties',
-  'Gajanan Projects',
-]
-
-const sitesByClient: Record<string, string[]> = {
-  'Amit Developers': [
-    'Sai Residency',
-    'Sunrise Enclave',
-    'Green Valley Phase 2',
-    'Riverfront Plaza',
-  ],
-  'Shree Krishna Infra': ['Krishna Heights', 'Shree Meadows', 'Silverline Park'],
-  'Vishwakarma Properties': ['Vishwakarma Residency', 'Maple Court'],
-  'Gajanan Projects': ['Gajanan Greens', 'Northgate Homes'],
-}
-
 const machineOptions = ['Total Station', 'Auto Level', 'GPS / GNSS', 'Drone Survey']
 
-const initialPhotos = [
-  { id: 'p1', src: 'https://picsum.photos/seed/sitevisit1/400/300' },
-  { id: 'p2', src: 'https://picsum.photos/seed/sitevisit2/400/300' },
-  { id: 'p3', src: 'https://picsum.photos/seed/sitevisit3/400/300' },
-]
+const initialPhotos: { id: string; src: string }[] = []
 
 type VisitRecord = {
   id: string
+  _id?: string
+  visitMongoId?: string
   client: string
   site: string
   date: string
@@ -92,56 +75,24 @@ type VisitRecord = {
   notes: string
 }
 
-const visitRecords: VisitRecord[] = [
-  {
-    id: 'SV-2451',
-    client: 'Amit Developers',
-    site: 'Sai Residency',
-    date: '20 May 2025',
-    machine: 'Total Station',
-    work: 'Topographic survey for layout planning and road alignment.',
-    amount: '15,000',
-    paymentMode: 'Cash',
-    paymentStatus: 'Paid',
-    notes: 'Completed boundary points and levels.',
-  },
-  {
-    id: 'SV-2450',
-    client: 'Shree Krishna Infra',
-    site: 'Krishna Heights',
-    date: '18 May 2025',
-    machine: 'Auto Level',
-    work: 'Road level transfer and benchmark verification.',
-    amount: '12,500',
-    paymentMode: 'UPI',
-    paymentStatus: 'Partial',
-    notes: 'Need follow-up visit for final contour check.',
-  },
-  {
-    id: 'SV-2449',
-    client: 'Vishwakarma Properties',
-    site: 'Maple Court',
-    date: '16 May 2025',
-    machine: 'GPS / GNSS',
-    work: 'Plot boundary staking and control point marking.',
-    amount: '10,000',
-    paymentMode: 'Bank Transfer',
-    paymentStatus: 'Pending',
-    notes: 'Client asked for revised point sheet.',
-  },
-]
+type ApiSite = { id: string; clientName: string; name: string }
 
 type AddSiteVisitProps = {
   onNavigate: (path: string) => void
 }
 
 export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
-  const location = useLocation()
+  const { token, user } = useAuth()
+  const { pathname, search } = useLocation()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const headerDateLabel = getHeaderDateLabel()
+  const [clientOptions, setClientOptions] = useState<string[]>([])
+  const [sitesByClient, setSitesByClient] = useState<Record<string, string[]>>({})
+  const [apiSites, setApiSites] = useState<ApiSite[]>([])
+  const [visitRecords, setVisitRecords] = useState<VisitRecord[]>([])
   const [showAddForm, setShowAddForm] = useState(false)
-  const [client, setClient] = useState('Amit Developers')
-  const [site, setSite] = useState('Sai Residency')
+  const [client, setClient] = useState('')
+  const [site, setSite] = useState('')
   const [visitDate] = useState(() => getHeaderDateLabel())
   const [machine, setMachine] = useState('Total Station')
   const [engineerName, setEngineerName] = useState('')
@@ -150,13 +101,52 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
   )
   const [amount, setAmount] = useState('15,000')
   const [notes, setNotes] = useState('Completed boundary points and levels.')
-  const [photos, setPhotos] = useState(initialPhotos)
+  const [photos, setPhotos] = useState<{ id: string; src: string }[]>(initialPhotos)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const formId = useId()
-  const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search])
+  const searchParams = useMemo(() => new URLSearchParams(search), [search])
   const mode = searchParams.get('mode')
   const requestedClient = searchParams.get('client')
   const requestedSiteName = searchParams.get('name')
+
+  const loadData = useCallback(async () => {
+    if (!token) return
+    try {
+      const [cRes, sRes, vRes] = await Promise.all([
+        http.get<{ ok: boolean; clients: Array<{ name: string }> }>('/api/clients'),
+        http.get<{ ok: boolean; sites: Array<{ id: string; clientName: string; name: string }> }>('/api/sites'),
+        http.get<{ ok: boolean; visits: VisitRecord[] }>('/api/visits'),
+      ])
+      const names = cRes.data?.ok ? cRes.data.clients.map((c) => c.name) : []
+      setClientOptions(names)
+      const grouped: Record<string, string[]> = {}
+      const flat: ApiSite[] = []
+      if (sRes.data?.ok) {
+        for (const s of sRes.data.sites) {
+          if (!grouped[s.clientName]) grouped[s.clientName] = []
+          grouped[s.clientName].push(s.name)
+          flat.push({ id: s.id, clientName: s.clientName, name: s.name })
+        }
+      }
+      setSitesByClient(grouped)
+      setApiSites(flat)
+      if (vRes.data?.ok) setVisitRecords(vRes.data.visits)
+    } catch {
+      toast.error('Could not load visits data')
+    }
+  }, [token])
+
+  useEffect(() => {
+    void loadData()
+  }, [loadData])
+
+  useEffect(() => {
+    if (!client && clientOptions[0]) {
+      const first = clientOptions[0]
+      setClient(first)
+      setSite(sitesByClient[first]?.[0] ?? '')
+    }
+  }, [client, clientOptions, sitesByClient])
 
   useEffect(() => {
     if (mode !== 'add') return
@@ -170,12 +160,12 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
         setSite(sites[0] ?? '')
       }
     }
-  }, [mode, requestedClient, requestedSiteName])
+  }, [mode, requestedClient, requestedSiteName, clientOptions, sitesByClient])
 
   const siteChoices = useMemo(() => sitesByClient[client] ?? [], [client])
   const totalAmount = useMemo(
     () => visitRecords.reduce((sum, record) => sum + Number(record.amount.replace(/[^\d.-]/g, '')), 0),
-    [],
+    [visitRecords],
   )
 
   const mobileBottomNav = [
@@ -221,13 +211,15 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
       notes: record.notes,
       work: record.work,
     })
+    const mid = record.visitMongoId ?? record._id
+    if (mid) params.set('visitMongoId', mid)
     return `/site-details?${params.toString()}`
   }
 
   return (
     <div className="flex h-[100svh] max-h-[100svh] min-h-[100svh] flex-col overflow-hidden bg-black md:h-dvh md:max-h-dvh md:min-h-dvh md:bg-neutral-100">
       <div className="flex min-h-0 flex-1 w-full max-w-none">
-        <aside className="fixed inset-y-0 left-0 z-20 hidden w-[280px] flex-col bg-gradient-to-b from-[#050505] via-[#0b0b0b] to-[#040404] pb-20 text-white lg:flex">
+      <aside className="fixed inset-y-0 left-0 z-20 hidden w-[280px] flex-col bg-gradient-to-b from-[#050505] via-[#0b0b0b] to-[#040404] pb-20 text-white lg:flex">
           <div className="px-6 pt-7">
             <CollaborationBrandMark variant="desktopSidebar" />
           </div>
@@ -239,7 +231,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                   return (
                     <Fragment key="account-manager">
                       <AccountManagerSidebarBlock
-                        pathname={location.pathname}
+                        pathname={pathname}
                         onNavigate={onNavigate}
                         onAfterNavigate={() => setIsSidebarOpen(false)}
                       />
@@ -258,14 +250,18 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                       isLogout
                         ? 'bg-red-500/15 text-red-300 ring-1 ring-red-400/35 hover:bg-red-500/20 hover:text-red-200'
                         : active
-                          ? 'bg-[#f39b03]/18 text-[#f39b03] ring-1 ring-[#f39b03]/30'
-                          : 'text-white/85 hover:bg-white/5 hover:text-white',
+                        ? 'bg-[#f39b03]/18 text-[#f39b03] ring-1 ring-[#f39b03]/30'
+                        : 'text-white/85 hover:bg-white/5 hover:text-white',
                     ].join(' ')}
                   >
                     <span
                       className={[
                         'grid h-8 w-8 place-items-center rounded-lg',
-                        isLogout ? 'bg-red-500/18 text-red-300' : active ? 'bg-[#f39b03]/14' : 'bg-white/5',
+                        isLogout
+                          ? 'bg-red-500/18 text-red-300'
+                          : active
+                          ? 'bg-[#f39b03]/14'
+                          : 'bg-white/5',
                       ].join(' ')}
                     >
                       {item.icon}
@@ -276,8 +272,8 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
               })}
             </div>
           </nav>
-        </aside>
 
+        </aside>
         {isSidebarOpen ? (
           <button
             type="button"
@@ -287,68 +283,103 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
           />
         ) : null}
 
-        <aside
+<aside
           className={[
             'fixed inset-y-0 left-0 z-50 flex w-[280px] flex-col overflow-y-auto bg-gradient-to-b from-[#050505] via-[#0b0b0b] to-[#040404] pb-20 text-white transition-transform duration-300 lg:hidden',
             isSidebarOpen ? 'translate-x-0' : '-translate-x-full',
           ].join(' ')}
+          aria-label="Profile"
         >
-          <div className="flex items-center justify-between px-6 pt-6">
-            <img src={layoutBrandLogo} alt="Samarth Land Surveyors" className="h-10 w-auto" draggable={false} />
+          <div className="flex items-center justify-between px-5 pt-6">
+            <span className="text-sm font-extrabold tracking-tight text-white">Profile</span>
             <button
               type="button"
               className="grid h-9 w-9 place-items-center rounded-xl bg-white/10 hover:bg-white/20"
-              aria-label="Close menu"
+              aria-label="Close profile"
               onClick={() => setIsSidebarOpen(false)}
             >
               <X size={18} />
             </button>
           </div>
 
-          <nav className="mt-4 flex-1 px-3">
-            <div className="space-y-1">
-              {navItems.map((item) => {
-                if (item.label === 'Account Manager') {
-                  return (
-                    <Fragment key="account-manager-mobile">
-                      <AccountManagerSidebarBlock
-                        pathname={location.pathname}
-                        onNavigate={onNavigate}
-                        onAfterNavigate={() => setIsSidebarOpen(false)}
-                      />
-                    </Fragment>
-                  )
-                }
-                const active = item.label === 'Site Visits'
-                const isLogout = item.label === 'Log Out'
-                return (
-                  <button
-                    type="button"
-                    key={item.label}
-                    onClick={() => handleNavClick(item.label)}
-                    className={[
-                      'group flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-[13px] font-semibold transition',
-                      isLogout
-                        ? 'bg-red-500/15 text-red-300 ring-1 ring-red-400/35 hover:bg-red-500/20 hover:text-red-200'
-                        : active
-                          ? 'bg-[#f39b03]/18 text-[#f39b03] ring-1 ring-[#f39b03]/30'
-                          : 'text-white/85 hover:bg-white/5 hover:text-white',
-                    ].join(' ')}
-                  >
-                    <span
-                      className={[
-                        'grid h-8 w-8 place-items-center rounded-lg',
-                        isLogout ? 'bg-red-500/18 text-red-300' : active ? 'bg-[#f39b03]/14' : 'bg-white/5',
-                      ].join(' ')}
-                    >
-                      {item.icon}
-                    </span>
-                    <span className="truncate">{item.label}</span>
-                  </button>
-                )
-              })}
+          <div className="mt-6 px-5">
+            <div className="rounded-2xl bg-white/5 p-4 ring-1 ring-white/10">
+              <div className="flex flex-col items-center text-center">
+                <div className="grid h-16 w-16 place-items-center rounded-2xl bg-white/10 text-white ring-1 ring-white/15">
+                  <CircleUserRound size={32} strokeWidth={1.75} />
+                </div>
+                <div className="mt-3 text-base font-extrabold text-white">{user?.fullName || 'User'}</div>
+                <div className="mt-1 text-xs font-semibold text-white/65">{user?.role === 'super_admin' ? 'Super Admin' : 'Admin'}</div>
+              </div>
+              <div className="mt-4 space-y-2 border-t border-white/10 pt-4">
+                <a
+                  href="mailto:samarthlandsurveyors@gmail.com"
+                  className="flex items-center gap-2 rounded-xl px-2 py-2 text-left text-xs font-semibold text-white/90 hover:bg-white/5"
+                >
+                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white/10 text-[#f39b03]">
+                    <Mail size={15} />
+                  </span>
+                  <span className="min-w-0 truncate">samarthlandsurveyors@gmail.com</span>
+                </a>
+                <a
+                  href="tel:+918643001010"
+                  className="flex items-center gap-2 rounded-xl px-2 py-2 text-left text-xs font-semibold text-white/90 hover:bg-white/5"
+                >
+                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white/10 text-[#f39b03]">
+                    <Phone size={15} />
+                  </span>
+                  <span>+91 86430 01010</span>
+                </a>
+              </div>
             </div>
-          </nav>
+          </div>
+
+          <div className="mt-5 px-5">
+            <div className="text-[11px] font-extrabold uppercase tracking-wide text-white/45">Quick navigation</div>
+            <div className="mt-2 space-y-2">
+              <AccountManagerSidebarBlock
+                pathname={pathname}
+                onNavigate={onNavigate}
+                onAfterNavigate={() => setIsSidebarOpen(false)}
+              />
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              {[
+                { label: 'Dashboard', path: '/dashboard', icon: LayoutGrid },
+                { label: 'Clients', path: '/clients-sites', icon: UsersRound },
+                { label: 'Visits', path: '/site-visits', icon: MapPin },
+              ].map(({ label, path, icon: Icon }) => (
+                <button
+                  type="button"
+                  key={path}
+                  onClick={() => {
+                    onNavigate(path)
+                    setIsSidebarOpen(false)
+                  }}
+                  className={[
+                    'flex flex-col items-center gap-1.5 rounded-xl px-2 py-3 text-[11px] font-bold ring-1 transition',
+                    path === '/dashboard'
+                      ? 'bg-white/10 text-[#f39b03] ring-[#f39b03]/35'
+                      : 'bg-white/5 text-white/85 ring-white/10 hover:bg-white/10',
+                  ].join(' ')}
+                >
+                  <Icon size={18} />
+                  <span className="truncate">{label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-6 flex-1 px-5">
+            <button
+              type="button"
+              onClick={() => handleNavClick('Log Out')}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-red-500/15 py-3 text-sm font-bold text-red-200 ring-1 ring-red-400/35 hover:bg-red-500/25"
+            >
+              <LogOut size={18} />
+              Log Out
+            </button>
+          </div>
         </aside>
 
         <main className="flex min-h-0 min-w-0 flex-1 flex-col lg:ml-[280px]">
@@ -440,7 +471,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                   />
                   <StatCard
                     title="Visit Revenue"
-                    value={`Rs ${totalAmount.toLocaleString('en-IN')}`}
+                    value={`₹ ${totalAmount.toLocaleString('en-IN')}`}
                     subtitle="This period"
                     icon={<Briefcase className="text-emerald-600" />}
                     toneClass="bg-emerald-100"
@@ -448,7 +479,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                   />
                   <StatCard
                     title="Received Amount"
-                    value={`Rs ${totalAmount.toLocaleString('en-IN')}`}
+                    value={`₹ ${totalAmount.toLocaleString('en-IN')}`}
                     subtitle="This period"
                     icon={<Calendar className="text-violet-600" />}
                     toneClass="bg-violet-100"
@@ -456,7 +487,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                   />
                   <StatCard
                     title="Pending Visit Amount"
-                    value="Rs 0"
+                    value="₹ 0"
                     subtitle="Outstanding"
                     icon={<MapPin className="text-rose-600" />}
                     toneClass="bg-rose-100"
@@ -651,25 +682,62 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                 <form
                   id={formId}
                   className="space-y-6"
-                  onSubmit={(e) => {
+                  onSubmit={async (e) => {
                     e.preventDefault()
-                    const visitId = `SV-${Math.floor(1000 + Math.random() * 9000)}`
-                    const params = new URLSearchParams({
-                      mode: 'visit',
-                      visitId,
-                      client,
-                      name: site,
-                      date: visitDate,
-                      machine,
-                      amount,
-                      paymentStatus: 'Pending',
-                      notes,
-                      work: workDetails,
-                      engineerName,
-                      contactPerson: engineerName,
-                    })
-                    setShowAddForm(false)
-                    onNavigate(`/site-details?${params.toString()}`)
+                    const match = apiSites.find((s) => s.clientName === client && s.name === site)
+                    if (!match) {
+                      toast.error('Choose a valid client and site.')
+                      return
+                    }
+                    const amountNum = Number(amount.replace(/[^\d.-]/g, '')) || 0
+                    try {
+                      const res = await http.post<{
+                        ok: boolean
+                        visit?: { id: string; _id: string; amount: string; paymentStatus: string }
+                        error?: string
+                      }>('/api/visits', {
+                        siteId: match.id,
+                        workDescription: workDetails,
+                        machineLabel: machine,
+                        amount: amountNum,
+                        paymentMode: '—',
+                        paymentStatus: 'pending',
+                        notes,
+                      })
+                      if (res.status !== 201 || !res.data?.ok || !res.data.visit) {
+                        toast.error(res.data?.error ?? 'Could not save visit')
+                        return
+                      }
+                      const v = res.data.visit
+                      const visitMongoId = v._id
+                      const files = fileInputRef.current?.files
+                      if (files?.length) {
+                        const fd = new FormData()
+                        for (let i = 0; i < files.length; i += 1) fd.append('photos', files[i])
+                        await http.post(`/api/visits/${visitMongoId}/photos`, fd)
+                      }
+                      toast.success('Visit saved')
+                      await loadData()
+                      const params = new URLSearchParams({
+                        mode: 'visit',
+                        visitId: v.id,
+                        visitMongoId,
+                        client,
+                        name: site,
+                        date: visitDate,
+                        machine,
+                        amount: v.amount,
+                        paymentStatus: v.paymentStatus,
+                        notes,
+                        work: workDetails,
+                        engineerName,
+                        contactPerson: engineerName,
+                      })
+                      setShowAddForm(false)
+                      onNavigate(`/site-details?${params.toString()}`)
+                    } catch {
+                      toast.error('Could not save visit')
+                    }
                   }}
                 >
                 <CardShell title="Visit Details">
@@ -911,7 +979,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
           {mobileBottomNav.map((item) => {
             const active =
               item.path === '/site-visits' &&
-              (location.pathname === '/site-visits' || location.pathname === '/add-site-visit')
+              (pathname === '/site-visits' || pathname === '/add-site-visit')
             const Icon = item.icon
             return (
               <button
@@ -939,74 +1007,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
         <div aria-hidden className="mobile-nav-safe-spacer" />
       </nav>
 
-      <footer className="fixed inset-x-0 bottom-0 z-50 hidden border-t border-white/10 bg-gradient-to-b from-[#050505] via-[#0b0b0b] to-[#040404] text-white shadow-[0_-12px_30px_rgba(0,0,0,0.3)] md:block">
-        <div className="mx-auto flex w-full max-w-none items-center justify-between gap-3 px-3 py-2 sm:px-5 sm:py-3">
-          <img
-            src={layoutBrandLogo}
-            alt="Samarth Land Surveyors"
-            className="h-9 w-auto shrink-0 sm:h-10"
-            draggable={false}
-          />
-
-          <div className="hidden min-w-0 flex-1 items-center justify-end text-xs font-bold text-white/95 md:flex">
-            <div className="flex min-w-0 items-center gap-2 pr-5">
-              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#f39b03]/20 text-[#f39b03] ring-1 ring-[#f39b03]/45">
-                <Phone size={13} />
-              </span>
-              <span className="truncate">Er. SHUBHAM BHOI 8643 00 1010</span>
-            </div>
-            <div className="h-6 w-px bg-white/25" />
-            <div className="flex min-w-0 items-center gap-2 px-5">
-              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#f39b03]/20 text-[#f39b03] ring-1 ring-[#f39b03]/45">
-                <Phone size={13} />
-              </span>
-              <span className="truncate">Er. SANKET KATAKAR 7026 01 6077</span>
-            </div>
-            <div className="h-6 w-px bg-white/25" />
-            <div className="flex min-w-0 items-center gap-2 px-5">
-              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#f39b03]/20 text-[#f39b03] ring-1 ring-[#f39b03]/45">
-                <Phone size={13} />
-              </span>
-              <span className="truncate">Er. SHUBHAM SODAGE 95959755566</span>
-            </div>
-            <div className="h-6 w-px bg-white/25" />
-            <div className="flex min-w-0 items-center gap-2 px-5">
-              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#f39b03]/20 text-[#f39b03] ring-1 ring-[#f39b03]/45">
-                <Phone size={13} />
-              </span>
-              <span className="truncate">Er. PRAJWAL PATIL 7058129002</span>
-            </div>
-            <div className="h-6 w-px bg-white/25" />
-            <div className="flex min-w-0 items-center gap-2 pl-5">
-              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#f39b03]/20 text-[#f39b03] ring-1 ring-[#f39b03]/45">
-                <Mail size={13} />
-              </span>
-              <span className="truncate">samarthlandsurveyors@gmail.com</span>
-            </div>
-          </div>
-
-          <div className="min-w-0 flex-1 justify-end text-right text-[10px] font-bold leading-tight text-white/90 md:hidden">
-            <div className="flex items-center justify-end gap-2">
-              <Phone size={11} className="text-[#f39b03]" />
-              <span>8643 00 1010</span>
-              <span className="text-white/55">|</span>
-              <Phone size={11} className="text-[#f39b03]" />
-              <span>7026 01 6077</span>
-            </div>
-            <div className="mt-1 flex items-center justify-end gap-2">
-              <Phone size={11} className="text-[#f39b03]" />
-              <span>95959755566</span>
-              <span className="text-white/55">|</span>
-              <Phone size={11} className="text-[#f39b03]" />
-              <span>7058129002</span>
-            </div>
-            <div className="mt-1 flex items-center justify-end gap-2">
-              <Mail size={11} className="text-[#f39b03]" />
-              <span className="truncate">samarthlandsurveyors@gmail.com</span>
-            </div>
-          </div>
-        </div>
-      </footer>
+      <LayoutFooter />
     </div>
   )
 }

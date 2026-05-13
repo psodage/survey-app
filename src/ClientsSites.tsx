@@ -19,7 +19,7 @@ import {
   X,
   IndianRupee,
 } from 'lucide-react'
-import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useLocation } from 'react-router-dom'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
@@ -35,8 +35,13 @@ import {
 import { AccountManagerSidebarBlock } from './AccountManagerSidebarBlock'
 import { AddSiteForm } from './AddSiteForm'
 import { CollaborationBrandMark } from './CollaborationBrandMark'
+import { LayoutFooter } from './LayoutFooter'
 import { layoutBrandLogo } from './brandLogo'
 import { getHeaderDateLabel } from './headerDateLabel'
+import axios from 'axios'
+import { toast } from 'sonner'
+import http from './api/http'
+import { useAuth } from './context/AuthContext'
 import { signOut } from './signOut'
 
 type NavItem = {
@@ -65,7 +70,12 @@ function parseCurrency(value: string) {
   return Number(value.replace(/[^\d.-]/g, '')) || 0
 }
 
+function formatRupee(amount: number) {
+  return `₹${Math.round(amount).toLocaleString('en-IN')}`
+}
+
 type ClientRow = {
+  id?: string
   name: string
   phone: string
   sites: number
@@ -73,57 +83,6 @@ type ClientRow = {
   received: string
   pending: string
 }
-
-const clientRows: ClientRow[] = [
-  {
-    name: 'Amit Developers',
-    phone: '9876543210',
-    sites: 6,
-    revenue: '₹2,25,000',
-    received: '₹1,40,000',
-    pending: '₹85,000',
-  },
-  {
-    name: 'Shree Krishna Infra',
-    phone: '9090909090',
-    sites: 5,
-    revenue: '₹1,85,000',
-    received: '₹1,20,000',
-    pending: '₹65,000',
-  },
-  {
-    name: 'Vishwakarma Properties',
-    phone: '7026016077',
-    sites: 4,
-    revenue: '₹1,45,000',
-    received: '₹90,000',
-    pending: '₹55,000',
-  },
-  {
-    name: 'Gajanan Projects',
-    phone: '8080808080',
-    sites: 3,
-    revenue: '₹1,10,000',
-    received: '₹70,000',
-    pending: '₹40,000',
-  },
-  {
-    name: 'Sai Realities',
-    phone: '7778889990',
-    sites: 3,
-    revenue: '₹95,000',
-    received: '₹59,000',
-    pending: '₹36,000',
-  },
-  {
-    name: 'Green Valley Constructions',
-    phone: '8899001122',
-    sites: 2,
-    revenue: '₹85,000',
-    received: '₹50,000',
-    pending: '₹35,000',
-  },
-]
 
 type SiteRow = {
   name: string
@@ -133,52 +92,16 @@ type SiteRow = {
   pending: string
 }
 
-const clientSites: Record<string, SiteRow[]> = {
-  'Amit Developers': [
-    { name: 'Sai Residency', location: 'Pune', lastVisit: '20 May 2025', status: 'Active', pending: '₹25,000' },
-    { name: 'Sunrise Enclave', location: 'Pimpri', lastVisit: '18 May 2025', status: 'Active', pending: '₹18,000' },
-    { name: 'Green Valley Phase 2', location: 'Hinjewadi', lastVisit: '16 May 2025', status: 'On Hold', pending: '₹12,000' },
-    { name: 'Riverfront Plaza', location: 'Wakad', lastVisit: '14 May 2025', status: 'Completed', pending: '₹0' },
-    { name: 'Lakeview Towers', location: 'Baner', lastVisit: '12 May 2025', status: 'Active', pending: '₹10,000' },
-    { name: 'Hillcrest Layout', location: 'Kothrud', lastVisit: '10 May 2025', status: 'Active', pending: '₹20,000' },
-  ],
-  'Shree Krishna Infra': [
-    { name: 'Krishna Heights', location: 'Pune', lastVisit: '19 May 2025', status: 'Active', pending: '₹15,000' },
-    { name: 'Shree Meadows', location: 'Nigdi', lastVisit: '17 May 2025', status: 'Active', pending: '₹12,500' },
-    { name: 'Silverline Park', location: 'Chinchwad', lastVisit: '15 May 2025', status: 'On Hold', pending: '₹10,000' },
-    { name: 'Orchid Avenue', location: 'Aundh', lastVisit: '12 May 2025', status: 'Active', pending: '₹7,500' },
-    { name: 'Westend Square', location: 'Baner', lastVisit: '09 May 2025', status: 'Completed', pending: '₹0' },
-  ],
-  'Vishwakarma Properties': [
-    { name: 'Vishwakarma Residency', location: 'Pune', lastVisit: '18 May 2025', status: 'Active', pending: '₹14,000' },
-    { name: 'Maple Court', location: 'Katraj', lastVisit: '15 May 2025', status: 'Active', pending: '₹11,000' },
-    { name: 'Skyline Hub', location: 'Hadapsar', lastVisit: '12 May 2025', status: 'On Hold', pending: '₹8,000' },
-    { name: 'City Center Plots', location: 'Sinhagad', lastVisit: '08 May 2025', status: 'Completed', pending: '₹0' },
-  ],
-  'Gajanan Projects': [
-    { name: 'Gajanan Greens', location: 'Pune', lastVisit: '16 May 2025', status: 'Active', pending: '₹12,000' },
-    { name: 'Northgate Homes', location: 'Bhosari', lastVisit: '12 May 2025', status: 'Active', pending: '₹9,000' },
-    { name: 'Palm View', location: 'Viman Nagar', lastVisit: '09 May 2025', status: 'On Hold', pending: '₹7,000' },
-  ],
-  'Sai Realities': [
-    { name: 'Sai Orchard', location: 'Pune', lastVisit: '14 May 2025', status: 'Active', pending: '₹11,000' },
-    { name: 'Golden Mile', location: 'Wagholi', lastVisit: '10 May 2025', status: 'Active', pending: '₹9,000' },
-    { name: 'Eastside Plots', location: 'Kharadi', lastVisit: '07 May 2025', status: 'Completed', pending: '₹0' },
-  ],
-  'Green Valley Constructions': [
-    { name: 'Green Valley Phase 1', location: 'Pune', lastVisit: '12 May 2025', status: 'Active', pending: '₹20,000' },
-    { name: 'Creekside Villas', location: 'Mulshi', lastVisit: '08 May 2025', status: 'On Hold', pending: '₹15,000' },
-  ],
-}
-
 type ClientsSitesProps = {
   onNavigate: (path: string) => void
 }
 
 export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
+  const { token, user } = useAuth()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [query, setQuery] = useState('')
-  const [clients, setClients] = useState<ClientRow[]>(clientRows)
+  const [clients, setClients] = useState<ClientRow[]>([])
+  const [clientSitesMap, setClientSitesMap] = useState<Record<string, SiteRow[]>>({})
   const [selectedClientName, setSelectedClientName] = useState<string | null>(null)
   const [isAddClientModalOpen, setIsAddClientModalOpen] = useState(false)
   const [isAddSiteModalOpen, setIsAddSiteModalOpen] = useState(false)
@@ -189,6 +112,70 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
   const [newClientPhone, setNewClientPhone] = useState('')
   const [addClientError, setAddClientError] = useState('')
   const location = useLocation()
+
+  const refreshClientsAndSites = useCallback(async () => {
+    if (!token) return
+    try {
+      const [cRes, sRes] = await Promise.all([
+        http.get<{
+          ok: boolean
+          clients: Array<{
+            id: string
+            name: string
+            phone: string
+            sites: number
+            revenue: string
+            received: string
+            pending: string
+          }>
+        }>('/api/clients'),
+        http.get<{
+          ok: boolean
+          sites: Array<{
+            clientName: string
+            name: string
+            location: string
+            lastVisit: string
+            status: string
+            pending: string
+          }>
+        }>('/api/sites'),
+      ])
+      if (cRes.data?.ok) {
+        setClients(
+          cRes.data.clients.map((c) => ({
+            id: c.id,
+            name: c.name,
+            phone: c.phone,
+            sites: c.sites,
+            revenue: c.revenue,
+            received: c.received,
+            pending: c.pending,
+          })),
+        )
+      }
+      const grouped: Record<string, SiteRow[]> = {}
+      if (sRes.data?.ok) {
+        for (const s of sRes.data.sites) {
+          if (!grouped[s.clientName]) grouped[s.clientName] = []
+          grouped[s.clientName].push({
+            name: s.name,
+            location: s.location,
+            lastVisit: s.lastVisit,
+            status: s.status as SiteRow['status'],
+            pending: s.pending,
+          })
+        }
+      }
+      setClientSitesMap(grouped)
+    } catch {
+      toast.error('Could not load clients or sites.')
+    }
+  }, [token])
+
+  useEffect(() => {
+    void refreshClientsAndSites()
+  }, [refreshClientsAndSites])
 
   const searchParams = new URLSearchParams(location.search)
   const summary = searchParams.get('summary') ?? ''
@@ -252,8 +239,8 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
 
   const selectedSites = useMemo(() => {
     if (!selectedClientName) return []
-    return clientSites[selectedClientName] ?? []
-  }, [selectedClientName])
+    return clientSitesMap[selectedClientName] ?? []
+  }, [selectedClientName, clientSitesMap])
 
   const filteredSitesForClient = useMemo(() => {
     const q = sitesSearchQuery.trim().toLowerCase()
@@ -272,13 +259,13 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
   }, [selectedSites, siteStatusFilter, sitesSearchQuery])
 
   const allSites = useMemo(() => {
-    return Object.entries(clientSites).flatMap(([clientName, sites]) =>
+    return (Object.entries(clientSitesMap) as [string, SiteRow[]][]).flatMap(([clientName, sites]) =>
       sites.map((site) => ({
         ...site,
         clientName,
       })),
     )
-  }, [])
+  }, [clientSitesMap])
 
   const filteredAllSites = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -314,6 +301,23 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
     onNavigate(qs ? `/clients-sites?${qs}` : '/clients-sites')
   }
 
+  const clientsAggregate = useMemo(() => {
+    let totalSites = 0
+    let totalRevenue = 0
+    let totalPending = 0
+    for (const c of clients) {
+      totalSites += c.sites
+      totalRevenue += parseCurrency(c.revenue)
+      totalPending += parseCurrency(c.pending)
+    }
+    return {
+      totalClients: clients.length,
+      totalSites,
+      totalRevenue,
+      totalPending,
+    }
+  }, [clients])
+
   const filteredRows = useMemo(() => {
     const q = query.trim().toLowerCase()
     const baseRows = (!q ? [...clients] : clients.filter((r) => r.name.toLowerCase().includes(q) || r.phone.includes(q))).filter((r) => {
@@ -340,6 +344,9 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
     return baseRows
   }, [clientPendingFilter, query, summary, clients])
 
+  const userRoleLabel =
+    user?.role === 'super_admin' ? 'Super Admin' : user?.role === 'admin' ? 'Admin' : ''
+
   const resetAddClientForm = () => {
     setNewClientName('')
     setNewClientPhone('')
@@ -364,7 +371,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
     setIsAddSiteModalOpen(false)
   }
 
-  const handleCreateClient = () => {
+  const handleCreateClient = async () => {
     const name = newClientName.trim()
     const phone = newClientPhone.trim()
 
@@ -387,19 +394,32 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
       return
     }
 
-    const nextClient: ClientRow = {
-      name,
-      phone,
-      sites: 0,
-      revenue: '₹0',
-      received: '₹0',
-      pending: '₹0',
+    try {
+      const body: { name: string; phone: string; adminId?: string } = { name, phone }
+      if (user?.role === 'super_admin') {
+        const adminsRes = await http.get<{ ok: boolean; admins: Array<{ id: string }> }>('/api/admins')
+        const aid = adminsRes.data?.admins?.[0]?.id
+        if (aid) {
+          body.adminId = aid
+        }
+      }
+      const res = await http.post<{ ok: boolean; client: ClientRow; error?: string }>('/api/clients', body)
+      if (res.status !== 201 || !res.data?.ok) {
+        setAddClientError(res.data?.error ?? 'Could not create client.')
+        return
+      }
+      toast.success('Client created')
+      await refreshClientsAndSites()
+      setSelectedClientName(null)
+      setQuery('')
+      handleCloseAddClientModal()
+    } catch (e) {
+      const msg =
+        axios.isAxiosError(e) && (e.response?.data as { error?: string })?.error
+          ? String((e.response?.data as { error?: string }).error)
+          : 'Could not create client.'
+      setAddClientError(msg)
     }
-
-    setClients((prev) => [nextClient, ...prev])
-    setSelectedClientName(null)
-    setQuery('')
-    handleCloseAddClientModal()
   }
 
   const getSiteDetailsPath = (clientName: string, site: SiteRow) => {
@@ -725,8 +745,10 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                     <CircleUserRound size={18} />
                   </div>
                   <div className="min-w-0 text-left">
-                    <div className="truncate text-xs font-extrabold text-neutral-900 sm:text-sm">Er. Shubham Bhoi</div>
-                    <div className="text-[11px] font-semibold text-neutral-600">Admin</div>
+                    <div className="truncate text-xs font-extrabold text-neutral-900 sm:text-sm">
+                      {user?.fullName ?? '—'}
+                    </div>
+                    <div className="text-[11px] font-semibold text-neutral-600">{userRoleLabel || '—'}</div>
                   </div>
                 </div>
               </div>
@@ -763,7 +785,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
               >
                 <StatCard
                   title={selectedClient ? 'Total Received Amount' : 'Total Clients'}
-                  value={selectedClient ? selectedClient.received : '32'}
+                  value={selectedClient ? selectedClient.received : String(clientsAggregate.totalClients)}
                   subtitle={selectedClient ? 'Current Client' : 'All Clients'}
                   icon={<UsersRound size={20} className="text-sky-600" />}
                   toneClass="bg-sky-100"
@@ -778,7 +800,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
               >
                 <StatCard
                   title="Total Sites"
-                  value={selectedClient ? String(selectedClient.sites) : '48'}
+                  value={selectedClient ? String(selectedClient.sites) : String(clientsAggregate.totalSites)}
                   subtitle={selectedClient ? 'Current Client' : 'All Sites'}
                   icon={<MapPin size={20} className="text-violet-600" />}
                   toneClass="bg-violet-100"
@@ -793,7 +815,9 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
               >
                 <StatCard
                   title="Total Revenue"
-                  value={selectedClient ? selectedClient.revenue : '₹12,75,000'}
+                  value={
+                    selectedClient ? selectedClient.revenue : formatRupee(clientsAggregate.totalRevenue)
+                  }
                   subtitle="This Financial Year"
                   icon={<IndianRupee size={20} className="text-emerald-600" />}
                   toneClass="bg-emerald-100"
@@ -808,7 +832,9 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
               >
                 <StatCard
                   title="Pending Amount"
-                  value={selectedClient ? selectedClient.pending : '₹4,29,500'}
+                  value={
+                    selectedClient ? selectedClient.pending : formatRupee(clientsAggregate.totalPending)
+                  }
                   subtitle="This Financial Year"
                   icon={<Briefcase size={20} className="text-rose-600" />}
                   toneClass="bg-rose-100"
@@ -863,7 +889,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                         className={toolbarSecondaryButtonClass}
                         onClick={handleExportAllClientsReport}
                       >
-                        Export All Clients
+                        Export
                       </button>
                       <button
                         type="button"
@@ -902,7 +928,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                   </select>
                   <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
                     <button type="button" className={toolbarSecondaryButtonClass} onClick={handleExportClientReport}>
-                      Export All Sites
+                      Export
                     </button>
                     <button type="button" onClick={handleOpenAddSiteModal} className={toolbarPrimaryButtonClass}>
                       <Plus className={toolbarPlusIconClass} />
@@ -1525,6 +1551,24 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                 variant="modal"
                 onCancel={handleCloseAddSiteModal}
                 onSuccess={handleCloseAddSiteModal}
+                saveSite={async (siteName, locationName) => {
+                  const row = clients.find((c) => c.name === selectedClient.name)
+                  if (!row?.id) {
+                    toast.error('Client is not synced yet. Refresh the page.')
+                    throw new Error('no client id')
+                  }
+                  const res = await http.post<{ ok: boolean; error?: string }>('/api/sites', {
+                    clientId: row.id,
+                    name: siteName,
+                    locationLabel: locationName,
+                  })
+                  if (res.status !== 201 || !res.data?.ok) {
+                    toast.error(res.data?.error ?? 'Could not save site')
+                    throw new Error('save site failed')
+                  }
+                  toast.success('Site saved')
+                  await refreshClientsAndSites()
+                }}
               />
             </div>
           </div>
@@ -1566,52 +1610,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
       </nav>
 
       {/* Fixed Bottom Footer */}
-      <footer className="fixed inset-x-0 bottom-0 z-50 hidden border-t border-white/10 bg-gradient-to-b from-[#050505] via-[#0b0b0b] to-[#040404] text-white shadow-[0_-12px_30px_rgba(0,0,0,0.3)] md:block">
-        <div className="mx-auto flex w-full max-w-none items-center justify-between gap-3 px-3 py-2 sm:px-5 sm:py-3">
-          <img
-            src={layoutBrandLogo}
-            alt="Samarth Land Surveyors"
-            className="h-9 w-auto shrink-0 sm:h-10"
-            draggable={false}
-          />
-          <div className="hidden min-w-0 flex-1 items-center justify-end text-xs font-bold text-white/95 md:flex">
-            <div className="flex min-w-0 items-center gap-2 pr-5">
-              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#f39b03]/20 text-[#f39b03] ring-1 ring-[#f39b03]/45">
-                <Phone size={13} />
-              </span>
-              <span className="truncate">Er. SHUBHAM BHOI 8643 00 1010</span>
-            </div>
-            <div className="h-6 w-px bg-white/25" />
-            <div className="flex min-w-0 items-center gap-2 px-5">
-              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#f39b03]/20 text-[#f39b03] ring-1 ring-[#f39b03]/45">
-                <Phone size={13} />
-              </span>
-              <span className="truncate">Er. SANKET KATAKAR 7026 01 6077</span>
-            </div>
-            <div className="h-6 w-px bg-white/25" />
-            <div className="flex min-w-0 items-center gap-2 px-5">
-              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#f39b03]/20 text-[#f39b03] ring-1 ring-[#f39b03]/45">
-                <Phone size={13} />
-              </span>
-              <span className="truncate">Er. SHUBHAM SODAGE 95959755566</span>
-            </div>
-            <div className="h-6 w-px bg-white/25" />
-            <div className="flex min-w-0 items-center gap-2 px-5">
-              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#f39b03]/20 text-[#f39b03] ring-1 ring-[#f39b03]/45">
-                <Phone size={13} />
-              </span>
-              <span className="truncate">Er. PRAJWAL PATIL 7058129002</span>
-            </div>
-            <div className="h-6 w-px bg-white/25" />
-            <div className="flex min-w-0 items-center gap-2 pl-5">
-              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#f39b03]/20 text-[#f39b03] ring-1 ring-[#f39b03]/45">
-                <Mail size={13} />
-              </span>
-              <span className="truncate">samarthlandsurveyors@gmail.com</span>
-            </div>
-          </div>
-        </div>
-      </footer>
+      <LayoutFooter />
     </div>
   )
 }

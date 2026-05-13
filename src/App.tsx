@@ -13,14 +13,24 @@ import { SiteDetails } from './SiteDetails'
 import Settings from './Settings'
 import InstallPrompt from './components/InstallPrompt.jsx'
 import Login from './Login.jsx'
+import { useAuth } from './context/AuthContext'
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
+  const { token, isLoading } = useAuth()
+  if (isLoading) {
+    return <div className="min-h-[100svh] bg-neutral-100 md:bg-neutral-100" aria-busy="true" />
+  }
+  if (!token) {
+    return <Navigate to="/login" replace />
+  }
   return <>{children}</>
 }
 
 /** Mobile: pick a manager. Desktop (md+): same URL redirects to default manager ledger. */
 function AccountManagerIndex({ onNavigate }: { onNavigate: NavigateFunction }) {
   const location = useLocation()
+  const { managers } = useAuth()
+  const defaultSlug = managers[0]?.id ?? DEFAULT_ACCOUNT_MANAGER_ID
   const [mdUp, setMdUp] = useState(
     () => typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches,
   )
@@ -33,7 +43,7 @@ function AccountManagerIndex({ onNavigate }: { onNavigate: NavigateFunction }) {
   if (mdUp) {
     return (
       <Navigate
-        to={{ pathname: `/account-manager/${DEFAULT_ACCOUNT_MANAGER_ID}`, search: location.search }}
+        to={{ pathname: `/account-manager/${defaultSlug}`, search: location.search }}
         replace
       />
     )
@@ -47,7 +57,7 @@ function AppRoutes() {
 
   return (
     <Routes location={location} key={location.pathname}>
-      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+      <Route path="/" element={<Navigate to="/login" replace />} />
       <Route path="/login" element={<Login />} />
       <Route
         path="/dashboard"

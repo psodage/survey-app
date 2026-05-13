@@ -1,6 +1,17 @@
 import { Briefcase, ChevronDown } from 'lucide-react'
-import { useEffect, useId, useState } from 'react'
+import { useEffect, useId, useMemo, useState } from 'react'
 import { ACCOUNT_MANAGERS } from './accountManagersData'
+import http from './api/http'
+import { useAuth } from './context/AuthContext'
+
+type InstrumentPeerAm = {
+  adminId: string
+  accountManagerSlug: string | null
+  fullName: string
+  shortName: string
+  phone: string
+  email: string
+}
 
 type AccountManagerSidebarBlockProps = {
   pathname: string
@@ -13,6 +24,47 @@ export function AccountManagerSidebarBlock({
   onNavigate,
   onAfterNavigate,
 }: AccountManagerSidebarBlockProps) {
+  const { managers, token, activeInstrumentId } = useAuth()
+  const [instrumentPages, setInstrumentPages] = useState<InstrumentPeerAm[]>([])
+
+  useEffect(() => {
+    if (!token || !activeInstrumentId) {
+      setInstrumentPages([])
+      return
+    }
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await http.get<{ ok: boolean; admins: InstrumentPeerAm[] }>('/api/instruments/coworkers', {
+          params: { instrumentId: activeInstrumentId },
+        })
+        if (cancelled) return
+        if (res.data?.ok) setInstrumentPages(res.data.admins ?? [])
+        else setInstrumentPages([])
+      } catch {
+        if (!cancelled) setInstrumentPages([])
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [token, activeInstrumentId])
+
+  const sidebarManagers = useMemo(() => {
+    const fromInstrument = instrumentPages
+      .filter((a) => a.accountManagerSlug)
+      .map((a) => ({
+        id: a.accountManagerSlug as string,
+        name: a.fullName || a.email || 'Account manager',
+        shortName: a.shortName || a.fullName || '—',
+        phone: a.phone,
+      }))
+    if (fromInstrument.length > 0) return fromInstrument
+    return managers.length
+      ? managers.map((m) => ({ id: m.id, name: m.name, shortName: m.shortName, phone: m.phone }))
+      : ACCOUNT_MANAGERS.map((m) => ({ id: m.id, name: m.name, shortName: m.shortName, phone: m.phone }))
+  }, [instrumentPages, managers])
+
   const isUnderAccount = pathname.startsWith('/account-manager')
   const [open, setOpen] = useState(false)
   const submenuId = useId()
@@ -99,7 +151,7 @@ export function AccountManagerSidebarBlock({
                 Available account manager pages
               </p>
               <ul className="flex flex-col gap-0.5" role="list">
-                {ACCOUNT_MANAGERS.map((m) => {
+                {sidebarManagers.map((m) => {
                   const path = `/account-manager/${m.id}`
                   const subActive = pathname === path
                   return (

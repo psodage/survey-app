@@ -1,4 +1,7 @@
+import { tokenStorage } from './api/http'
+
+/** Clears auth and notifies the app; same async shape for existing callers. */
 export async function signOut(): Promise<void> {
-  // Auth is disabled in frontend mode; keep the same async API shape for callers.
-  return Promise.resolve()
+  tokenStorage.clear()
+  window.dispatchEvent(new CustomEvent('survey:logout'))
 }

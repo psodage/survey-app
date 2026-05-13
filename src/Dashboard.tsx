@@ -18,10 +18,13 @@ import {
   Phone,
   UsersRound,
 } from 'lucide-react'
-import { Fragment, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useState, type ReactNode } from 'react'
 import { useLocation } from 'react-router-dom'
+import http from './api/http'
+import { useAuth } from './context/AuthContext'
 import { AccountManagerSidebarBlock } from './AccountManagerSidebarBlock'
 import { CollaborationBrandMark } from './CollaborationBrandMark'
+import { LayoutFooter } from './LayoutFooter'
 import { CardShell, StatCard } from './dashboardCards'
 import { layoutBrandLogo } from './brandLogo'
 import { getHeaderDateLabel } from './headerDateLabel'
@@ -46,56 +49,72 @@ type DashboardProps = {
   onNavigate: (path: string) => void
 }
 
+type RecentVisitRow = {
+  id: string
+  visitMongoId?: string
+  site: string
+  client: string
+  date: string
+  amount: string
+  machine: string
+  paymentMode: string
+  paymentStatus: string
+  notes: string
+  work: string
+}
+
 export default function Dashboard({ onNavigate }: DashboardProps) {
+  const { user, token } = useAuth()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const { pathname } = useLocation()
   const headerDateLabel = getHeaderDateLabel()
-  const recentVisits = [
-    {
-      id: 'SV-2451',
-      site: 'Sai Residency',
-      client: 'Amit Developers',
-      date: '20 May 2025',
-      amount: '15,000',
-      machine: 'Total Station',
-      paymentMode: 'Cash',
-      paymentStatus: 'Paid',
-      notes: 'Completed boundary points and levels.',
-      work: 'Topographic survey for layout planning and road alignment.',
-    },
-    {
-      id: 'SV-2442',
-      site: 'Green Valley Phase 2',
-      client: 'Shree Krishna Infra',
-      date: '19 May 2025',
-      amount: '12,000',
-      machine: 'Auto Level',
-      paymentMode: 'UPI',
-      paymentStatus: 'Partial',
-      notes: 'Checked key reference levels before next stage.',
-      work: 'Road level transfer and control point verification.',
-    },
-    {
-      id: 'SV-2430',
-      site: 'Sunrise Enclave',
-      client: 'Vishwakarma Properties',
-      date: '18 May 2025',
-      amount: '18,500',
-      machine: 'GPS / GNSS',
-      paymentMode: 'Bank Transfer',
-      paymentStatus: 'Pending',
-      notes: 'Boundary and utilities alignment completed.',
-      work: 'Topographic survey and boundary point marking.',
-    },
-  ] as const
-  const pendingAmountByClient = [
-    ['Amit Developers', '₹1,25,000'],
-    ['Shree Krishna Infra', '₹86,500'],
-    ['Vishwakarma Properties', '₹65,000'],
-    ['Gajanan Projects', '₹42,000'],
-  ] as const
+  const [recentVisits, setRecentVisits] = useState<RecentVisitRow[]>([])
+  const [pendingAmountByClient, setPendingAmountByClient] = useState<[string, string][]>([])
+  const [stats, setStats] = useState({
+    totalRevenue: '—',
+    received: '—',
+    pending: '—',
+    totalSites: '—',
+    totalClients: '—',
+  })
 
-  const getVisitDetailsPath = (visit: (typeof recentVisits)[number]) => {
+  useEffect(() => {
+    if (!token) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await http.get<{
+          ok: boolean
+          recentVisits: RecentVisitRow[]
+          pendingAmountByClient: [string, string][]
+          stats: {
+            totalRevenue: string
+            received: string
+            pending: string
+            totalSites: number
+            totalClients: number
+          }
+        }>('/api/dashboard')
+        if (cancelled || !res.data?.ok) return
+        setRecentVisits(res.data.recentVisits ?? [])
+        setPendingAmountByClient(res.data.pendingAmountByClient ?? [])
+        setStats({
+          totalRevenue: res.data.stats?.totalRevenue ?? '—',
+          received: res.data.stats?.received ?? '—',
+          pending: res.data.stats?.pending ?? '—',
+          totalSites: String(res.data.stats?.totalSites ?? '—'),
+          totalClients: String(res.data.stats?.totalClients ?? '—'),
+        })
+      } catch {
+        /* offline or server down — keep placeholders */
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [token])
+
+  const getVisitDetailsPath = (visit: RecentVisitRow) => {
     const params = new URLSearchParams({
       mode: 'visit',
       visitId: visit.id,
@@ -109,6 +128,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
       notes: visit.notes,
       work: visit.work,
     })
+    if (visit.visitMongoId) params.set('visitMongoId', visit.visitMongoId)
     return `/site-details?${params.toString()}`
   }
 
@@ -245,8 +265,8 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                 <div className="grid h-16 w-16 place-items-center rounded-2xl bg-white/10 text-white ring-1 ring-white/15">
                   <CircleUserRound size={32} strokeWidth={1.75} />
                 </div>
-                <div className="mt-3 text-base font-extrabold text-white">Er. Shubham Bhoi</div>
-                <div className="mt-1 text-xs font-semibold text-white/65">Admin</div>
+                <div className="mt-3 text-base font-extrabold text-white">{user?.fullName || 'User'}</div>
+                <div className="mt-1 text-xs font-semibold text-white/65">{user?.role === 'super_admin' ? 'Super Admin' : 'Admin'}</div>
               </div>
               <div className="mt-4 space-y-2 border-t border-white/10 pt-4">
                 <a
@@ -390,9 +410,11 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                   </div>
                   <div className="min-w-0 text-left">
                     <div className="truncate text-xs font-extrabold text-neutral-900 sm:text-sm">
-                      Er. Shubham Bhoi
+                      {user?.fullName || 'User'}
                     </div>
-                    <div className="text-[11px] font-semibold text-neutral-600">Admin</div>
+                    <div className="text-[11px] font-semibold text-neutral-600">
+                      {user?.role === 'super_admin' ? 'Super Admin' : 'Admin'}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -410,7 +432,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
               >
                 <StatCard
                   title="Total Revenue"
-                  value="₹12,75,000"
+                  value={stats.totalRevenue}
                   subtitle="This Financial Year"
                   icon={<IndianRupee size={20} className="text-emerald-600" />}
                   toneClass="bg-emerald-100"
@@ -425,7 +447,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
               >
                 <StatCard
                   title="Received Amount"
-                  value="₹8,45,500"
+                  value={stats.received}
                   subtitle="This Financial Year"
                   icon={<Gauge size={20} className="text-sky-600" />}
                   toneClass="bg-sky-100"
@@ -440,7 +462,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
               >
                 <StatCard
                   title="Pending Amount"
-                  value="₹4,29,500"
+                  value={stats.pending}
                   subtitle="This Financial Year"
                   icon={<BarChart3 size={20} className="text-rose-600" />}
                   toneClass="bg-rose-100"
@@ -455,7 +477,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
               >
                 <StatCard
                   title="Total Sites"
-                  value="48"
+                  value={stats.totalSites}
                   subtitle="All Sites"
                   icon={<Building2 size={20} className="text-neutral-700 md:text-[#f39b03]" />}
                   toneClass="bg-neutral-200 md:bg-[#f39b03]/12"
@@ -469,8 +491,8 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
               <CardShell title="Quick Actions">
                 <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 sm:gap-4 xl:grid-cols-3">
                   {[
-                    { title: 'Add Site', path: '/add-site', icon: <Building2 size={18} /> },
-                    { title: 'Add Site Visit', path: '/add-site-visit', icon: <ClipboardList size={18} /> },
+                    { title: 'Add Site', path: '/clients-sites', icon: <Building2 size={18} /> },
+                    { title: 'Add Site Visit', path: '/site-visits', icon: <ClipboardList size={18} /> },
                     { title: 'View Clients', path: '/clients-sites', icon: <UsersRound size={18} /> },
                   ].map((a) => (
                     <button
@@ -638,75 +660,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
         <div aria-hidden className="mobile-nav-safe-spacer" />
       </nav>
 
-      {/* Fixed Bottom Footer (tablet/desktop) */}
-      <footer className="fixed inset-x-0 bottom-0 z-50 hidden border-t border-white/10 bg-gradient-to-b from-[#050505] via-[#0b0b0b] to-[#040404] text-white shadow-[0_-12px_30px_rgba(0,0,0,0.3)] md:block">
-        <div className="mx-auto flex w-full max-w-none items-center justify-between gap-3 px-3 py-2 sm:px-5 sm:py-3">
-          <img
-            src={layoutBrandLogo}
-            alt="Samarth Land Surveyors"
-            className="h-9 w-auto shrink-0 sm:h-10"
-            draggable={false}
-          />
-
-          <div className="hidden min-w-0 flex-1 items-center justify-end text-xs font-bold text-white/95 md:flex">
-            <div className="flex min-w-0 items-center gap-2 pr-5">
-              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#f39b03]/20 text-[#f39b03] ring-1 ring-[#f39b03]/45">
-                <Phone size={13} />
-              </span>
-              <span className="truncate">Er. SHUBHAM BHOI 8643 00 1010</span>
-            </div>
-            <div className="h-6 w-px bg-white/25" />
-            <div className="flex min-w-0 items-center gap-2 px-5">
-              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#f39b03]/20 text-[#f39b03] ring-1 ring-[#f39b03]/45">
-                <Phone size={13} />
-              </span>
-              <span className="truncate">Er. SANKET KATAKAR 7026 01 6077</span>
-            </div>
-            <div className="h-6 w-px bg-white/25" />
-            <div className="flex min-w-0 items-center gap-2 px-5">
-              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#f39b03]/20 text-[#f39b03] ring-1 ring-[#f39b03]/45">
-                <Phone size={13} />
-              </span>
-              <span className="truncate">Er. SHUBHAM SODAGE 95959755566</span>
-            </div>
-            <div className="h-6 w-px bg-white/25" />
-            <div className="flex min-w-0 items-center gap-2 px-5">
-              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#f39b03]/20 text-[#f39b03] ring-1 ring-[#f39b03]/45">
-                <Phone size={13} />
-              </span>
-              <span className="truncate">Er. PRAJWAL PATIL 7058129002</span>
-            </div>
-            <div className="h-6 w-px bg-white/25" />
-            <div className="flex min-w-0 items-center gap-2 pl-5">
-              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#f39b03]/20 text-[#f39b03] ring-1 ring-[#f39b03]/45">
-                <Mail size={13} />
-              </span>
-              <span className="truncate">samarthlandsurveyors@gmail.com</span>
-            </div>
-          </div>
-
-          <div className="min-w-0 flex-1 justify-end text-right text-[10px] font-bold leading-tight text-white/90 md:hidden">
-            <div className="flex items-center justify-end gap-2">
-              <Phone size={11} className="text-[#f39b03]" />
-              <span>8643 00 1010</span>
-              <span className="text-white/55">|</span>
-              <Phone size={11} className="text-[#f39b03]" />
-              <span>7026 01 6077</span>
-            </div>
-            <div className="mt-1 flex items-center justify-end gap-2">
-              <Phone size={11} className="text-[#f39b03]" />
-              <span>95959755566</span>
-              <span className="text-white/55">|</span>
-              <Phone size={11} className="text-[#f39b03]" />
-              <span>7058129002</span>
-            </div>
-            <div className="mt-1 flex items-center justify-end gap-2">
-              <Mail size={11} className="text-[#f39b03]" />
-              <span className="truncate">samarthlandsurveyors@gmail.com</span>
-            </div>
-          </div>
-        </div>
-      </footer>
+      <LayoutFooter />
     </div>
   )
 }

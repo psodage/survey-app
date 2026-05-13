@@ -5,7 +5,6 @@ import {
   Calendar,
   CircleUserRound,
   ClipboardList,
-  FileBarChart,
   LayoutGrid,
   LogOut,
   Mail,
@@ -15,12 +14,24 @@ import {
   UsersRound,
   X,
 } from 'lucide-react'
-import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
+import axios from 'axios'
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type ReactNode,
+} from 'react'
 import { useLocation } from 'react-router-dom'
+import http from './api/http'
 import { AccountManagerSidebarBlock } from './AccountManagerSidebarBlock'
 import { layoutBrandLogo } from './brandLogo'
 import { CollaborationBrandMark } from './CollaborationBrandMark'
+import { LayoutFooter } from './LayoutFooter'
 import { CardShell } from './dashboardCards'
+import { useAuth } from './context/AuthContext'
 import { getHeaderDateLabel } from './headerDateLabel'
 import { signOut } from './signOut'
 
@@ -33,21 +44,63 @@ type SettingsProps = {
   onNavigate: (path: string) => void
 }
 
+function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B'
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  let u = 0
+  let n = bytes
+  while (n >= 1024 && u < units.length - 1) {
+    n /= 1024
+    u += 1
+  }
+  const rounded = u === 0 || n >= 10 ? Math.round(n) : Number(n.toFixed(1))
+  return `${rounded} ${units[u]}`
+}
+
+function formatBackupDate(iso: string | null | undefined): string {
+  if (!iso) return 'Never'
+  try {
+    return new Date(iso).toLocaleDateString(undefined, {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    })
+  } catch {
+    return '—'
+  }
+}
+
+function apiErrorMessage(err: unknown): string {
+  if (axios.isAxiosError(err)) {
+    return (err.response?.data as { error?: string } | undefined)?.error ?? err.message ?? 'Request failed'
+  }
+  if (err instanceof Error) return err.message
+  return 'Something went wrong'
+}
+
 function ToggleRow({
   label,
   checked,
   onChange,
+  disabled,
 }: {
   label: string
   checked: boolean
   onChange: (next: boolean) => void
+  disabled?: boolean
 }) {
   return (
-    <label className="flex items-center justify-between gap-3 rounded-xl px-2 py-1.5">
+    <label
+      className={[
+        'flex items-center justify-between gap-3 rounded-xl px-2 py-1.5',
+        disabled ? 'cursor-not-allowed opacity-55' : '',
+      ].join(' ')}
+    >
       <span className="truncate text-sm font-semibold text-neutral-800">{label}</span>
       <input
         type="checkbox"
         checked={checked}
+        disabled={disabled}
         onChange={(e) => onChange(e.target.checked)}
         className="peer sr-only"
         aria-label={label}
@@ -88,16 +141,24 @@ export default function Settings({ onNavigate }: SettingsProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const { pathname } = useLocation()
   const headerDateLabel = getHeaderDateLabel()
+  const { user } = useAuth()
+  const isSuperAdmin = user?.role === 'super_admin'
+  const displayName = user?.fullName?.trim() || user?.email || 'User'
+  const companyLocked = !isSuperAdmin
+
+  const [pageLoading, setPageLoading] = useState(true)
+  const [saveBusy, setSaveBusy] = useState(false)
 
   // Company
-  const [companyName, setCompanyName] = useState('Samarth Land Surveyors')
-  const [ownerName, setOwnerName] = useState('Er. Shubham Bhoi')
+  const [companyName, setCompanyName] = useState('')
+  const [ownerName, setOwnerName] = useState('')
   const [contactNumber, setContactNumber] = useState('')
   const [emailAddress, setEmailAddress] = useState('')
   const [officeAddress, setOfficeAddress] = useState('')
   const [gstNumber, setGstNumber] = useState('')
 
   const [logoPreviewUrl, setLogoPreviewUrl] = useState(layoutBrandLogo)
+  const [remoteLogoUrl, setRemoteLogoUrl] = useState<string | null>(null)
   const [logoObjectUrl, setLogoObjectUrl] = useState<string | null>(null)
   const logoInputRef = useRef<HTMLInputElement | null>(null)
 
@@ -109,44 +170,161 @@ export default function Settings({ onNavigate }: SettingsProps) {
 
   const triggerLogoPicker = () => logoInputRef.current?.click()
 
-  // App preferences
-  const [currency, setCurrency] = useState('INR (₹)')
+  // App preferences (company + user)
+  const [currencyCode, setCurrencyCode] = useState('INR')
   const [dateFormat, setDateFormat] = useState('DD/MM/YYYY')
-  const [defaultTheme, setDefaultTheme] = useState('Dark')
-  const [language, setLanguage] = useState('English')
+  const [uiTheme, setUiTheme] = useState<'light' | 'dark' | 'system'>('system')
+  const [languageCode, setLanguageCode] = useState('en')
   const [defaultMachine, setDefaultMachine] = useState<'Total Station' | 'DGPS'>('Total Station')
   const [notificationsEnabled, setNotificationsEnabled] = useState(true)
   const [autoBackupEnabled, setAutoBackupEnabled] = useState(true)
-  const [darkModeEnabled, setDarkModeEnabled] = useState(false)
 
   // Security
+  const [currentPassword, setCurrentPassword] = useState('')
   const [changePassword, setChangePassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [passwordBusy, setPasswordBusy] = useState(false)
 
-  // Backup & storage
-  const storageUsedGb = 12
-  const storageTotalGb = 25
-  const storagePercent = Math.round((storageUsedGb / storageTotalGb) * 100)
-  const lastBackupLabel = '20 May 2025'
+  // Backup & storage (from API)
+  const [storageUsedBytes, setStorageUsedBytes] = useState(0)
+  const [storageQuotaBytes, setStorageQuotaBytes] = useState(25 * 1024 ** 3)
+  const [lastBackupAt, setLastBackupAt] = useState<string | null>(null)
+  const [storedFileCount, setStoredFileCount] = useState(0)
 
-  // PDF settings
-  const [signatureLabel, setSignatureLabel] = useState('No file selected')
-  const [stampLabel, setStampLabel] = useState('No file selected')
+  // PDF / invoice
+  const [signatureUrl, setSignatureUrl] = useState<string | null>(null)
+  const [stampUrl, setStampUrl] = useState<string | null>(null)
   const signatureInputRef = useRef<HTMLInputElement | null>(null)
   const stampInputRef = useRef<HTMLInputElement | null>(null)
 
-  const [invoiceTheme, setInvoiceTheme] = useState('Modern')
-  const [footerNote, setFooterNote] = useState('Thank you for choosing Samarth Land Surveyors.')
+  const [invoiceTheme, setInvoiceTheme] = useState<'modern' | 'classic' | 'minimal'>('modern')
+  const [footerNote, setFooterNote] = useState('')
 
-  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const storagePercent =
+    storageQuotaBytes > 0 ? Math.min(100, Math.round((storageUsedBytes / storageQuotaBytes) * 100)) : 0
+
+  const loadSettings = useCallback(async () => {
+    setPageLoading(true)
+    try {
+      const [coRes, meRes] = await Promise.all([
+        http.get<{
+          ok: boolean
+          company: {
+            name: string
+            ownerName?: string
+            contactPhone?: string
+            email?: string
+            officeAddress?: string
+            gstNumber?: string
+            settings?: {
+              currency?: string
+              dateFormat?: string
+              defaultInstrumentTypeLabel?: string
+              notificationsEnabled?: boolean
+              autoBackupEnabled?: boolean
+            }
+            invoiceDefaults?: {
+              theme?: string
+              footerNote?: string
+              signatureUrl?: string | null
+              stampUrl?: string | null
+            }
+            branding?: { logoUrl?: string | null }
+            storage?: {
+              usedBytes: number
+              quotaBytes: number
+              lastBackupAt?: string | null
+              fileCount: number
+            }
+          }
+        }>('/api/settings/company'),
+        http.get<{
+          ok: boolean
+          email: string
+          profile?: { fullName?: string; phone?: string }
+          preferences?: { theme?: string; language?: string }
+        }>('/api/settings/me'),
+      ])
+
+      const c = coRes.data?.company
+      if (c) {
+        setCompanyName(c.name ?? '')
+        setOwnerName(c.ownerName ?? '')
+        setContactNumber(c.contactPhone ?? '')
+        setEmailAddress(c.email ?? '')
+        setOfficeAddress(c.officeAddress ?? '')
+        setGstNumber(c.gstNumber ?? '')
+        setCurrencyCode(c.settings?.currency ?? 'INR')
+        setDateFormat(c.settings?.dateFormat ?? 'DD/MM/YYYY')
+        const mach = c.settings?.defaultInstrumentTypeLabel ?? ''
+        setDefaultMachine(mach.toLowerCase().includes('dgps') ? 'DGPS' : 'Total Station')
+        setNotificationsEnabled(c.settings?.notificationsEnabled ?? true)
+        setAutoBackupEnabled(c.settings?.autoBackupEnabled ?? true)
+
+        const th = (c.invoiceDefaults?.theme ?? 'modern').toLowerCase()
+        setInvoiceTheme(th === 'classic' ? 'classic' : th === 'minimal' ? 'minimal' : 'modern')
+        setFooterNote(c.invoiceDefaults?.footerNote ?? '')
+        setSignatureUrl(c.invoiceDefaults?.signatureUrl ?? null)
+        setStampUrl(c.invoiceDefaults?.stampUrl ?? null)
+
+        const logo = c.branding?.logoUrl
+        setRemoteLogoUrl(logo ?? null)
+        setLogoPreviewUrl(logo || layoutBrandLogo)
+
+        if (c.storage) {
+          setStorageUsedBytes(c.storage.usedBytes ?? 0)
+          setStorageQuotaBytes(c.storage.quotaBytes ?? 25 * 1024 ** 3)
+          setLastBackupAt(c.storage.lastBackupAt ? String(c.storage.lastBackupAt) : null)
+          setStoredFileCount(c.storage.fileCount ?? 0)
+        }
+      }
+
+      const me = meRes.data
+      if (me?.preferences?.theme === 'light' || me.preferences?.theme === 'dark' || me.preferences?.theme === 'system') {
+        setUiTheme(me.preferences.theme)
+      }
+      if (me?.preferences?.language) setLanguageCode(me.preferences.language)
+    } catch (err) {
+      window.alert(apiErrorMessage(err))
+    } finally {
+      setPageLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void loadSettings()
+  }, [loadSettings])
+
+  const handleLogoChange = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
+    if (!isSuperAdmin) {
+      window.alert('Only a super admin can change the company logo.')
+      e.target.value = ''
+      return
+    }
 
     if (logoObjectUrl) URL.revokeObjectURL(logoObjectUrl)
     const nextUrl = URL.createObjectURL(file)
     setLogoObjectUrl(nextUrl)
     setLogoPreviewUrl(nextUrl)
-    e.target.value = ''
+
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      await http.post('/api/settings/company/logo', fd)
+      URL.revokeObjectURL(nextUrl)
+      setLogoObjectUrl(null)
+      await loadSettings()
+      window.alert('Logo uploaded successfully.')
+    } catch (err) {
+      URL.revokeObjectURL(nextUrl)
+      setLogoObjectUrl(null)
+      window.alert(apiErrorMessage(err))
+      setLogoPreviewUrl(remoteLogoUrl || layoutBrandLogo)
+    } finally {
+      e.target.value = ''
+    }
   }
 
   const navItems: NavItem[] = [
@@ -188,54 +366,210 @@ export default function Settings({ onNavigate }: SettingsProps) {
     { label: 'Settings', path: '/settings', icon: Building2 },
   ] as const
 
-  const handleUpdatePassword = () => {
+  const handleUpdatePassword = async () => {
+    if (!currentPassword.trim()) {
+      window.alert('Please enter your current password.')
+      return
+    }
     if (!changePassword || !confirmPassword) {
-      window.alert('Please fill in both password fields.')
+      window.alert('Please fill in both new password fields.')
       return
     }
     if (changePassword !== confirmPassword) {
-      window.alert('Passwords do not match.')
+      window.alert('New passwords do not match.')
       return
     }
-    window.alert('Password updated successfully (mock).')
-    setChangePassword('')
-    setConfirmPassword('')
-  }
-
-  const handleLogoutAllDevices = async () => {
-    const ok = window.confirm('Logout from all devices?')
-    if (!ok) return
-    await signOut()
-    onNavigate('/login')
+    if (changePassword.length < 8) {
+      window.alert('New password must be at least 8 characters.')
+      return
+    }
+    setPasswordBusy(true)
+    try {
+      await http.post('/api/auth/change-password', {
+        currentPassword,
+        newPassword: changePassword,
+      })
+      window.alert('Password updated successfully.')
+      setCurrentPassword('')
+      setChangePassword('')
+      setConfirmPassword('')
+    } catch (err) {
+      window.alert(apiErrorMessage(err))
+    } finally {
+      setPasswordBusy(false)
+    }
   }
 
   const handleSignaturePick = () => signatureInputRef.current?.click()
   const handleStampPick = () => stampInputRef.current?.click()
 
-  const handleSignatureChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSignatureChange = async (e: ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]
     if (!f) return
-    setSignatureLabel(f.name)
-    e.target.value = ''
+    if (!isSuperAdmin) {
+      window.alert('Only a super admin can upload invoice assets.')
+      e.target.value = ''
+      return
+    }
+    try {
+      const fd = new FormData()
+      fd.append('file', f)
+      await http.post('/api/settings/company/invoice-signature', fd)
+      await loadSettings()
+      window.alert('Signature uploaded.')
+    } catch (err) {
+      window.alert(apiErrorMessage(err))
+    } finally {
+      e.target.value = ''
+    }
   }
 
-  const handleStampChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleStampChange = async (e: ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]
     if (!f) return
-    setStampLabel(f.name)
-    e.target.value = ''
+    if (!isSuperAdmin) {
+      window.alert('Only a super admin can upload invoice assets.')
+      e.target.value = ''
+      return
+    }
+    try {
+      const fd = new FormData()
+      fd.append('file', f)
+      await http.post('/api/settings/company/invoice-stamp', fd)
+      await loadSettings()
+      window.alert('Stamp uploaded.')
+    } catch (err) {
+      window.alert(apiErrorMessage(err))
+    } finally {
+      e.target.value = ''
+    }
   }
 
   const handlePreviewInvoice = () => {
-    window.alert('Invoice preview (mock).')
+    const w = window.open('', '_blank')
+    if (!w) {
+      window.alert('Please allow pop-ups to preview the invoice.')
+      return
+    }
+    const themeLabel =
+      invoiceTheme === 'classic' ? 'Classic' : invoiceTheme === 'minimal' ? 'Minimal' : 'Modern'
+    const logoSrc = logoPreviewUrl
+    const esc = (s: string) =>
+      s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+    const html = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><title>Invoice preview</title>
+<style>
+  body{font-family:system-ui,-apple-system,sans-serif;margin:0;padding:24px;background:#f4f4f5;color:#111;}
+  .sheet{max-width:720px;margin:0 auto;background:#fff;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.08);overflow:hidden;}
+  .modern header{border-bottom:4px solid #f39b03;}
+  .classic header{border-bottom:2px solid #111;}
+  .minimal header{border-bottom:1px solid #e5e5e5;}
+  header{padding:20px 24px;display:flex;align-items:flex-start;justify-content:space-between;gap:16px;}
+  .brand{display:flex;align-items:center;gap:14px;}
+  .brand img{max-height:56px;max-width:160px;object-fit:contain;}
+  h1{font-size:18px;margin:0;}
+  .meta{font-size:12px;color:#52525b;margin-top:4px;}
+  .body{padding:24px;}
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th{text-align:left;padding:10px 8px;border-bottom:1px solid #e4e4e7;color:#52525b;font-weight:600;}
+  td{padding:10px 8px;border-bottom:1px solid #f4f4f5;}
+  .footer{padding:16px 24px 28px;font-size:12px;color:#71717a;border-top:1px solid #f4f4f5;}
+  .sig{display:flex;gap:24px;flex-wrap:wrap;margin-top:20px;align-items:flex-end;}
+  .sig img{max-height:72px;max-width:160px;object-fit:contain;}
+</style></head><body>
+<div class="sheet ${invoiceTheme}">
+  <header>
+    <div class="brand">
+      ${logoSrc ? `<img src="${esc(logoSrc)}" alt="Logo"/>` : ''}
+      <div><h1>${esc(companyName || 'Company')}</h1>
+      <div class="meta">${esc(emailAddress || '')}${officeAddress ? ` · ${esc(officeAddress)}` : ''}</div></div>
+    </div>
+    <div style="text-align:right;font-size:12px;"><strong>INVOICE</strong><div class="meta">Theme: ${esc(themeLabel)}</div></div>
+  </header>
+  <div class="body">
+    <table>
+      <thead><tr><th>Description</th><th>Qty</th><th>Amount</th></tr></thead>
+      <tbody>
+        <tr><td>Sample survey line item</td><td>1</td><td>—</td></tr>
+      </tbody>
+    </table>
+    <div class="sig">
+      ${signatureUrl ? `<div><div style="font-size:11px;color:#71717a;margin-bottom:4px;">Signature</div><img src="${esc(signatureUrl)}" alt="Signature"/></div>` : ''}
+      ${stampUrl ? `<div><div style="font-size:11px;color:#71717a;margin-bottom:4px;">Stamp</div><img src="${esc(stampUrl)}" alt="Stamp"/></div>` : ''}
+    </div>
+  </div>
+  <div class="footer">${esc(footerNote || '')}</div>
+</div></body></html>`
+    w.document.write(html)
+    w.document.close()
   }
 
   const handleCancel = () => {
-    window.alert('Changes discarded (mock).')
+    void loadSettings()
   }
 
-  const handleSaveSettings = () => {
-    window.alert('Settings saved successfully (mock).')
+  const handleSaveSettings = async () => {
+    setSaveBusy(true)
+    try {
+      await http.patch('/api/settings/me', {
+        preferences: {
+          theme: uiTheme,
+          language: languageCode,
+        },
+      })
+      if (isSuperAdmin) {
+        await http.patch('/api/settings/company', {
+          name: companyName.trim(),
+          ownerName: ownerName.trim(),
+          contactPhone: contactNumber.trim(),
+          email: emailAddress.trim(),
+          officeAddress: officeAddress.trim(),
+          gstNumber: gstNumber.trim(),
+          settings: {
+            currency: currencyCode,
+            dateFormat,
+            defaultInstrumentTypeLabel: defaultMachine,
+            notificationsEnabled,
+            autoBackupEnabled,
+          },
+          invoiceDefaults: {
+            theme: invoiceTheme,
+            footerNote: footerNote.trim(),
+          },
+        })
+      }
+      window.alert('Settings saved successfully.')
+      await loadSettings()
+    } catch (err) {
+      window.alert(apiErrorMessage(err))
+    } finally {
+      setSaveBusy(false)
+    }
+  }
+
+  const handleCreateBackup = async () => {
+    if (!isSuperAdmin) return
+    try {
+      await http.post('/api/settings/company/backup')
+      await loadSettings()
+      window.alert('Backup recorded.')
+    } catch (err) {
+      window.alert(apiErrorMessage(err))
+    }
+  }
+
+  const handleDownloadBackup = async () => {
+    if (!isSuperAdmin) return
+    try {
+      const res = await http.get('/api/settings/company/backup-export', { responseType: 'blob' })
+      const url = URL.createObjectURL(res.data)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'survey-company-backup.json'
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      window.alert(apiErrorMessage(err))
+    }
   }
 
   return (
@@ -331,28 +665,41 @@ export default function Settings({ onNavigate }: SettingsProps) {
                 <div className="grid h-16 w-16 place-items-center rounded-2xl bg-white/10 text-white ring-1 ring-white/15">
                   <CircleUserRound size={32} strokeWidth={1.75} />
                 </div>
-                <div className="mt-3 text-base font-extrabold text-white">Er. Shubham Bhoi</div>
-                <div className="mt-1 text-xs font-semibold text-white/65">Admin</div>
+                <div className="mt-3 text-base font-extrabold text-white">{displayName}</div>
+                <div className="mt-1 text-xs font-semibold text-white/65">
+                  {isSuperAdmin ? 'Super admin' : 'Admin'}
+                </div>
               </div>
               <div className="mt-4 space-y-2 border-t border-white/10 pt-4">
-                <a
-                  href="mailto:samarthlandsurveyors@gmail.com"
-                  className="flex items-center gap-2 rounded-xl px-2 py-2 text-left text-xs font-semibold text-white/90 hover:bg-white/5"
-                >
-                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white/10 text-[#f39b03]">
-                    <Mail size={15} />
-                  </span>
-                  <span className="min-w-0 truncate">samarthlandsurveyors@gmail.com</span>
-                </a>
-                <a
-                  href="tel:+918643001010"
-                  className="flex items-center gap-2 rounded-xl px-2 py-2 text-left text-xs font-semibold text-white/90 hover:bg-white/5"
-                >
-                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white/10 text-[#f39b03]">
-                    <Phone size={15} />
-                  </span>
-                  <span>+91 86430 01010</span>
-                </a>
+                {user?.email ? (
+                  <a
+                    href={`mailto:${user.email}`}
+                    className="flex items-center gap-2 rounded-xl px-2 py-2 text-left text-xs font-semibold text-white/90 hover:bg-white/5"
+                  >
+                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white/10 text-[#f39b03]">
+                      <Mail size={15} />
+                    </span>
+                    <span className="min-w-0 truncate">{user.email}</span>
+                  </a>
+                ) : (
+                  <div className="flex items-center gap-2 rounded-xl px-2 py-2 text-left text-xs font-semibold text-white/50">
+                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white/10 text-[#f39b03]">
+                      <Mail size={15} />
+                    </span>
+                    <span className="min-w-0 truncate">—</span>
+                  </div>
+                )}
+                {user?.phone ? (
+                  <a
+                    href={`tel:${user.phone.replace(/\s/g, '')}`}
+                    className="flex items-center gap-2 rounded-xl px-2 py-2 text-left text-xs font-semibold text-white/90 hover:bg-white/5"
+                  >
+                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white/10 text-[#f39b03]">
+                      <Phone size={15} />
+                    </span>
+                    <span>{user.phone}</span>
+                  </a>
+                ) : null}
               </div>
             </div>
           </div>
@@ -475,10 +822,10 @@ export default function Settings({ onNavigate }: SettingsProps) {
                     <CircleUserRound size={18} />
                   </div>
                   <div className="min-w-0 text-left">
-                    <div className="truncate text-xs font-extrabold text-neutral-900 sm:text-sm">
-                      Er. Shubham Bhoi
+                    <div className="truncate text-xs font-extrabold text-neutral-900 sm:text-sm">{displayName}</div>
+                    <div className="text-[11px] font-semibold text-neutral-600">
+                      {isSuperAdmin ? 'Super admin' : 'Admin'}
                     </div>
-                    <div className="text-[11px] font-semibold text-neutral-600">Admin</div>
                   </div>
                 </div>
               </div>
@@ -486,65 +833,78 @@ export default function Settings({ onNavigate }: SettingsProps) {
           </header>
 
           <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-white p-3 pb-[calc(3.65rem+max(10px,env(safe-area-inset-bottom,0px)))] sm:px-5 sm:pt-5 sm:pb-[calc(3.65rem+max(10px,env(safe-area-inset-bottom,0px)))] md:p-6 md:pb-24 lg:p-8 lg:pb-28">
-            <section className="mx-auto w-full max-w-[1400px]">
+            <section className="mx-auto w-full max-w-[1600px]">
+              {pageLoading ? (
+                <div className="flex min-h-[240px] items-center justify-center rounded-2xl border border-neutral-200 bg-neutral-50 text-sm font-semibold text-neutral-600">
+                  Loading settings…
+                </div>
+              ) : (
+                <>
               <div className="grid grid-cols-1 gap-3 md:gap-5 xl:grid-cols-2">
                 {/* Company Information */}
-                <CardShell title="Company Details">
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                    <div className="md:col-span-2">
-                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        <Field label="Company Name">
-                          <input
-                            value={companyName}
-                            onChange={(e) => setCompanyName(e.target.value)}
-                            className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
-                          />
-                        </Field>
-                        <Field label="Owner Name">
-                          <input
-                            value={ownerName}
-                            onChange={(e) => setOwnerName(e.target.value)}
-                            className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
-                          />
-                        </Field>
-                        <Field label="Contact Number">
-                          <input
-                            value={contactNumber}
-                            onChange={(e) => setContactNumber(e.target.value)}
-                            placeholder="+91 ... "
-                            className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
-                          />
-                        </Field>
-                        <Field label="Email Address">
-                          <input
-                            value={emailAddress}
-                            onChange={(e) => setEmailAddress(e.target.value)}
-                            placeholder="name@company.com"
-                            className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
-                          />
-                        </Field>
-                        <Field label="Office Address">
-                          <textarea
-                            value={officeAddress}
-                            onChange={(e) => setOfficeAddress(e.target.value)}
-                            rows={3}
-                            placeholder="Office location and address details"
-                            className="w-full resize-y rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm font-medium leading-relaxed text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
-                          />
-                        </Field>
-                        <Field label="GST Number (optional)">
-                          <input
-                            value={gstNumber}
-                            onChange={(e) => setGstNumber(e.target.value)}
-                            placeholder="GSTIN"
-                            className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
-                          />
-                        </Field>
+                <div className="xl:col-span-2">
+                  <CardShell title="Company Details">
+                    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)] lg:items-start lg:gap-6">
+                      <div className="min-w-0">
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                          <Field label="Company Name">
+                            <input
+                              value={companyName}
+                              onChange={(e) => setCompanyName(e.target.value)}
+                              disabled={companyLocked}
+                              className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20 disabled:cursor-not-allowed disabled:bg-neutral-50 disabled:text-neutral-500"
+                            />
+                          </Field>
+                          <Field label="Owner Name">
+                            <input
+                              value={ownerName}
+                              onChange={(e) => setOwnerName(e.target.value)}
+                              disabled={companyLocked}
+                              className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20 disabled:cursor-not-allowed disabled:bg-neutral-50 disabled:text-neutral-500"
+                            />
+                          </Field>
+                          <Field label="Contact Number">
+                            <input
+                              value={contactNumber}
+                              onChange={(e) => setContactNumber(e.target.value)}
+                              placeholder="+91 ... "
+                              disabled={companyLocked}
+                              className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20 disabled:cursor-not-allowed disabled:bg-neutral-50 disabled:text-neutral-500"
+                            />
+                          </Field>
+                          <Field label="Email Address">
+                            <input
+                              value={emailAddress}
+                              onChange={(e) => setEmailAddress(e.target.value)}
+                              placeholder="name@company.com"
+                              disabled={companyLocked}
+                              className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20 disabled:cursor-not-allowed disabled:bg-neutral-50 disabled:text-neutral-500"
+                            />
+                          </Field>
+                          <Field label="Office Address">
+                            <textarea
+                              value={officeAddress}
+                              onChange={(e) => setOfficeAddress(e.target.value)}
+                              rows={3}
+                              placeholder="Office location and address details"
+                              disabled={companyLocked}
+                              className="w-full resize-y rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm font-medium leading-relaxed text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20 disabled:cursor-not-allowed disabled:bg-neutral-50 disabled:text-neutral-500 sm:col-span-2"
+                            />
+                          </Field>
+                          <Field label="GST Number (optional)">
+                            <input
+                              value={gstNumber}
+                              onChange={(e) => setGstNumber(e.target.value)}
+                              placeholder="GSTIN"
+                              disabled={companyLocked}
+                              className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20 disabled:cursor-not-allowed disabled:bg-neutral-50 disabled:text-neutral-500"
+                            />
+                          </Field>
+                        </div>
                       </div>
-                    </div>
 
-                    <div className="md:col-span-1">
-                      <div className="rounded-xl border border-neutral-200 bg-white p-2.5 shadow-sm md:p-3">
+                      <div className="min-w-0 shrink-0 lg:max-w-none">
+                        <div className="rounded-xl border border-neutral-200 bg-white p-2.5 shadow-sm md:p-3">
                         <div className="text-xs font-extrabold tracking-tight text-neutral-900">Logo Upload</div>
                         <div className="mt-3 aspect-[4/3] overflow-hidden rounded-xl bg-neutral-50 ring-1 ring-black/5">
                           <img
@@ -564,7 +924,8 @@ export default function Settings({ onNavigate }: SettingsProps) {
                         <button
                           type="button"
                           onClick={triggerLogoPicker}
-                          className="mt-3 inline-flex w-full items-center justify-center rounded-xl border border-neutral-200 bg-white px-4 py-2 text-sm font-extrabold text-neutral-800 shadow-sm ring-1 ring-black/5 transition hover:border-[#f39b03]/40 hover:text-[#f39b03]"
+                          disabled={companyLocked}
+                          className="mt-3 inline-flex w-full items-center justify-center rounded-xl border border-neutral-200 bg-white px-4 py-2 text-sm font-extrabold text-neutral-800 shadow-sm ring-1 ring-black/5 transition hover:border-[#f39b03]/40 hover:text-[#f39b03] disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           Change Logo
                         </button>
@@ -582,109 +943,11 @@ export default function Settings({ onNavigate }: SettingsProps) {
                           . Flaticon’s license requires attribution; cite the designer name from your icon download page if you
                           substitute a different graphic.
                         </p>
-                      </div>
-                    </div>
-                  </div>
-                </CardShell>
-
-                {/* Application Preferences */}
-                <CardShell title="Application Settings">
-                  <div className="grid grid-cols-1 gap-4">
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                      <Field label="Currency">
-                        <select
-                          value={currency}
-                          onChange={(e) => setCurrency(e.target.value)}
-                          className="h-11 w-full cursor-pointer appearance-none rounded-xl border border-neutral-200 bg-white px-3 pr-10 text-sm font-semibold text-neutral-900 outline-none transition hover:border-neutral-300 focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
-                        >
-                          <option>INR (₹)</option>
-                          <option>USD ($)</option>
-                          <option>EUR (€)</option>
-                        </select>
-                      </Field>
-
-                      <Field label="Date Format">
-                        <select
-                          value={dateFormat}
-                          onChange={(e) => setDateFormat(e.target.value)}
-                          className="h-11 w-full cursor-pointer appearance-none rounded-xl border border-neutral-200 bg-white px-3 pr-10 text-sm font-semibold text-neutral-900 outline-none transition hover:border-neutral-300 focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
-                        >
-                          <option>DD/MM/YYYY</option>
-                          <option>MM/DD/YYYY</option>
-                          <option>YYYY-MM-DD</option>
-                        </select>
-                      </Field>
-
-                      <Field label="Default Theme">
-                        <select
-                          value={defaultTheme}
-                          onChange={(e) => setDefaultTheme(e.target.value)}
-                          className="h-11 w-full cursor-pointer appearance-none rounded-xl border border-neutral-200 bg-white px-3 pr-10 text-sm font-semibold text-neutral-900 outline-none transition hover:border-neutral-300 focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
-                        >
-                          <option>Dark</option>
-                          <option>Light</option>
-                        </select>
-                      </Field>
-
-                      <Field label="Language">
-                        <select
-                          value={language}
-                          onChange={(e) => setLanguage(e.target.value)}
-                          className="h-11 w-full cursor-pointer appearance-none rounded-xl border border-neutral-200 bg-white px-3 pr-10 text-sm font-semibold text-neutral-900 outline-none transition hover:border-neutral-300 focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
-                        >
-                          <option>English</option>
-                          <option>Hindi</option>
-                          <option>Marathi</option>
-                        </select>
-                      </Field>
-
-                      <div className="sm:col-span-2">
-                        <div className="grid gap-2">
-                          <span className="text-xs font-bold text-neutral-700">Default Machine</span>
-                          <div className="grid grid-cols-2 gap-2">
-                            <button
-                              type="button"
-                              onClick={() => setDefaultMachine('Total Station')}
-                              className={[
-                                'h-11 rounded-xl border px-3 text-sm font-extrabold transition',
-                                defaultMachine === 'Total Station'
-                                  ? 'border-[#f39b03]/60 bg-[#f39b03]/10 text-[#f39b03]'
-                                  : 'border-neutral-200 bg-white text-neutral-900 hover:border-neutral-300',
-                              ].join(' ')}
-                            >
-                              Total Station
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setDefaultMachine('DGPS')}
-                              className={[
-                                'h-11 rounded-xl border px-3 text-sm font-extrabold transition',
-                                defaultMachine === 'DGPS'
-                                  ? 'border-[#f39b03]/60 bg-[#f39b03]/10 text-[#f39b03]'
-                                  : 'border-neutral-200 bg-white text-neutral-900 hover:border-neutral-300',
-                              ].join(' ')}
-                            >
-                              DGPS
-                            </button>
-                          </div>
                         </div>
                       </div>
                     </div>
-
-                    <div className="rounded-xl border border-neutral-100 bg-white px-3 py-2.5">
-                      <div className="text-xs font-extrabold tracking-tight text-neutral-900">Toggle Switches</div>
-                      <div className="mt-3 grid gap-2">
-                        <ToggleRow
-                          label="Enable Notifications"
-                          checked={notificationsEnabled}
-                          onChange={setNotificationsEnabled}
-                        />
-                        <ToggleRow label="Enable Auto Backup" checked={autoBackupEnabled} onChange={setAutoBackupEnabled} />
-                        <ToggleRow label="Enable Dark Mode" checked={darkModeEnabled} onChange={setDarkModeEnabled} />
-                      </div>
-                    </div>
-                  </div>
-                </CardShell>
+                  </CardShell>
+                </div>
 
                 {/* Account & Security */}
                 <div className="xl:col-span-2">
@@ -694,20 +957,32 @@ export default function Settings({ onNavigate }: SettingsProps) {
                   >
                     <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                       <div className="grid gap-3 md:pr-4">
-                        <Field label="Change Password">
+                        <Field label="Current password">
+                          <input
+                            type="password"
+                            value={currentPassword}
+                            onChange={(e) => setCurrentPassword(e.target.value)}
+                            autoComplete="current-password"
+                            placeholder="Current password"
+                            className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
+                          />
+                        </Field>
+                        <Field label="New password">
                           <input
                             type="password"
                             value={changePassword}
                             onChange={(e) => setChangePassword(e.target.value)}
-                            placeholder="Enter new password"
+                            autoComplete="new-password"
+                            placeholder="At least 8 characters"
                             className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
                           />
                         </Field>
-                        <Field label="Confirm Password">
+                        <Field label="Confirm new password">
                           <input
                             type="password"
                             value={confirmPassword}
                             onChange={(e) => setConfirmPassword(e.target.value)}
+                            autoComplete="new-password"
                             placeholder="Confirm new password"
                             className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
                           />
@@ -718,23 +993,16 @@ export default function Settings({ onNavigate }: SettingsProps) {
                         <div className="w-full">
                           <button
                             type="button"
-                            onClick={handleUpdatePassword}
-                            className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-6 text-sm font-extrabold text-neutral-900 shadow-sm ring-1 ring-black/5 transition hover:border-[#f39b03]/40 hover:text-[#f39b03]"
+                            onClick={() => void handleUpdatePassword()}
+                            disabled={passwordBusy}
+                            className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-6 text-sm font-extrabold text-neutral-900 shadow-sm ring-1 ring-black/5 transition hover:border-[#f39b03]/40 hover:text-[#f39b03] disabled:cursor-not-allowed disabled:opacity-60"
                           >
-                            Update Password
+                            {passwordBusy ? 'Updating…' : 'Update password'}
                           </button>
                         </div>
-                        <div className="w-full">
-                          <button
-                            type="button"
-                            onClick={handleLogoutAllDevices}
-                            className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-6 text-sm font-extrabold text-neutral-900 shadow-sm ring-1 ring-black/5 transition hover:border-[#f39b03]/40 hover:text-[#f39b03]"
-                          >
-                            Logout from All Devices
-                          </button>
-                        </div>
+
                         <div className="w-full text-left text-xs font-semibold text-neutral-500">
-                          For security reasons, password updates require confirmation (mock UI).
+                          Enter your current password, then choose a new password (minimum 8 characters).
                         </div>
                       </div>
                     </div>
@@ -744,24 +1012,31 @@ export default function Settings({ onNavigate }: SettingsProps) {
                 {/* Backup & Storage */}
                 <CardShell title="Backup & Storage">
                   <div className="grid gap-4">
+                    <p className="text-xs font-semibold leading-relaxed text-neutral-600">
+                      Storage totals include all files registered for your company (including Cloudinary uploads such as visit
+                      photos and invoice assets). Quota is configured on the server.
+                    </p>
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                       <div className="rounded-xl border border-neutral-100 bg-white p-2.5 md:p-3">
-                        <div className="text-xs font-extrabold text-neutral-900">Storage Used</div>
+                        <div className="text-xs font-extrabold text-neutral-900">Storage used</div>
                         <div className="mt-1 text-sm font-extrabold text-neutral-950">
-                          {storageUsedGb} GB / {storageTotalGb} GB
+                          {formatBytes(storageUsedBytes)} / {formatBytes(storageQuotaBytes)}
+                        </div>
+                        <div className="mt-1 text-[11px] font-semibold text-neutral-500">
+                          {storedFileCount} file{storedFileCount === 1 ? '' : 's'} tracked
                         </div>
                       </div>
                       <div className="rounded-xl border border-neutral-100 bg-white p-2.5 md:p-3">
-                        <div className="text-xs font-extrabold text-neutral-900">Backup Status</div>
+                        <div className="text-xs font-extrabold text-neutral-900">Backup status</div>
                         <div className="mt-1 text-sm font-extrabold text-neutral-950">
-                          Last backup: {lastBackupLabel}
+                          Last backup: {formatBackupDate(lastBackupAt)}
                         </div>
                       </div>
                     </div>
 
                     <div className="rounded-xl border border-neutral-100 bg-white p-2.5 md:p-3">
                       <div className="flex items-center justify-between gap-3">
-                        <div className="text-xs font-extrabold text-neutral-900">Storage Progress</div>
+                        <div className="text-xs font-extrabold text-neutral-900">Storage progress</div>
                         <div className="text-xs font-extrabold text-[#f39b03]">{storagePercent}%</div>
                       </div>
                       <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-neutral-100 ring-1 ring-black/5">
@@ -775,42 +1050,58 @@ export default function Settings({ onNavigate }: SettingsProps) {
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                       <button
                         type="button"
-                        className="h-11 rounded-xl border border-neutral-200 bg-white px-4 text-sm font-extrabold text-neutral-900 shadow-sm ring-1 ring-black/5 transition hover:border-[#f39b03]/40 hover:text-[#f39b03]"
+                        onClick={() => void handleCreateBackup()}
+                        disabled={!isSuperAdmin}
+                        className="h-11 rounded-xl border border-neutral-200 bg-white px-4 text-sm font-extrabold text-neutral-900 shadow-sm ring-1 ring-black/5 transition hover:border-[#f39b03]/40 hover:text-[#f39b03] disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        Create Backup
+                        Record backup
                       </button>
                       <button
                         type="button"
-                        className="h-11 rounded-xl border border-neutral-200 bg-white px-4 text-sm font-extrabold text-neutral-900 shadow-sm ring-1 ring-black/5 transition hover:border-[#f39b03]/40 hover:text-[#f39b03]"
+                        onClick={() => void handleDownloadBackup()}
+                        disabled={!isSuperAdmin}
+                        className="h-11 rounded-xl border border-neutral-200 bg-white px-4 text-sm font-extrabold text-neutral-900 shadow-sm ring-1 ring-black/5 transition hover:border-[#f39b03]/40 hover:text-[#f39b03] disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        Download Backup
+                        Download backup (JSON)
                       </button>
                       <button
                         type="button"
-                        className="h-11 rounded-xl border border-neutral-200 bg-white px-4 text-sm font-extrabold text-neutral-900 shadow-sm ring-1 ring-black/5 transition hover:border-[#f39b03]/40 hover:text-[#f39b03] sm:col-span-2"
+                        disabled={!isSuperAdmin}
+                        className="h-11 rounded-xl border border-dashed border-neutral-200 bg-neutral-50 px-4 text-sm font-semibold text-neutral-600 sm:col-span-2"
                       >
-                        Manage Storage
+                        Manage storage in Cloudinary Dashboard (super admin)
                       </button>
                     </div>
                   </div>
                 </CardShell>
 
                 {/* PDF & Invoice Preferences */}
-                <CardShell title="PDF Settings">
+                <CardShell title="PDF & invoice">
                   <div className="grid gap-4">
                     <div className="rounded-xl border border-neutral-100 bg-white p-2.5 md:p-3">
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <div className="rounded-xl bg-white p-2.5 shadow-sm ring-1 ring-black/5 md:p-3">
-                          <div className="text-xs font-extrabold text-neutral-900">Upload Signature</div>
-                          <div className="mt-2 text-xs font-semibold text-neutral-500">
-                            {signatureLabel}
+                          <div className="text-xs font-extrabold text-neutral-900">Signature</div>
+                          <div className="mt-2 flex min-h-[100px] items-center justify-center overflow-hidden rounded-lg bg-neutral-50 ring-1 ring-black/5">
+                            {signatureUrl ? (
+                              <img
+                                src={signatureUrl}
+                                alt="Signature preview"
+                                className="max-h-28 w-full object-contain p-2"
+                              />
+                            ) : (
+                              <span className="px-3 text-center text-xs font-semibold text-neutral-500">
+                                No signature uploaded
+                              </span>
+                            )}
                           </div>
                           <button
                             type="button"
                             onClick={handleSignaturePick}
-                            className="mt-3 w-full rounded-xl border border-neutral-200 bg-white px-4 py-2 text-sm font-extrabold text-neutral-900 shadow-sm ring-1 ring-black/5 transition hover:border-[#f39b03]/40 hover:text-[#f39b03]"
+                            disabled={companyLocked}
+                            className="mt-3 w-full rounded-xl border border-neutral-200 bg-white px-4 py-2 text-sm font-extrabold text-neutral-900 shadow-sm ring-1 ring-black/5 transition hover:border-[#f39b03]/40 hover:text-[#f39b03] disabled:cursor-not-allowed disabled:opacity-50"
                           >
-                            Upload Signature
+                            Upload signature
                           </button>
                           <input
                             ref={signatureInputRef}
@@ -822,16 +1113,27 @@ export default function Settings({ onNavigate }: SettingsProps) {
                         </div>
 
                         <div className="rounded-xl bg-white p-2.5 shadow-sm ring-1 ring-black/5 md:p-3">
-                          <div className="text-xs font-extrabold text-neutral-900">Upload Stamp</div>
-                          <div className="mt-2 text-xs font-semibold text-neutral-500">
-                            {stampLabel}
+                          <div className="text-xs font-extrabold text-neutral-900">Stamp</div>
+                          <div className="mt-2 flex min-h-[100px] items-center justify-center overflow-hidden rounded-lg bg-neutral-50 ring-1 ring-black/5">
+                            {stampUrl ? (
+                              <img
+                                src={stampUrl}
+                                alt="Stamp preview"
+                                className="max-h-28 w-full object-contain p-2"
+                              />
+                            ) : (
+                              <span className="px-3 text-center text-xs font-semibold text-neutral-500">
+                                No stamp uploaded
+                              </span>
+                            )}
                           </div>
                           <button
                             type="button"
                             onClick={handleStampPick}
-                            className="mt-3 w-full rounded-xl border border-neutral-200 bg-white px-4 py-2 text-sm font-extrabold text-neutral-900 shadow-sm ring-1 ring-black/5 transition hover:border-[#f39b03]/40 hover:text-[#f39b03]"
+                            disabled={companyLocked}
+                            className="mt-3 w-full rounded-xl border border-neutral-200 bg-white px-4 py-2 text-sm font-extrabold text-neutral-900 shadow-sm ring-1 ring-black/5 transition hover:border-[#f39b03]/40 hover:text-[#f39b03] disabled:cursor-not-allowed disabled:opacity-50"
                           >
-                            Upload Stamp
+                            Upload stamp
                           </button>
                           <input
                             ref={stampInputRef}
@@ -845,15 +1147,18 @@ export default function Settings({ onNavigate }: SettingsProps) {
                     </div>
 
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                      <Field label="Select Invoice Theme">
+                      <Field label="Invoice theme">
                         <select
                           value={invoiceTheme}
-                          onChange={(e) => setInvoiceTheme(e.target.value)}
-                          className="h-11 w-full cursor-pointer appearance-none rounded-xl border border-neutral-200 bg-white px-3 pr-10 text-sm font-semibold text-neutral-900 outline-none transition hover:border-neutral-300 focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
+                          disabled={companyLocked}
+                          onChange={(e) =>
+                            setInvoiceTheme(e.target.value as 'modern' | 'classic' | 'minimal')
+                          }
+                          className="h-11 w-full cursor-pointer appearance-none rounded-xl border border-neutral-200 bg-white px-3 pr-10 text-sm font-semibold text-neutral-900 outline-none transition hover:border-neutral-300 focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20 disabled:cursor-not-allowed disabled:bg-neutral-50"
                         >
-                          <option>Modern</option>
-                          <option>Classic</option>
-                          <option>Minimal</option>
+                          <option value="modern">Modern</option>
+                          <option value="classic">Classic</option>
+                          <option value="minimal">Minimal</option>
                         </select>
                       </Field>
 
@@ -863,17 +1168,19 @@ export default function Settings({ onNavigate }: SettingsProps) {
                           onClick={handlePreviewInvoice}
                           className="h-11 w-full rounded-xl border border-[#f39b03]/60 bg-[#f39b03]/10 px-4 text-sm font-extrabold text-[#f39b03] shadow-sm ring-1 ring-[#f39b03]/20 transition hover:bg-[#f39b03]/15"
                         >
-                          Preview Invoice
+                          Preview invoice
                         </button>
                       </div>
                     </div>
 
-                    <Field label="Footer Note">
+                    <Field label="Footer note">
                       <textarea
                         value={footerNote}
                         onChange={(e) => setFooterNote(e.target.value)}
+                        disabled={companyLocked}
                         rows={4}
-                        className="w-full resize-y rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm font-medium leading-relaxed text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
+                        placeholder="Shown at the bottom of PDF invoices"
+                        className="w-full resize-y rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm font-medium leading-relaxed text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20 disabled:cursor-not-allowed disabled:bg-neutral-50"
                       />
                     </Field>
                   </div>
@@ -891,11 +1198,14 @@ export default function Settings({ onNavigate }: SettingsProps) {
                 <button
                   type="button"
                   onClick={handleSaveSettings}
-                  className="inline-flex h-11 items-center justify-center rounded-xl bg-[#f39b03] px-8 text-sm font-extrabold text-white shadow-[0_10px_30px_rgba(243,155,3,0.25)] transition hover:bg-[#e18e03]"
+                  disabled={saveBusy}
+                  className="inline-flex h-11 items-center justify-center rounded-xl bg-[#f39b03] px-8 text-sm font-extrabold text-white transition hover:bg-[#e18e03] disabled:opacity-60"
                 >
-                  Save Settings
+                  {saveBusy ? 'Saving…' : 'Save Settings'}
                 </button>
               </div>
+                </>
+              )}
             </section>
           </div>
         </main>
@@ -936,74 +1246,7 @@ export default function Settings({ onNavigate }: SettingsProps) {
         <div aria-hidden className="mobile-nav-safe-spacer" />
       </nav>
 
-      <footer className="fixed inset-x-0 bottom-0 z-50 hidden border-t border-white/10 bg-gradient-to-b from-[#050505] via-[#0b0b0b] to-[#040404] text-white shadow-[0_-12px_30px_rgba(0,0,0,0.3)] md:block">
-        <div className="mx-auto flex w-full max-w-none items-center justify-between gap-3 px-3 py-2 sm:px-5 sm:py-3">
-          <img
-            src={layoutBrandLogo}
-            alt="Samarth Land Surveyors"
-            className="h-9 w-auto shrink-0 sm:h-10"
-            draggable={false}
-          />
-
-          <div className="hidden min-w-0 flex-1 items-center justify-end text-xs font-bold text-white/95 md:flex">
-            <div className="flex min-w-0 items-center gap-2 pr-5">
-              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#f39b03]/20 text-[#f39b03] ring-1 ring-[#f39b03]/45">
-                <Phone size={13} />
-              </span>
-              <span className="truncate">Er. SHUBHAM BHOI 8643 00 1010</span>
-            </div>
-            <div className="h-6 w-px bg-white/25" />
-            <div className="flex min-w-0 items-center gap-2 px-5">
-              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#f39b03]/20 text-[#f39b03] ring-1 ring-[#f39b03]/45">
-                <Phone size={13} />
-              </span>
-              <span className="truncate">Er. SANKET KATAKAR 7026 01 6077</span>
-            </div>
-            <div className="h-6 w-px bg-white/25" />
-            <div className="flex min-w-0 items-center gap-2 px-5">
-              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#f39b03]/20 text-[#f39b03] ring-1 ring-[#f39b03]/45">
-                <Phone size={13} />
-              </span>
-              <span className="truncate">Er. SHUBHAM SODAGE 95959755566</span>
-            </div>
-            <div className="h-6 w-px bg-white/25" />
-            <div className="flex min-w-0 items-center gap-2 px-5">
-              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#f39b03]/20 text-[#f39b03] ring-1 ring-[#f39b03]/45">
-                <Phone size={13} />
-              </span>
-              <span className="truncate">Er. PRAJWAL PATIL 7058129002</span>
-            </div>
-            <div className="h-6 w-px bg-white/25" />
-            <div className="flex min-w-0 items-center gap-2 pl-5">
-              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#f39b03]/20 text-[#f39b03] ring-1 ring-[#f39b03]/45">
-                <Mail size={13} />
-              </span>
-              <span className="truncate">samarthlandsurveyors@gmail.com</span>
-            </div>
-          </div>
-
-          <div className="min-w-0 flex-1 justify-end text-right text-[10px] font-bold leading-tight text-white/90 md:hidden">
-            <div className="flex items-center justify-end gap-2">
-              <Phone size={11} className="text-[#f39b03]" />
-              <span>8643 00 1010</span>
-              <span className="text-white/55">|</span>
-              <Phone size={11} className="text-[#f39b03]" />
-              <span>7026 01 6077</span>
-            </div>
-            <div className="mt-1 flex items-center justify-end gap-2">
-              <Phone size={11} className="text-[#f39b03]" />
-              <span>95959755566</span>
-              <span className="text-white/55">|</span>
-              <Phone size={11} className="text-[#f39b03]" />
-              <span>7058129002</span>
-            </div>
-            <div className="mt-1 flex items-center justify-end gap-2">
-              <Mail size={11} className="text-[#f39b03]" />
-              <span className="truncate">samarthlandsurveyors@gmail.com</span>
-            </div>
-          </div>
-        </div>
-      </footer>
+      <LayoutFooter />
     </div>
   )
 }

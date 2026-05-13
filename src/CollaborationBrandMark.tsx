@@ -1,18 +1,50 @@
+import { useMemo } from 'react'
 import { layoutBrandLogo } from './brandLogo'
 import dgpsLogo from './assets/dgps-logo.png'
+import tsLogo from './assets/ts-logo.png'
+import { useAuth } from './context/AuthContext'
 
 type CollaborationBrandMarkProps = {
   variant: 'desktopSidebar' | 'mobileHeader'
 }
 
+function useMachineLogoSrc() {
+  const { instruments, activeInstrumentId } = useAuth()
+  return useMemo(() => {
+    const inst = instruments.find((i) => i.id === activeInstrumentId) ?? instruments[0]
+    const cat = inst?.category?.trim().toLowerCase() ?? ''
+    if (cat === 'total station') return tsLogo
+    if (cat === 'dgps') return dgpsLogo
+    return dgpsLogo
+  }, [instruments, activeInstrumentId])
+}
+
+function useCollaborationAriaLabel() {
+  const { instruments, activeInstrumentId } = useAuth()
+  return useMemo(() => {
+    const inst = instruments.find((i) => i.id === activeInstrumentId) ?? instruments[0]
+    const cat = inst?.category?.trim() ?? ''
+    if (cat.toLowerCase() === 'total station') {
+      return 'Samarth Land Surveyors in collaboration with Total Station'
+    }
+    if (cat.toLowerCase() === 'dgps') {
+      return 'Samarth Land Surveyors in collaboration with DGPS'
+    }
+    return 'Samarth Land Surveyors in collaboration with DGPS'
+  }, [instruments, activeInstrumentId])
+}
+
 export function CollaborationBrandMark({ variant }: CollaborationBrandMarkProps) {
+  const machineLogoSrc = useMachineLogoSrc()
+  const collaborationAriaLabel = useCollaborationAriaLabel()
+
   if (variant === 'desktopSidebar') {
     return (
       <div className="flex w-full min-w-0 max-w-full flex-col">
         <div
           className="flex w-full min-w-0 max-w-full flex-col items-center gap-2"
           role="img"
-          aria-label="Samarth Land Surveyors in collaboration with DGPS"
+          aria-label={collaborationAriaLabel}
         >
           <img
             src={layoutBrandLogo}
@@ -29,7 +61,7 @@ export function CollaborationBrandMark({ variant }: CollaborationBrandMarkProps)
             </span>
             <div className="flex w-full min-w-0 justify-center">
               <img
-                src={dgpsLogo}
+                src={machineLogoSrc}
                 alt=""
                 draggable={false}
                 className="h-6 w-auto max-h-6 max-w-[85%] object-contain object-center sm:h-7 sm:max-h-7"
@@ -46,7 +78,7 @@ export function CollaborationBrandMark({ variant }: CollaborationBrandMarkProps)
     <div
       className="flex min-w-0 max-w-full items-center justify-center gap-1.5 sm:gap-2"
       role="img"
-      aria-label="Samarth Land Surveyors in collaboration with DGPS"
+      aria-label={collaborationAriaLabel}
     >
       <img
         src={layoutBrandLogo}
@@ -61,7 +93,7 @@ export function CollaborationBrandMark({ variant }: CollaborationBrandMarkProps)
         ×
       </span>
       <img
-        src={dgpsLogo}
+        src={machineLogoSrc}
         alt=""
         draggable={false}
         className="h-5 max-h-[28px] w-auto max-w-[38%] shrink object-contain object-center sm:h-6 sm:max-h-[30px]"

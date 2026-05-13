@@ -15,38 +15,67 @@ import {
   X,
   type LucideIcon,
 } from 'lucide-react'
-import { Fragment, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { AccountManagerSidebarBlock } from './AccountManagerSidebarBlock'
 import { AddSiteForm, DEFAULT_CLIENT_OPTIONS_FOR_ADD_SITE } from './AddSiteForm'
 import { CollaborationBrandMark } from './CollaborationBrandMark'
+import { LayoutFooter } from './LayoutFooter'
 import { CardPanel, toolbarSearchInputClass, toolbarSecondaryButtonClass } from './dashboardCards'
 import { layoutBrandLogo } from './brandLogo'
 import { getHeaderDateLabel } from './headerDateLabel'
+import { toast } from 'sonner'
+import http from './api/http'
+import { useAuth } from './context/AuthContext'
 import { signOut } from './signOut'
 
 type AddSiteProps = {
   onNavigate: (path: string) => void
 }
 
-const knownClients = [...DEFAULT_CLIENT_OPTIONS_FOR_ADD_SITE]
-
 export default function AddSite({ onNavigate }: AddSiteProps) {
+  const { token } = useAuth()
   const location = useLocation()
   const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search])
   const clientFromQuery = searchParams.get('client')
-  const initialClient =
-    clientFromQuery && knownClients.includes(clientFromQuery) ? clientFromQuery : knownClients[0]
+  const [clientNames, setClientNames] = useState<string[]>([...DEFAULT_CLIENT_OPTIONS_FOR_ADD_SITE])
+  const [clientIds, setClientIds] = useState<Record<string, string>>({})
 
-  const [selectedClient, setSelectedClient] = useState(initialClient)
+  const [selectedClient, setSelectedClient] = useState(() => clientFromQuery ?? DEFAULT_CLIENT_OPTIONS_FOR_ADD_SITE[0])
   const [clientSearchQuery, setClientSearchQuery] = useState('')
   const [clientGroupFilter, setClientGroupFilter] = useState<'all' | 'a-m' | 'n-z'>('all')
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const headerDateLabel = getHeaderDateLabel()
 
+  useEffect(() => {
+    if (!token) return
+    ;(async () => {
+      try {
+        const res = await http.get<{ ok: boolean; clients: Array<{ id: string; name: string }> }>('/api/clients')
+        if (!res.data?.ok) return
+        const ids: Record<string, string> = {}
+        const names = res.data.clients.map((c) => {
+          ids[c.name] = c.id
+          return c.name
+        })
+        if (names.length) {
+          setClientIds(ids)
+          setClientNames(names)
+          setSelectedClient((prev) => {
+            if (clientFromQuery && names.includes(clientFromQuery)) return clientFromQuery
+            if (names.includes(prev)) return prev
+            return names[0]
+          })
+        }
+      } catch {
+        toast.error('Could not load clients')
+      }
+    })()
+  }, [token, clientFromQuery])
+
   const filteredClientOptions = useMemo(() => {
     const normalizedQuery = clientSearchQuery.trim().toLowerCase()
-    return knownClients.filter((clientName) => {
+    return clientNames.filter((clientName) => {
       const firstChar = clientName.trim().charAt(0).toLowerCase()
       const matchesGroup =
         clientGroupFilter === 'all' ||
@@ -55,7 +84,7 @@ export default function AddSite({ onNavigate }: AddSiteProps) {
       const matchesQuery = normalizedQuery.length === 0 || clientName.toLowerCase().includes(normalizedQuery)
       return matchesGroup && matchesQuery
     })
-  }, [clientGroupFilter, clientSearchQuery])
+  }, [clientGroupFilter, clientSearchQuery, clientNames])
 
   const mobileBottomNav: { label: string; path: string; icon: LucideIcon }[] = [
     { label: 'Dashboard', path: '/dashboard', icon: LayoutGrid },
@@ -265,6 +294,23 @@ export default function AddSite({ onNavigate }: AddSiteProps) {
                 variant="page"
                 onCancel={() => onNavigate('/clients-sites')}
                 onSuccess={() => onNavigate('/clients-sites')}
+                saveSite={async (siteName, locationName) => {
+                  const cid = clientIds[selectedClient]
+                  if (!cid) {
+                    toast.error('Client not ready. Try again in a moment.')
+                    throw new Error('no client id')
+                  }
+                  const res = await http.post<{ ok: boolean; error?: string }>('/api/sites', {
+                    clientId: cid,
+                    name: siteName,
+                    locationLabel: locationName,
+                  })
+                  if (res.status !== 201 || !res.data?.ok) {
+                    toast.error(res.data?.error ?? 'Could not save site')
+                    throw new Error('save failed')
+                  }
+                  toast.success('Site saved')
+                }}
               />
             </CardPanel>
           </div>
@@ -355,12 +401,7 @@ export default function AddSite({ onNavigate }: AddSiteProps) {
         <div aria-hidden className="mobile-nav-safe-spacer" />
       </nav>
 
-      <footer className="fixed inset-x-0 bottom-0 z-50 hidden border-t border-white/10 bg-gradient-to-b from-[#050505] via-[#0b0b0b] to-[#040404] text-white shadow-[0_-12px_30px_rgba(0,0,0,0.3)] md:block">
-        <div className="mx-auto flex w-full max-w-none items-center justify-between gap-3 px-3 py-2 sm:px-5 sm:py-3">
-          <img src={layoutBrandLogo} alt="Samarth Land Surveyors" className="h-9 w-auto shrink-0 sm:h-10" draggable={false} />
-          <div className="min-w-0 flex-1 text-right text-[11px] font-bold text-white/90">Samarth Land Surveyors</div>
-        </div>
-      </footer>
+      <LayoutFooter />
     </div>
   )
 }

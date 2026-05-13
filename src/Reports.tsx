@@ -19,13 +19,16 @@ import {
   UsersRound,
   X,
 } from 'lucide-react'
-import { Fragment, useMemo, useState, type ReactNode } from 'react'
+import { Fragment, useCallback, useMemo, useState, type ReactNode } from 'react'
 import { useLocation } from 'react-router-dom'
 import { AccountManagerSidebarBlock } from './AccountManagerSidebarBlock'
 import { CollaborationBrandMark } from './CollaborationBrandMark'
+import { LayoutFooter } from './LayoutFooter'
 import { CardShell, StatCard } from './dashboardCards'
 import { layoutBrandLogo } from './brandLogo'
 import { getHeaderDateLabel } from './headerDateLabel'
+import { toast } from 'sonner'
+import http from './api/http'
 import { signOut } from './signOut'
 
 type NavItem = {
@@ -78,36 +81,31 @@ export default function Reports({ onNavigate }: ReportsProps) {
   const [machineType, setMachineType] = useState<string>('Total Station')
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | ReportRow['status']>('all')
+  const [reportRows, setReportRows] = useState<ReportRow[]>([])
 
-  const reportRows: ReportRow[] = [
-    {
-      id: 'RPT-1001',
-      type: 'Site-wise',
-      client: 'Amit Developers',
-      site: 'Sai Residency',
-      date: '20 May 2025',
-      machine: 'Total Station',
-      status: 'Completed',
-    },
-    {
-      id: 'RPT-1002',
-      type: 'Client-wise',
-      client: 'Shree Krishna Infra',
-      site: 'Multiple Sites',
-      date: '18 May 2025',
-      machine: 'DGPS',
-      status: 'Completed',
-    },
-    {
-      id: 'RPT-1003',
-      type: 'Date-wise',
-      client: 'Vishwakarma Properties',
-      site: 'Green Valley Phase 2',
-      date: '16 May 2025',
-      machine: 'Total Station',
-      status: 'Pending',
-    },
-  ]
+  const loadReportRows = useCallback(async () => {
+    try {
+      const res = await http.get<{
+        ok: boolean
+        rows: ReportRow[]
+      }>('/api/reports/rows', {
+        params: {
+          reportType,
+          clientFilter,
+          siteFilter,
+          fromDate,
+          toDate,
+          machineType,
+          searchQuery,
+          statusFilter,
+        },
+      })
+      if (res.data?.ok) setReportRows(res.data.rows ?? [])
+      else toast.error('Could not load report')
+    } catch {
+      toast.error('Could not load report')
+    }
+  }, [reportType, clientFilter, siteFilter, fromDate, toDate, machineType, searchQuery, statusFilter])
 
   const navItems: NavItem[] = [
     { label: 'Dashboard', icon: <LayoutGrid size={16} /> },
@@ -572,6 +570,7 @@ export default function Reports({ onNavigate }: ReportsProps) {
                     <div className="flex flex-wrap gap-2.5 lg:justify-end">
                       <button
                         type="button"
+                        onClick={() => void loadReportRows()}
                         className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[#f39b03] px-5 text-sm font-extrabold text-white transition hover:bg-[#e18e03] md:flex-none md:min-w-[158px]"
                       >
                         <Plus size={18} strokeWidth={2.5} className="shrink-0" />
@@ -579,6 +578,7 @@ export default function Reports({ onNavigate }: ReportsProps) {
                       </button>
                       <button
                         type="button"
+                        onClick={() => void loadReportRows()}
                         className="inline-flex h-11 flex-1 items-center justify-center rounded-xl bg-[#f39b03] px-6 text-sm font-extrabold text-white transition hover:bg-[#e18e03] md:flex-none md:min-w-[140px]"
                       >
                         Apply Filter
@@ -708,74 +708,7 @@ export default function Reports({ onNavigate }: ReportsProps) {
         <div aria-hidden className="mobile-nav-safe-spacer" />
       </nav>
 
-      <footer className="fixed inset-x-0 bottom-0 z-50 hidden border-t border-white/10 bg-gradient-to-b from-[#050505] via-[#0b0b0b] to-[#040404] text-white shadow-[0_-12px_30px_rgba(0,0,0,0.3)] md:block">
-        <div className="mx-auto flex w-full max-w-none items-center justify-between gap-3 px-3 py-2 sm:px-5 sm:py-3">
-          <img
-            src={layoutBrandLogo}
-            alt="Samarth Land Surveyors"
-            className="h-9 w-auto shrink-0 sm:h-10"
-            draggable={false}
-          />
-
-          <div className="hidden min-w-0 flex-1 items-center justify-end text-xs font-bold text-white/95 md:flex">
-            <div className="flex min-w-0 items-center gap-2 pr-5">
-              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#f39b03]/20 text-[#f39b03] ring-1 ring-[#f39b03]/45">
-                <Phone size={13} />
-              </span>
-              <span className="truncate">Er. SHUBHAM BHOI 8643 00 1010</span>
-            </div>
-            <div className="h-6 w-px bg-white/25" />
-            <div className="flex min-w-0 items-center gap-2 px-5">
-              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#f39b03]/20 text-[#f39b03] ring-1 ring-[#f39b03]/45">
-                <Phone size={13} />
-              </span>
-              <span className="truncate">Er. SANKET KATAKAR 7026 01 6077</span>
-            </div>
-            <div className="h-6 w-px bg-white/25" />
-            <div className="flex min-w-0 items-center gap-2 px-5">
-              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#f39b03]/20 text-[#f39b03] ring-1 ring-[#f39b03]/45">
-                <Phone size={13} />
-              </span>
-              <span className="truncate">Er. SHUBHAM SODAGE 95959755566</span>
-            </div>
-            <div className="h-6 w-px bg-white/25" />
-            <div className="flex min-w-0 items-center gap-2 px-5">
-              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#f39b03]/20 text-[#f39b03] ring-1 ring-[#f39b03]/45">
-                <Phone size={13} />
-              </span>
-              <span className="truncate">Er. PRAJWAL PATIL 7058129002</span>
-            </div>
-            <div className="h-6 w-px bg-white/25" />
-            <div className="flex min-w-0 items-center gap-2 pl-5">
-              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#f39b03]/20 text-[#f39b03] ring-1 ring-[#f39b03]/45">
-                <Mail size={13} />
-              </span>
-              <span className="truncate">samarthlandsurveyors@gmail.com</span>
-            </div>
-          </div>
-
-          <div className="min-w-0 flex-1 justify-end text-right text-[10px] font-bold leading-tight text-white/90 md:hidden">
-            <div className="flex items-center justify-end gap-2">
-              <Phone size={11} className="text-[#f39b03]" />
-              <span>8643 00 1010</span>
-              <span className="text-white/55">|</span>
-              <Phone size={11} className="text-[#f39b03]" />
-              <span>7026 01 6077</span>
-            </div>
-            <div className="mt-1 flex items-center justify-end gap-2">
-              <Phone size={11} className="text-[#f39b03]" />
-              <span>95959755566</span>
-              <span className="text-white/55">|</span>
-              <Phone size={11} className="text-[#f39b03]" />
-              <span>7058129002</span>
-            </div>
-            <div className="mt-1 flex items-center justify-end gap-2">
-              <Mail size={11} className="text-[#f39b03]" />
-              <span className="truncate">samarthlandsurveyors@gmail.com</span>
-            </div>
-          </div>
-        </div>
-      </footer>
+      <LayoutFooter />
     </div>
   )
 }

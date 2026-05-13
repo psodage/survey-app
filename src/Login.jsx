@@ -12,7 +12,9 @@ import {
   Zap,
 } from 'lucide-react'
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Navigate, useNavigate } from 'react-router-dom'
+import { toast } from 'sonner'
+import { useAuth } from './context/AuthContext'
 import { layoutBrandLogo } from './brandLogo'
 
 const features = [
@@ -102,6 +104,7 @@ const GoogleLogo = () => (
 
 function Login() {
   const navigate = useNavigate()
+  const { login, token, isLoading } = useAuth()
   const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -109,14 +112,28 @@ function Login() {
 
   async function onSubmit(event) {
     event.preventDefault()
+    const email = identifier.trim()
+    if (!email || !password) {
+      toast.error('Enter email and password.')
+      return
+    }
     setIsSubmitting(true)
     try {
+      await login(email, password)
       setIdentifier('')
       setPassword('')
+      toast.success('Signed in')
       navigate('/dashboard', { replace: true })
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Login failed'
+      toast.error(msg)
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  if (!isLoading && token) {
+    return <Navigate to="/dashboard" replace />
   }
 
   return (
@@ -248,19 +265,8 @@ function Login() {
                 <ArrowRight className="absolute right-4 h-[18px] w-[18px]" />
               </button>
 
-              <div className="flex items-center gap-4 text-sm tracking-wide text-white/45">
-                <div className="h-px flex-1 bg-white/16" />
-                <span>OR</span>
-                <div className="h-px flex-1 bg-white/16" />
-              </div>
+             
 
-              <button
-                type="button"
-                className="flex h-11 w-full items-center justify-center gap-3 rounded-xl border border-white/20 bg-transparent text-[16px] font-medium text-white transition hover:border-white/35 hover:bg-white/5"
-              >
-                <GoogleLogo />
-                Login with Google
-              </button>
 
               <p className="pt-1 text-center text-[14px] text-white/70">
                 <a href="#" className="font-medium text-[#f39b03] transition hover:text-[#f7b13a]">

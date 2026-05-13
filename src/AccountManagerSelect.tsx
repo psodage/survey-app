@@ -15,13 +15,14 @@ import {
   X,
   ArrowRight,
 } from 'lucide-react'
-import { Fragment, useState, type ReactNode } from 'react'
+import { Fragment, useMemo, useState, type ReactNode } from 'react'
 import { useLocation, useSearchParams, type NavigateFunction } from 'react-router-dom'
 import { AccountManagerSidebarBlock } from './AccountManagerSidebarBlock'
 import { ACCOUNT_MANAGERS } from './accountManagersData'
+import { useAuth } from './context/AuthContext'
 import { CollaborationBrandMark } from './CollaborationBrandMark'
+import { LayoutFooter } from './LayoutFooter'
 import { CardPanel } from './dashboardCards'
-import { layoutBrandLogo } from './brandLogo'
 import { getHeaderDateLabel } from './headerDateLabel'
 import { signOut } from './signOut'
 
@@ -45,6 +46,14 @@ type AccountManagerSelectProps = {
 }
 
 export default function AccountManagerSelect({ onNavigate }: AccountManagerSelectProps) {
+  const { managers } = useAuth()
+  const pickList = useMemo(
+    () =>
+      managers.length
+        ? managers.map((m) => ({ id: m.id, name: m.name, shortName: m.shortName, phone: m.phone }))
+        : ACCOUNT_MANAGERS.map((m) => ({ id: m.id, name: m.name, shortName: m.shortName, phone: m.phone })),
+    [managers],
+  )
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const location = useLocation()
   const [searchParams] = useSearchParams()
@@ -307,7 +316,7 @@ export default function AccountManagerSelect({ onNavigate }: AccountManagerSelec
               page.
             </p>
             <div className="mt-4 grid gap-3 sm:grid-cols-2 sm:gap-4">
-              {ACCOUNT_MANAGERS.map((m) => (
+              {pickList.map((m) => (
                 <button
                   key={m.id}
                   type="button"
@@ -382,14 +391,7 @@ export default function AccountManagerSelect({ onNavigate }: AccountManagerSelec
         <div aria-hidden className="mobile-nav-safe-spacer" />
       </nav>
 
-      <footer className="fixed inset-x-0 bottom-0 z-50 hidden border-t border-white/10 bg-gradient-to-b from-[#050505] via-[#0b0b0b] to-[#040404] text-white shadow-[0_-12px_30px_rgba(0,0,0,0.3)] md:block">
-        <div className="mx-auto flex w-full max-w-none items-center justify-between gap-3 px-3 py-2 sm:px-5 sm:py-3">
-          <img src={layoutBrandLogo} alt="Samarth Land Surveyors" className="h-9 w-auto shrink-0 sm:h-10" draggable={false} />
-          <div className="min-w-0 flex-1 justify-end text-right text-[10px] font-bold leading-tight text-white/90">
-            <span className="truncate">samarthlandsurveyors@gmail.com</span>
-          </div>
-        </div>
-      </footer>
+      <LayoutFooter />
     </div>
   )
 }

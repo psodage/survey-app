@@ -12,11 +12,20 @@ export type AddSiteFormProps = {
   variant?: 'page' | 'modal'
   onCancel: () => void
   onSuccess: () => void
+  /** When set, called before onSuccess; throw or reject to keep the form open. */
+  saveSite?: (siteName: string, locationName: string) => Promise<void>
 }
 
-export function AddSiteForm({ clientName, variant = 'page', onCancel, onSuccess }: AddSiteFormProps) {
+export function AddSiteForm({
+  clientName,
+  variant = 'page',
+  onCancel,
+  onSuccess,
+  saveSite,
+}: AddSiteFormProps) {
   const [siteName, setSiteName] = useState('')
   const [locationName, setLocationName] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
 
   const resetFields = () => {
     setSiteName('')
@@ -36,10 +45,19 @@ export function AddSiteForm({ clientName, variant = 'page', onCancel, onSuccess 
   return (
     <form
       className={gridClass}
-      onSubmit={(event) => {
+      onSubmit={async (event) => {
         event.preventDefault()
-        resetFields()
-        onSuccess()
+        if (isSaving) return
+        setIsSaving(true)
+        try {
+          if (saveSite) {
+            await saveSite(siteName.trim(), locationName.trim())
+          }
+          resetFields()
+          onSuccess()
+        } finally {
+          setIsSaving(false)
+        }
       }}
     >
       <label className={['grid gap-2', colSpanWide].join(' ')}>
@@ -83,9 +101,10 @@ export function AddSiteForm({ clientName, variant = 'page', onCancel, onSuccess 
         </button>
         <button
           type="submit"
-          className="inline-flex h-11 min-w-[120px] flex-1 items-center justify-center rounded-xl bg-[#f39b03] px-8 text-sm font-extrabold text-white transition hover:bg-[#e18e03] sm:flex-none"
+          disabled={isSaving}
+          className="inline-flex h-11 min-w-[120px] flex-1 items-center justify-center rounded-xl bg-[#f39b03] px-8 text-sm font-extrabold text-white transition hover:bg-[#e18e03] enabled:cursor-pointer disabled:opacity-60 sm:flex-none"
         >
-          Save Site
+          {isSaving ? 'Saving…' : 'Save Site'}
         </button>
       </div>
     </form>
