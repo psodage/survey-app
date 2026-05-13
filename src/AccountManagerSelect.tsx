@@ -15,10 +15,11 @@ import {
   X,
   ArrowRight,
 } from 'lucide-react'
-import { Fragment, useMemo, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useLocation, useSearchParams, type NavigateFunction } from 'react-router-dom'
 import { AccountManagerSidebarBlock } from './AccountManagerSidebarBlock'
 import { ACCOUNT_MANAGERS } from './accountManagersData'
+import http from './api/http'
 import { useAuth } from './context/AuthContext'
 import { CollaborationBrandMark } from './CollaborationBrandMark'
 import { LayoutFooter } from './LayoutFooter'
@@ -45,15 +46,66 @@ type AccountManagerSelectProps = {
   onNavigate: NavigateFunction
 }
 
+type PickRow = {
+  id: string
+  name: string
+  shortName: string
+  phone: string
+  /** Other admin's ledger — browse only */
+  viewOnly?: boolean
+}
+
+type InstrumentPeerAm = {
+  adminId: string
+  accountManagerSlug: string | null
+  fullName: string
+  shortName: string
+  phone: string
+  email: string
+}
+
 export default function AccountManagerSelect({ onNavigate }: AccountManagerSelectProps) {
-  const { managers } = useAuth()
-  const pickList = useMemo(
-    () =>
-      managers.length
-        ? managers.map((m) => ({ id: m.id, name: m.name, shortName: m.shortName, phone: m.phone }))
-        : ACCOUNT_MANAGERS.map((m) => ({ id: m.id, name: m.name, shortName: m.shortName, phone: m.phone })),
-    [managers],
-  )
+  const { managers, token, activeInstrumentId, user } = useAuth()
+  const [instrumentAdmins, setInstrumentAdmins] = useState<InstrumentPeerAm[]>([])
+
+  useEffect(() => {
+    if (!token || !activeInstrumentId) {
+      setInstrumentAdmins([])
+      return
+    }
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await http.get<{ ok: boolean; admins: InstrumentPeerAm[] }>('/api/instruments/coworkers', {
+          params: { instrumentId: activeInstrumentId },
+        })
+        if (cancelled) return
+        if (res.data?.ok) setInstrumentAdmins(res.data.admins ?? [])
+        else setInstrumentAdmins([])
+      } catch {
+        if (!cancelled) setInstrumentAdmins([])
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [token, activeInstrumentId])
+
+  const pickList = useMemo((): PickRow[] => {
+    const fromInstrument = instrumentAdmins
+      .filter((a) => a.accountManagerSlug)
+      .map((a) => ({
+        id: a.accountManagerSlug as string,
+        name: a.fullName || a.email || 'Account manager',
+        shortName: a.shortName || a.fullName || '—',
+        phone: a.phone,
+        viewOnly: Boolean(user?.id && a.adminId !== user.id),
+      }))
+    if (fromInstrument.length > 0) return fromInstrument
+    return managers.length
+      ? managers.map((m) => ({ id: m.id, name: m.name, shortName: m.shortName, phone: m.phone }))
+      : ACCOUNT_MANAGERS.map((m) => ({ id: m.id, name: m.name, shortName: m.shortName, phone: m.phone }))
+  }, [instrumentAdmins, managers, user?.id])
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const location = useLocation()
   const [searchParams] = useSearchParams()
@@ -339,10 +391,19 @@ export default function AccountManagerSelect({ onNavigate }: AccountManagerSelec
                     />
                   </div>
                   <div className="min-w-0">
-                    <div className="truncate text-base font-extrabold text-neutral-950 sm:text-lg">{m.name}</div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="truncate text-base font-extrabold text-neutral-950 sm:text-lg">{m.name}</div>
+                      {m.viewOnly ? (
+                        <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-amber-900 ring-1 ring-amber-200/90">
+                          View only
+                        </span>
+                      ) : null}
+                    </div>
                     <div className="mt-1 truncate text-sm font-semibold text-neutral-600">{m.phone}</div>
                   </div>
-                  <span className="text-xs font-bold text-[#f39b03]">Open account manager page →</span>
+                  <span className="text-xs font-bold text-[#f39b03]">
+                    {m.viewOnly ? 'Open ledger (view only) →' : 'Open account manager page →'}
+                  </span>
                 </button>
               ))}
             </div>

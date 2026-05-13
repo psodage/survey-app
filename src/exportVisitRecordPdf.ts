@@ -18,6 +18,8 @@ export type VisitRecordPdfData = {
   dwgRefBy?: string
   dwgNo?: string
   engineerName?: string
+  /** HTTPS image URLs (e.g. Cloudinary); rendered on PDF page 2+ */
+  photoUrls?: string[]
 }
 
 async function loadImageAsDataUrl(src: string) {
@@ -32,6 +34,59 @@ async function loadImageAsDataUrl(src: string) {
   return dataUrl
 }
 
+function guessImageFormat(dataUrl: string): 'JPEG' | 'PNG' | 'WEBP' {
+  if (dataUrl.startsWith('data:image/png')) return 'PNG'
+  if (dataUrl.startsWith('data:image/webp')) return 'WEBP'
+  return 'JPEG'
+}
+
+async function appendPhotoPages(doc: jsPDF, photoUrls: string[], visitId: string) {
+  const urls = photoUrls.filter((u) => typeof u === 'string' && u.trim().length > 0)
+  if (!urls.length) return
+
+  const perPage = 4
+  const positions: [number, number, number, number][] = [
+    [10, 32, 133, 86],
+    [154, 32, 133, 86],
+    [10, 124, 133, 86],
+    [154, 124, 133, 86],
+  ]
+
+  for (let i = 0; i < urls.length; i += perPage) {
+    doc.addPage()
+    const pageW = doc.internal.pageSize.getWidth()
+    const pageH = doc.internal.pageSize.getHeight()
+    doc.setFillColor(255, 255, 255)
+    doc.rect(0, 0, pageW, pageH, 'F')
+    doc.setDrawColor(60, 60, 60)
+    doc.rect(6, 6, pageW - 12, pageH - 12)
+
+    doc.setTextColor(35, 35, 35)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(14)
+    doc.text('SITE VISIT PHOTOGRAPHS', pageW / 2, 18, { align: 'center' })
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9)
+    doc.setTextColor(80, 80, 80)
+    doc.text(`Report / Visit: ${visitId}`, pageW / 2, 24, { align: 'center' })
+
+    const slice = urls.slice(i, i + perPage)
+    for (let j = 0; j < slice.length; j += 1) {
+      const pos = positions[j] ?? [10, 32, 133, 86]
+      const [x, y, w, h] = pos
+      try {
+        const dataUrl = await loadImageAsDataUrl(slice[j])
+        const fmt = guessImageFormat(dataUrl)
+        doc.addImage(dataUrl, fmt, x, y, w, h)
+      } catch {
+        doc.setFont('helvetica', 'italic')
+        doc.setFontSize(10)
+        doc.setTextColor(120, 120, 120)
+        doc.text('(Photo could not be loaded)', x + 4, y + h / 2)
+      }
+    }
+  }
+}
 function lineValue(doc: jsPDF, xStart: number, xEnd: number, y: number, value: string) {
   doc.setDrawColor(40, 40, 40)
   doc.line(xStart, y + 0.8, xEnd, y + 0.8)
@@ -151,6 +206,8 @@ export async function exportVisitRecordPdf(data: VisitRecordPdfData) {
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(11)
   doc.text('Office Add. - Bhoinagar Shahapur, Ichalkaranji - 416 121', 12, 199)
+
+  await appendPhotoPages(doc, data.photoUrls ?? [], data.visitId)
 
   const safeDate = new Date().toISOString().slice(0, 10)
   doc.save(`visit-record-${data.visitId}-${safeDate}.pdf`)

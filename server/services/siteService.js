@@ -98,13 +98,18 @@ export async function listAllSites(req) {
     ...instrumentScopeMatch(allowedInstrumentIds),
     ...adminIdFilter(req),
   }
-  const sites = await Site.find(match).populate('clientId', 'name').sort({ updatedAt: -1 }).lean()
+  const sites = await Site.find(match)
+    .populate('clientId', 'name')
+    .populate('instrumentId', 'name category')
+    .sort({ updatedAt: -1 })
+    .lean()
   const out = []
   for (const s of sites) {
     const pending = await sitePending(s._id)
     const lastVisit = s.lastVisitAt
       ? new Date(s.lastVisitAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
       : '—'
+    const inst = s.instrumentId && typeof s.instrumentId === 'object' ? s.instrumentId : null
     out.push({
       id: s._id.toString(),
       clientName: s.clientId?.name ?? '',
@@ -113,6 +118,8 @@ export async function listAllSites(req) {
       lastVisit,
       status: statusLabel(s.status),
       pending: formatInr(pending),
+      instrumentName: inst?.name ?? '',
+      instrumentCategory: inst?.category ?? '',
     })
   }
   return out

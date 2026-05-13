@@ -56,9 +56,20 @@ const navItems: NavItem[] = [
   { label: 'Log Out', icon: <LogOut size={16} /> },
 ]
 
-const machineOptions = ['Total Station', 'Auto Level', 'GPS / GNSS', 'Drone Survey']
+function machineLabelFromSite(site: { instrumentName?: string; instrumentCategory?: string } | undefined): string {
+  if (!site) return 'Total Station'
+  const cat = (site.instrumentCategory ?? '').toLowerCase()
+  if (cat.includes('total station')) return 'Total Station'
+  if (cat.includes('auto level') || (cat.includes('level') && !cat.includes('total'))) return 'Auto Level'
+  if (cat.includes('drone')) return 'Drone Survey'
+  if (cat.includes('gps') || cat.includes('gnss') || cat.includes('dgps')) return 'GPS / GNSS'
+  const name = (site.instrumentName ?? '').trim()
+  return name || 'Total Station'
+}
 
-const initialPhotos: { id: string; src: string }[] = []
+type PendingVisitPhoto = { id: string; src: string; file: File }
+
+const initialPhotos: PendingVisitPhoto[] = []
 
 type VisitRecord = {
   id: string
@@ -73,9 +84,16 @@ type VisitRecord = {
   paymentMode: string
   paymentStatus: string
   notes: string
+  photoUrls?: string[]
 }
 
-type ApiSite = { id: string; clientName: string; name: string }
+type ApiSite = {
+  id: string
+  clientName: string
+  name: string
+  instrumentName?: string
+  instrumentCategory?: string
+}
 
 type AddSiteVisitProps = {
   onNavigate: (path: string) => void
@@ -96,12 +114,15 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
   const [visitDate] = useState(() => getHeaderDateLabel())
   const [machine, setMachine] = useState('Total Station')
   const [engineerName, setEngineerName] = useState('')
+  const [billingParticular, setBillingParticular] = useState('')
+  const [billingQuantity, setBillingQuantity] = useState('1')
+  const [billingRate, setBillingRate] = useState('80')
+  const [billingOtherCharges, setBillingOtherCharges] = useState('0')
   const [workDetails, setWorkDetails] = useState(
-    'Topographic survey for layout planning and road alignment.',
+    'Topographic survey for layout planning',
   )
-  const [amount, setAmount] = useState('15,000')
   const [notes, setNotes] = useState('Completed boundary points and levels.')
-  const [photos, setPhotos] = useState<{ id: string; src: string }[]>(initialPhotos)
+  const [photos, setPhotos] = useState<PendingVisitPhoto[]>(initialPhotos)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const formId = useId()
   const searchParams = useMemo(() => new URLSearchParams(search), [search])
@@ -114,7 +135,16 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
     try {
       const [cRes, sRes, vRes] = await Promise.all([
         http.get<{ ok: boolean; clients: Array<{ name: string }> }>('/api/clients'),
-        http.get<{ ok: boolean; sites: Array<{ id: string; clientName: string; name: string }> }>('/api/sites'),
+        http.get<{
+          ok: boolean
+          sites: Array<{
+            id: string
+            clientName: string
+            name: string
+            instrumentName?: string
+            instrumentCategory?: string
+          }>
+        }>('/api/sites'),
         http.get<{ ok: boolean; visits: VisitRecord[] }>('/api/visits'),
       ])
       const names = cRes.data?.ok ? cRes.data.clients.map((c) => c.name) : []
@@ -141,6 +171,11 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
   }, [loadData])
 
   useEffect(() => {
+    const s = apiSites.find((x) => x.clientName === client && x.name === site)
+    setMachine(machineLabelFromSite(s))
+  }, [client, site, apiSites])
+
+  useEffect(() => {
     if (!client && clientOptions[0]) {
       const first = clientOptions[0]
       setClient(first)
@@ -163,6 +198,13 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
   }, [mode, requestedClient, requestedSiteName, clientOptions, sitesByClient])
 
   const siteChoices = useMemo(() => sitesByClient[client] ?? [], [client])
+  const amountRupees = useMemo(() => {
+    const q = parseFloat(billingQuantity.replace(/[^\d.-]/g, '')) || 0
+    const r = parseFloat(billingRate.replace(/[^\d.-]/g, '')) || 0
+    const o = parseFloat(billingOtherCharges.replace(/[^\d.-]/g, '')) || 0
+    return Math.round(q * r + o)
+  }, [billingQuantity, billingRate, billingOtherCharges])
+  const amountDisplay = useMemo(() => amountRupees.toLocaleString('en-IN'), [amountRupees])
   const totalAmount = useMemo(
     () => visitRecords.reduce((sum, record) => sum + Number(record.amount.replace(/[^\d.-]/g, '')), 0),
     [visitRecords],
@@ -689,7 +731,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                       toast.error('Choose a valid client and site.')
                       return
                     }
-                    const amountNum = Number(amount.replace(/[^\d.-]/g, '')) || 0
+                    const amountNum = amountRupees
                     try {
                       const res = await http.post<{
                         ok: boolean
@@ -699,6 +741,10 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                         siteId: match.id,
                         workDescription: workDetails,
                         machineLabel: machine,
+                        billingParticular: billingParticular.trim() || undefined,
+                        billingQuantity: parseFloat(billingQuantity.replace(/[^\d.-]/g, '')) || 0,
+                        billingRate: parseFloat(billingRate.replace(/[^\d.-]/g, '')) || 0,
+                        billingOtherCharges: parseFloat(billingOtherCharges.replace(/[^\d.-]/g, '')) || 0,
                         amount: amountNum,
                         paymentMode: '—',
                         paymentStatus: 'pending',
@@ -710,10 +756,9 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                       }
                       const v = res.data.visit
                       const visitMongoId = v._id
-                      const files = fileInputRef.current?.files
-                      if (files?.length) {
+                      if (photos.length) {
                         const fd = new FormData()
-                        for (let i = 0; i < files.length; i += 1) fd.append('photos', files[i])
+                        for (const p of photos) fd.append('photos', p.file)
                         await http.post(`/api/visits/${visitMongoId}/photos`, fd)
                       }
                       toast.success('Visit saved')
@@ -814,24 +859,13 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
 
                     <label className="grid gap-2">
                       <span className="text-xs font-bold text-neutral-700">Machine Used</span>
-                      <div className="relative">
-                        <select
-                          value={machine}
-                          onChange={(e) => setMachine(e.target.value)}
-                          className="h-11 w-full cursor-pointer appearance-none rounded-xl border border-neutral-200 bg-white px-3 pr-10 text-sm font-semibold text-neutral-900 outline-none transition hover:border-neutral-300 focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
-                        >
-                          {machineOptions.map((m) => (
-                            <option key={m} value={m}>
-                              {m}
-                            </option>
-                          ))}
-                        </select>
-                        <ChevronDown
-                          size={16}
-                          className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-neutral-500"
-                          aria-hidden
-                        />
-                      </div>
+                      <input
+                        type="text"
+                        readOnly
+                        value={machine}
+                        title="Set automatically from the instrument linked to this site"
+                        className="h-11 w-full cursor-default rounded-xl border border-neutral-200 bg-neutral-50 px-3 text-sm font-semibold text-neutral-800 outline-none"
+                      />
                     </label>
 
                     <label className="grid gap-2">
@@ -845,6 +879,58 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                     </label>
 
                     <label className="grid gap-2 md:col-span-2">
+                      <span className="text-xs font-bold text-neutral-700">Particular</span>
+                      <input
+                        value={billingParticular}
+                        onChange={(e) => setBillingParticular(e.target.value)}
+                        placeholder="e.g. Topographic survey, boundary marking…"
+                        className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
+                      />
+                    </label>
+
+                    <label className="grid gap-2">
+                      <span className="text-xs font-bold text-neutral-700">Quantity</span>
+                      <input
+                        value={billingQuantity}
+                        onChange={(e) => setBillingQuantity(e.target.value)}
+                        inputMode="decimal"
+                        className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
+                      />
+                    </label>
+
+                    <label className="grid gap-2">
+                      <span className="text-xs font-bold text-neutral-700">Rate (₹)</span>
+                      <input
+                        value={billingRate}
+                        onChange={(e) => setBillingRate(e.target.value)}
+                        inputMode="decimal"
+                        className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
+                      />
+                    </label>
+
+                    <label className="grid gap-2">
+                      <span className="text-xs font-bold text-neutral-700">Other charges (₹)</span>
+                      <input
+                        value={billingOtherCharges}
+                        onChange={(e) => setBillingOtherCharges(e.target.value)}
+                        inputMode="decimal"
+                        className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
+                      />
+                    </label>
+
+                    <label className="grid gap-2">
+                      <span className="text-xs font-bold text-neutral-700">Amount (₹)</span>
+                      <input
+                        readOnly
+                        value={amountDisplay}
+                        className="h-11 w-full cursor-default rounded-xl border border-neutral-200 bg-neutral-50 px-3 text-sm font-semibold text-emerald-800 outline-none"
+                      />
+                      <span className="text-[11px] font-semibold text-neutral-500">
+                        Quantity × Rate + Other charges (rounded)
+                      </span>
+                    </label>
+
+                    <label className="grid gap-2 md:col-span-2">
                       <span className="text-xs font-bold text-neutral-700">Work Details / Description</span>
                       <textarea
                         value={workDetails}
@@ -852,16 +938,6 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                         rows={3}
                         className="w-full resize-y rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm font-medium leading-relaxed text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
                         placeholder="Describe the work completed on site…"
-                      />
-                    </label>
-
-                    <label className="grid gap-2">
-                      <span className="text-xs font-bold text-neutral-700">Amount (₹)</span>
-                      <input
-                        value={amount}
-                        onChange={(e) => setAmount(e.target.value)}
-                        inputMode="numeric"
-                        className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
                       />
                     </label>
 
@@ -891,11 +967,15 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                       onChange={(e) => {
                         const files = e.target.files
                         if (!files?.length) return
-                        const next: { id: string; src: string }[] = []
+                        const next: PendingVisitPhoto[] = []
                         for (let i = 0; i < files.length; i++) {
                           const f = files[i]
                           if (!f.type.match(/^image\/(jpeg|png)$/i)) continue
-                          next.push({ id: `new_${Date.now()}_${i}`, src: URL.createObjectURL(f) })
+                          next.push({
+                            id: `new_${Date.now()}_${i}`,
+                            src: URL.createObjectURL(f),
+                            file: f,
+                          })
                         }
                         if (next.length) setPhotos((prev) => [...prev, ...next])
                         e.target.value = ''
@@ -927,7 +1007,10 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                             type="button"
                             className="absolute right-1.5 top-1.5 grid h-7 w-7 place-items-center rounded-lg bg-red-600 text-white shadow-md ring-2 ring-white/90 transition hover:bg-red-700"
                             aria-label="Remove photo"
-                            onClick={() => setPhotos((prev) => prev.filter((x) => x.id !== p.id))}
+                            onClick={() => {
+                              URL.revokeObjectURL(p.src)
+                              setPhotos((prev) => prev.filter((x) => x.id !== p.id))
+                            }}
                           >
                             <X size={14} strokeWidth={2.75} />
                           </button>
@@ -959,7 +1042,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                   <button
                     type="submit"
                     form={formId}
-                    className="inline-flex h-11 items-center justify-center rounded-xl bg-[#f39b03] px-8 text-sm font-extrabold text-white shadow-[0_10px_30px_rgba(243,155,3,0.25)] transition hover:bg-[#e18e03]"
+                    className="inline-flex h-11 items-center justify-center rounded-xl bg-[#f39b03] px-8 text-sm font-extrabold text-white transition hover:bg-[#e18e03]"
                   >
                     Save Visit
                   </button>

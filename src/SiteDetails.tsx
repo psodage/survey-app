@@ -18,7 +18,7 @@ import {
   X,
   type LucideIcon,
 } from 'lucide-react'
-import { Fragment, useMemo, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useLocation as useRouterLocation } from 'react-router-dom'
 import { AccountManagerSidebarBlock } from './AccountManagerSidebarBlock'
 import { CollaborationBrandMark } from './CollaborationBrandMark'
@@ -37,6 +37,8 @@ import { exportVisitRecordPdf } from './exportVisitRecordPdf'
 import { layoutBrandLogo } from './brandLogo'
 import { getHeaderDateLabel } from './headerDateLabel'
 import { signOut } from './signOut'
+import http from './api/http'
+import { useAuth } from './context/AuthContext'
 
 type NavItem = {
   label: string
@@ -68,6 +70,7 @@ type SiteVisitRecord = {
   paymentStatus: string
   notes: string
   work?: string
+  photoUrls?: string[]
 }
 
 const toolbarSelectClass =
@@ -113,6 +116,7 @@ const siteVisitRecords: SiteVisitRecord[] = [
 ]
 
 export function SiteDetails({ onNavigate }: SiteDetailsProps) {
+  const { token } = useAuth()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [visitsSearchQuery, setVisitsSearchQuery] = useState('')
   const [visitMachineFilter, setVisitMachineFilter] = useState('all')
@@ -138,6 +142,30 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
   const work = params.get('work') ?? '-'
   const engineerName = params.get('engineerName') ?? ''
   const contactPerson = params.get('contactPerson') ?? engineerName
+  const visitMongoId = params.get('visitMongoId')
+  const [visitPhotoUrls, setVisitPhotoUrls] = useState<string[]>([])
+
+  useEffect(() => {
+    if (!isVisitMode) {
+      setVisitPhotoUrls([])
+      return
+    }
+    if (!visitMongoId || !token) return
+    let cancelled = false
+    void http
+      .get<{ ok: boolean; visit?: { photoUrls?: string[] } }>(`/api/visits/${visitMongoId}`)
+      .then((res) => {
+        if (cancelled || !res.data?.ok || !res.data.visit) return
+        setVisitPhotoUrls(res.data.visit.photoUrls ?? [])
+      })
+      .catch(() => {
+        if (!cancelled) setVisitPhotoUrls([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [isVisitMode, visitMongoId, token])
+
   const relatedVisitRecords = siteVisitRecords.filter((record) => record.client === client && record.site === name)
   const parseVisitAmount = (amount: string) => Number(amount.replace(/[^\d.]/g, '')) || 0
 
@@ -314,7 +342,9 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
     paymentStatus?: string
     notes?: string
     work?: string
+    photoUrls?: string[]
   }) => {
+    const photos = record.photoUrls?.length ? record.photoUrls : visitPhotoUrls
     void exportVisitRecordPdf({
       visitId: record.visitId,
       client,
@@ -332,6 +362,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
       dwgRefBy: 'Samarth Land Surveyors',
       dwgNo: record.visitId.replace('SV-', ''),
       engineerName: engineerName || 'Er. Shubham Bhoi',
+      photoUrls: photos,
     })
   }
 

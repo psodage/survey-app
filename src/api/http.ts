@@ -30,6 +30,10 @@ http.interceptors.request.use((config) => {
   if (t) config.headers.Authorization = `Bearer ${t}`
   const i = tokenStorage.getInstrumentId()
   if (i) config.headers['x-instrument-id'] = i
+  // Let the browser set multipart boundary (default axios/json would break multer uploads).
+  if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
+    delete config.headers['Content-Type']
+  }
   return config
 })
 

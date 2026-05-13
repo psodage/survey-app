@@ -6,7 +6,6 @@ import {
   Calendar,
   CircleUserRound,
   Eye,
-  FileBarChart,
   FileText,
   LayoutGrid,
   LogOut,
@@ -17,6 +16,7 @@ import {
   IndianRupee,
   ReceiptIndianRupee,
   Plus,
+  Trash2,
   UsersRound,
   Wallet,
   X,
@@ -25,13 +25,7 @@ import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Navigate, useLocation, useParams, useSearchParams, type NavigateFunction } from 'react-router-dom'
 import { AccountManagerSidebarBlock } from './AccountManagerSidebarBlock'
 import { CollaborationBrandMark } from './CollaborationBrandMark'
-import {
-  clientNamesForManager,
-  getAccountManagerById,
-  siteOptionsByClient,
-  type AccountRow,
-  type LedgerTransaction,
-} from './accountManagersData'
+import { type AccountRow, type LedgerTransaction } from './accountManagersData'
 import {
   CardPanel,
   CardShell,
@@ -71,22 +65,22 @@ function formatINR(value: number) {
   return `₹${value.toLocaleString('en-IN')}`
 }
 
+function slugToDisplayLabel(slug: string) {
+  return slug
+    .split('-')
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ')
+}
+
+const TX_PAGE_SIZE = 12
+
 type TransactionType = 'debit' | 'credit'
 
 type Transaction = LedgerTransaction
 
 type AccountManagerProps = {
   onNavigate: NavigateFunction
-}
-
-type InstrumentCoworker = {
-  /** User id of the admin who owns this ledger */
-  adminId: string
-  fullName: string
-  shortName: string
-  phone: string
-  email: string
-  accountManagerSlug: string | null
 }
 
 type LedgerMeta = {
@@ -98,14 +92,11 @@ type LedgerMeta = {
 }
 
 export default function AccountManager({ onNavigate }: AccountManagerProps) {
-  const { token, user, company, activeInstrumentId } = useAuth()
-  const [instrumentAdmins, setInstrumentAdmins] = useState<InstrumentCoworker[]>([])
+  const { user, company, managers } = useAuth()
   const [ledgerMeta, setLedgerMeta] = useState<LedgerMeta | null>(null)
   const [ledgerLoadState, setLedgerLoadState] = useState<'loading' | 'ok' | 'error'>('loading')
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const { managerId: managerIdFromRoute } = useParams<{ managerId: string }>()
-  const staticManager = managerIdFromRoute ? getAccountManagerById(managerIdFromRoute) : undefined
-  const managerId = managerIdFromRoute ?? ''
   const [searchParams] = useSearchParams()
   const viewParam = searchParams.get('view')
   const viewMode: 'all' | 'debits' | 'credits' | 'pending' | 'net' =
@@ -126,11 +117,15 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
       }
     | undefined
 
-  const [selectedYear] = useState(() => navState?.selectedYear ?? '2025')
+  const [selectedYear] = useState(() => navState?.selectedYear ?? String(new Date().getFullYear()))
   const currentDateLabel = getHeaderDateLabel()
   const [accountRows, setAccountRows] = useState<AccountRow[]>([])
-  const [clientSiteOptions, setClientSiteOptions] = useState<Record<string, string[]>>(() => ({ ...siteOptionsByClient }))
-  const clientOptions = accountRows.length ? accountRows.map((r) => r.name) : clientNamesForManager(managerId)
+  const [clientSiteOptions, setClientSiteOptions] = useState<Record<string, string[]>>({})
+  const clientOptions = useMemo(() => {
+    const fromAccounts = accountRows.map((r) => r.name)
+    if (fromAccounts.length > 0) return fromAccounts
+    return Object.keys(clientSiteOptions).sort((a, b) => a.localeCompare(b))
+  }, [accountRows, clientSiteOptions])
   const totalPending = accountRows.reduce((sum, row) => sum + parseCurrency(row.pending), 0)
   const [isAddOpen, setIsAddOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -146,6 +141,7 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
   }))
 
   const [transactionsByManager, setTransactionsByManager] = useState<Record<string, Transaction[]>>({})
+  const [deletingTxId, setDeletingTxId] = useState<string | null>(null)
   const routeKey = managerIdFromRoute ?? ''
   const transactions = transactionsByManager[routeKey] ?? []
 
@@ -190,7 +186,7 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
         }
         if (aRes.data?.ok) setAccountRows(aRes.data.accounts)
         if (sRes.data?.ok) {
-          const m: Record<string, string[]> = { ...siteOptionsByClient }
+          const m: Record<string, string[]> = {}
           for (const s of sRes.data.sites) {
             if (!m[s.clientName]) m[s.clientName] = []
             m[s.clientName].push(s.name)
@@ -210,37 +206,13 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
     }
   }, [managerIdFromRoute])
 
-  useEffect(() => {
-    if (!token || !activeInstrumentId) {
-      setInstrumentAdmins([])
-      return
-    }
-    let cancelled = false
-    ;(async () => {
-      try {
-        const res = await http.get<{ ok: boolean; admins: InstrumentCoworker[] }>('/api/instruments/coworkers', {
-          params: { instrumentId: activeInstrumentId },
-        })
-        if (cancelled) return
-        if (res.data?.ok) setInstrumentAdmins(res.data.admins ?? [])
-        else setInstrumentAdmins([])
-      } catch {
-        if (!cancelled) setInstrumentAdmins([])
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [token, activeInstrumentId])
-
-  const ledgerSwitchOptions = useMemo(
-    () => instrumentAdmins.filter((a) => a.accountManagerSlug),
-    [instrumentAdmins],
+  const managerFromSession = useMemo(
+    () => managers.find((m) => m.id === managerIdFromRoute),
+    [managers, managerIdFromRoute],
   )
 
-  const ledgerRowKey = (a: InstrumentCoworker) => a.accountManagerSlug ?? a.adminId
-
   const manager = useMemo(() => {
+    if (!managerIdFromRoute) return undefined
     if (ledgerMeta) {
       return {
         id: ledgerMeta.slug,
@@ -249,8 +221,22 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
         phone: ledgerMeta.phone ?? '',
       }
     }
-    return staticManager
-  }, [ledgerMeta, staticManager])
+    if (managerFromSession) {
+      return {
+        id: managerFromSession.id,
+        name: managerFromSession.name,
+        shortName: managerFromSession.shortName || managerFromSession.name,
+        phone: managerFromSession.phone ?? '',
+      }
+    }
+    const label = slugToDisplayLabel(managerIdFromRoute)
+    return {
+      id: managerIdFromRoute,
+      name: label,
+      shortName: label,
+      phone: '',
+    }
+  }, [ledgerMeta, managerFromSession, managerIdFromRoute])
 
   const canEditLedger = useMemo(
     () => user?.role === 'super_admin' || (!!user?.id && !!ledgerMeta?.adminId && ledgerMeta.adminId === user.id),
@@ -323,6 +309,19 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
     })
   }, [tableTransactions, normalizedSearchQuery, transactionFilter])
 
+  const [txPage, setTxPage] = useState(1)
+  const txPageCount = Math.max(1, Math.ceil(filteredTableTransactions.length / TX_PAGE_SIZE))
+
+  const paginatedTableTransactions = useMemo(() => {
+    const safePage = Math.min(txPage, txPageCount)
+    const start = (safePage - 1) * TX_PAGE_SIZE
+    return filteredTableTransactions.slice(start, start + TX_PAGE_SIZE)
+  }, [filteredTableTransactions, txPage, txPageCount])
+
+  useEffect(() => {
+    setTxPage(1)
+  }, [filteredTableTransactions])
+
   const exportTotals = useMemo(() => {
     const debit = filteredTableTransactions.filter((t) => t.type === 'debit').reduce((sum, t) => sum + t.amount, 0)
     const credit = filteredTableTransactions.filter((t) => t.type === 'credit').reduce((sum, t) => sum + t.amount, 0)
@@ -341,7 +340,7 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
     return <Navigate to={{ pathname: '/account-manager', search: location.search }} replace />
   }
 
-  if (ledgerLoadState === 'loading' || !manager) {
+  if (ledgerLoadState === 'loading') {
     return (
       <div className="flex min-h-[100svh] flex-col items-center justify-center gap-3 bg-neutral-100 px-6 text-center">
         <p className="text-sm font-semibold text-neutral-700">Loading ledger…</p>
@@ -349,12 +348,9 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
     )
   }
 
-  const slugOptions = ledgerSwitchOptions
-    .map((o) => o.accountManagerSlug)
-    .filter((s): s is string => Boolean(s && s.length))
-  const ledgerSwitchValue = slugOptions.includes(managerIdFromRoute)
-    ? managerIdFromRoute
-    : (slugOptions[0] ?? managerIdFromRoute)
+  if (!manager) {
+    return <Navigate to={{ pathname: '/account-manager', search: location.search }} replace />
+  }
 
   const pageTitle =
     viewMode === 'debits'
@@ -385,6 +381,36 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
     qs.set('view', kind)
     onNavigate(`/account-manager/${managerIdFromRoute}?${qs.toString()}`, { state: { selectedYear } })
     setIsSidebarOpen(false)
+  }
+
+  const deleteTransactionForRow = async (txId: string) => {
+    if (!managerIdFromRoute || !canEditLedger) return
+    if (!window.confirm('Delete this transaction? This cannot be undone.')) return
+    setDeletingTxId(txId)
+    try {
+      const res = await http.delete<{ ok: boolean }>(`/api/transactions/item/${txId}`)
+      if (res.status !== 200 || !res.data?.ok) {
+        toast.error('Could not delete transaction')
+        return
+      }
+      setTransactionsByManager((prev) => ({
+        ...prev,
+        [managerIdFromRoute]: (prev[managerIdFromRoute] ?? []).filter((t) => t.id !== txId),
+      }))
+      try {
+        const aRes = await http.get<{ ok: boolean; accounts: AccountRow[] }>(
+          `/api/account-managers/${managerIdFromRoute}/accounts`,
+        )
+        if (aRes.data?.ok) setAccountRows(aRes.data.accounts)
+      } catch {
+        /* list updated; balances refresh on next navigation if this fails */
+      }
+      toast.success('Transaction deleted')
+    } catch {
+      toast.error('Could not delete transaction')
+    } finally {
+      setDeletingTxId(null)
+    }
   }
 
   const handleNavClick = async (label: string) => {
@@ -926,8 +952,8 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                               if (nextType === 'debit') {
                                 return { ...prev, type: 'debit', client: undefined, site: undefined, reason: prev.reason ?? '' }
                               }
-                              const defaultClient = prev.client ?? clientOptions[0]
-                              const defaultSite = clientSiteOptions[defaultClient]?.[0] ?? ''
+                              const defaultClient = prev.client ?? clientOptions[0] ?? ''
+                              const defaultSite = defaultClient ? (clientSiteOptions[defaultClient]?.[0] ?? '') : ''
                               return { ...prev, type: 'credit', reason: '', client: defaultClient, site: defaultSite }
                             })
                           }}
@@ -978,14 +1004,16 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                         <label className="grid gap-1">
                           <span className="text-xs font-bold text-neutral-700">Client (Credit)</span>
                           <select
-                            value={draftTx.client ?? clientOptions[0]}
+                            value={draftTx.client ?? clientOptions[0] ?? ''}
                             onChange={(event) => {
                               const nextClient = event.target.value
                               const sites = clientSiteOptions[nextClient] ?? []
                               setDraftTx((prev) => ({ ...prev, client: nextClient, site: sites[0] ?? '' }))
                             }}
-                            className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
+                            disabled={clientOptions.length === 0}
+                            className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-500"
                           >
+                            {clientOptions.length === 0 ? <option value="">No clients available</option> : null}
                             {clientOptions.map((client) => (
                               <option key={client} value={client}>
                                 {client}
@@ -999,9 +1027,10 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                           <select
                             value={draftTx.site ?? ''}
                             onChange={(event) => setDraftTx((prev) => ({ ...prev, site: event.target.value }))}
-                            className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
+                            disabled={clientOptions.length === 0}
+                            className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-500"
                           >
-                            {(clientSiteOptions[draftTx.client ?? clientOptions[0]] ?? []).map((site) => (
+                            {(clientSiteOptions[draftTx.client ?? clientOptions[0] ?? ''] ?? []).map((site) => (
                               <option key={site} value={site}>
                                 {site}
                               </option>
@@ -1060,7 +1089,7 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                     </ul>
                   ) : (
                     <ul className="flex flex-col gap-1.5 px-3 pb-1.5 pt-1.5">
-                      {filteredTableTransactions.map((tx) => (
+                      {paginatedTableTransactions.map((tx) => (
                         <li key={tx.id}>
                           <div className="flex items-center gap-2 rounded-xl border border-neutral-200 bg-white p-2 shadow-sm ring-1 ring-black/5 md:p-3">
                             <div
@@ -1093,6 +1122,17 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                               >
                                 <Eye size={14} />
                               </button>
+                              {canEditLedger ? (
+                                <button
+                                  type="button"
+                                  onClick={() => void deleteTransactionForRow(tx.id)}
+                                  disabled={deletingTxId === tx.id}
+                                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-rose-500/12 text-rose-600 transition hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-50 md:h-8 md:w-8"
+                                  aria-label="Delete transaction"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              ) : null}
                             </div>
                           </div>
                         </li>
@@ -1144,7 +1184,7 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                         </tr>
                       </thead>
                       <tbody className="text-sm font-semibold text-neutral-800">
-                        {filteredTableTransactions.map((tx) => (
+                        {paginatedTableTransactions.map((tx) => (
                           <tr key={tx.id} className="border-t border-neutral-200 hover:bg-neutral-50/60">
                             <td className="px-6 py-4">
                               <span
@@ -1180,6 +1220,17 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                                 >
                                   <Eye size={16} />
                                 </button>
+                                {canEditLedger ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => void deleteTransactionForRow(tx.id)}
+                                    disabled={deletingTxId === tx.id}
+                                    className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-rose-500/12 text-rose-600 transition hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                                    aria-label="Delete transaction"
+                                  >
+                                    <Trash2 size={16} />
+                                  </button>
+                                ) : null}
                               </div>
                             </td>
                           </tr>
@@ -1189,40 +1240,29 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                   )}
                 </div>
 
-                {viewMode !== 'pending' ? (
+                {viewMode !== 'pending' && filteredTableTransactions.length > TX_PAGE_SIZE ? (
                   <div className="flex flex-col gap-3 border-t border-neutral-200 px-4 py-4 sm:px-6 md:flex-row md:items-center md:justify-between">
                     <button
                       type="button"
-                      className="inline-flex h-9 items-center justify-center rounded-xl border border-neutral-200 bg-white px-4 text-sm font-extrabold text-neutral-800 hover:bg-neutral-50"
+                      disabled={txPage <= 1}
+                      onClick={() => setTxPage((p) => Math.max(1, p - 1))}
+                      className="inline-flex h-9 items-center justify-center rounded-xl border border-neutral-200 bg-white px-4 text-sm font-extrabold text-neutral-800 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       Previous
                     </button>
-                    <div className="flex items-center justify-center gap-2">
-                      <button
-                        type="button"
-                        className="grid h-9 w-9 place-items-center rounded-xl bg-[#f39b03] text-sm font-extrabold text-white"
-                        aria-label="Page 1"
-                      >
-                        1
-                      </button>
-                      <button
-                        type="button"
-                        className="grid h-9 w-9 place-items-center rounded-xl border border-neutral-200 bg-white text-sm font-extrabold text-neutral-800 hover:bg-neutral-50"
-                        aria-label="Page 2"
-                      >
-                        2
-                      </button>
-                      <button
-                        type="button"
-                        className="grid h-9 w-9 place-items-center rounded-xl border border-neutral-200 bg-white text-sm font-extrabold text-neutral-800 hover:bg-neutral-50"
-                        aria-label="Page 3"
-                      >
-                        3
-                      </button>
+                    <div className="flex flex-col items-center justify-center gap-1 text-center md:flex-1">
+                      <div className="text-sm font-extrabold text-neutral-900">
+                        Page {Math.min(txPage, txPageCount)} of {txPageCount}
+                      </div>
+                      <div className="text-xs font-semibold text-neutral-500">
+                        Showing {paginatedTableTransactions.length} of {filteredTableTransactions.length} transactions
+                      </div>
                     </div>
                     <button
                       type="button"
-                      className="inline-flex h-9 items-center justify-center rounded-xl border border-neutral-200 bg-white px-4 text-sm font-extrabold text-neutral-800 hover:bg-neutral-50"
+                      disabled={txPage >= txPageCount}
+                      onClick={() => setTxPage((p) => Math.min(txPageCount, p + 1))}
+                      className="inline-flex h-9 items-center justify-center rounded-xl border border-neutral-200 bg-white px-4 text-sm font-extrabold text-neutral-800 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       Next
                     </button>
@@ -1279,74 +1319,17 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
           />
 
           <div className="hidden min-w-0 flex-1 items-center justify-end gap-3 text-xs font-bold text-white/95 md:flex">
-            {ledgerSwitchOptions.length > 0 ? (
-              <>
-                <UsersRound size={14} className="shrink-0 text-[#f39b03]" aria-hidden />
-                <select
-                  className="min-w-0 max-w-[min(100%,28rem)] cursor-pointer truncate rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-xs font-bold text-white outline-none ring-1 ring-white/10 focus:ring-2 focus:ring-[#f39b03]/45"
-                  aria-label="Switch account manager for this instrument"
-                  value={ledgerSwitchValue}
-                  onChange={(e) => {
-                    const slug = e.target.value
-                    if (!slug) return
-                    onNavigate(`/account-manager/${slug}${location.search}`)
-                  }}
-                >
-                  {ledgerSwitchOptions.map((a) => (
-                    <option key={ledgerRowKey(a)} value={a.accountManagerSlug ?? ''}>
-                      {[a.fullName || a.email || 'Admin', a.phone].filter(Boolean).join(' · ')}
-                    </option>
-                  ))}
-                </select>
-              </>
-            ) : (
-              <span className="truncate text-white/65">No admins assigned to this instrument.</span>
-            )}
             {sessionEmail ? (
-              <>
-                <div className="h-6 w-px bg-white/25" aria-hidden />
-                <a
-                  href={`mailto:${sessionEmail}`}
-                  className="flex min-w-0 max-w-[14rem] items-center gap-2 text-white/95 hover:text-white"
-                >
-                  <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#f39b03]/20 text-[#f39b03] ring-1 ring-[#f39b03]/45">
-                    <Mail size={13} />
-                  </span>
-                  <span className="truncate">{sessionEmail}</span>
-                </a>
-              </>
+              <a
+                href={`mailto:${sessionEmail}`}
+                className="flex min-w-0 max-w-[14rem] items-center gap-2 text-white/95 hover:text-white"
+              >
+                <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#f39b03]/20 text-[#f39b03] ring-1 ring-[#f39b03]/45">
+                  <Mail size={13} />
+                </span>
+                <span className="truncate">{sessionEmail}</span>
+              </a>
             ) : null}
-          </div>
-
-          <div className="min-w-0 flex-1 md:hidden">
-            {ledgerSwitchOptions.length > 0 ? (
-              <div className="flex flex-col items-end gap-1.5">
-                <select
-                  className="w-full max-w-full cursor-pointer truncate rounded-lg border border-white/20 bg-white/10 px-2 py-1.5 text-right text-[10px] font-bold text-white outline-none"
-                  aria-label="Switch account manager for this instrument"
-                  value={ledgerSwitchValue}
-                  onChange={(e) => {
-                    const slug = e.target.value
-                    if (!slug) return
-                    onNavigate(`/account-manager/${slug}${location.search}`)
-                  }}
-                >
-                  {ledgerSwitchOptions.map((a) => (
-                    <option key={ledgerRowKey(a)} value={a.accountManagerSlug ?? ''}>
-                      {[a.fullName || a.email || 'Admin', a.phone].filter(Boolean).join(' · ')}
-                    </option>
-                  ))}
-                </select>
-                {sessionEmail ? (
-                  <a href={`mailto:${sessionEmail}`} className="inline-flex max-w-full items-center gap-1 text-[10px] font-bold text-white/90">
-                    <Mail size={11} className="shrink-0 text-[#f39b03]" />
-                    <span className="truncate">{sessionEmail}</span>
-                  </a>
-                ) : null}
-              </div>
-            ) : (
-              <div className="text-right text-[10px] font-bold text-white/65">No admins on this instrument.</div>
-            )}
           </div>
         </div>
       </footer>

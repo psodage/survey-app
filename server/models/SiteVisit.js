@@ -13,6 +13,10 @@ const siteVisitSchema = new Schema(
     visitDate: { type: Date, required: true, index: true },
     workDescription: { type: String, trim: true },
     machineLabel: { type: String, trim: true },
+    billingParticular: { type: String, trim: true },
+    billingQuantity: { type: Number },
+    billingRate: { type: Number },
+    billingOtherCharges: { type: Number },
     amount: { type: Schema.Types.Decimal128 },
     paymentMode: { type: String, trim: true },
     paymentStatus: {

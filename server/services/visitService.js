@@ -54,12 +54,24 @@ export async function createVisit(req, body) {
     companyId: req.user.companyId,
     ...instrumentScopeMatch(allowedInstrumentIds),
     ...adminIdFilter(req),
-  }).populate('clientId')
+  })
   if (!site) throw new ApiError(404, 'Site not found')
+
+  const clientRow = await Client.findOne({ _id: site.clientId, companyId: req.user.companyId })
+    .select('name')
+    .lean()
+  if (!clientRow) throw new ApiError(404, 'Client not found for this site')
 
   const visitCode = await nextVisitCode(req.user.companyId)
   const visitDate = body.visitDate ? new Date(body.visitDate) : new Date()
-  const amountNum = Number(body.amount) || 0
+  const qty = Number(body.billingQuantity)
+  const rate = Number(body.billingRate)
+  const otherRaw = Number(body.billingOtherCharges)
+  const other = Number.isFinite(otherRaw) ? otherRaw : 0
+  const hasBilling = Number.isFinite(qty) && Number.isFinite(rate)
+  const computedFromBilling = hasBilling ? Math.round(qty * rate + other) : null
+  const amountNum = computedFromBilling != null ? computedFromBilling : Number(body.amount) || 0
+  const amountSafe = Number.isFinite(Number(amountNum)) ? Number(amountNum) : 0
   const paymentStatusRaw = String(body.paymentStatus || 'pending').toLowerCase()
   const paymentMap = { pending: 'pending', partial: 'partial', paid: 'paid', waived: 'waived' }
   const paymentStatus = paymentMap[paymentStatusRaw] ?? 'pending'
@@ -68,13 +80,17 @@ export async function createVisit(req, body) {
     companyId: req.user.companyId,
     adminId: site.adminId,
     instrumentId: site.instrumentId,
-    clientId: site.clientId._id,
+    clientId: site.clientId,
     siteId: site._id,
     visitCode,
     visitDate,
     workDescription: body.workDescription?.trim(),
     machineLabel: body.machineLabel?.trim(),
-    amount: mongoose.Types.Decimal128.fromString((Number(amountNum) || 0).toFixed(2)),
+    billingParticular: body.billingParticular?.trim(),
+    billingQuantity: hasBilling ? qty : undefined,
+    billingRate: hasBilling ? rate : undefined,
+    billingOtherCharges: hasBilling ? other : undefined,
+    amount: mongoose.Types.Decimal128.fromString(amountSafe.toFixed(2)),
     paymentMode: body.paymentMode?.trim(),
     paymentStatus,
     notes: body.notes?.trim(),
@@ -88,12 +104,12 @@ export async function createVisit(req, body) {
   return {
     id: visit.visitCode,
     _id: visit._id.toString(),
-    client: site.clientId.name,
+    client: clientRow.name ?? '',
     site: site.name,
     date: new Date(visit.visitDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
     machine: visit.machineLabel ?? '',
     work: visit.workDescription ?? '',
-    amount: decToDisplay(amountNum),
+    amount: decToDisplay(amountSafe),
     paymentMode: visit.paymentMode ?? '',
     paymentStatus: paymentLabel(visit.paymentStatus),
     notes: visit.notes ?? '',
