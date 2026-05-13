@@ -18,6 +18,8 @@ const siteVisitSchema = new Schema(
     billingRate: { type: Number },
     billingOtherCharges: { type: Number },
     amount: { type: Schema.Types.Decimal128 },
+    /** Rupees applied toward this visit (credits, etc.); when unset, paid/partial use legacy rules in visitPaymentMath. */
+    paidAmount: { type: Schema.Types.Decimal128 },
     paymentMode: { type: String, trim: true },
     paymentStatus: {
       type: String,

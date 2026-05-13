@@ -2,11 +2,7 @@ import Client from '../models/Client.js'
 import Site from '../models/Site.js'
 import SiteVisit from '../models/SiteVisit.js'
 import { resolveInstrumentScope, adminIdFilter, instrumentScopeMatch } from '../utils/scope.js'
-
-function dec(v) {
-  if (v == null) return 0
-  return parseFloat(v.toString()) || 0
-}
+import { decAmount, effectivePaidAmount } from '../utils/visitPaymentMath.js'
 
 function formatInr(n) {
   return `₹${Math.round(n).toLocaleString('en-IN')}`
@@ -34,7 +30,7 @@ export async function getDashboard(req) {
     site: v.siteId?.name ?? '',
     client: v.clientId?.name ?? '',
     date: new Date(v.visitDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
-    amount: decToDisplay(dec(v.amount)),
+    amount: decToDisplay(decAmount(v.amount)),
     machine: v.machineLabel ?? '—',
     paymentMode: v.paymentMode ?? '—',
     paymentStatus: paymentLabel(v.paymentStatus),
@@ -42,17 +38,16 @@ export async function getDashboard(req) {
     work: v.workDescription ?? '',
   }))
 
-  const allVisits = await SiteVisit.find(visitMatch).select('amount paymentStatus clientId').lean()
+  const allVisits = await SiteVisit.find(visitMatch).select('amount paymentStatus paidAmount clientId').lean()
   const byClient = new Map()
   for (const v of allVisits) {
     const id = v.clientId?.toString()
     if (!id) continue
-    const a = dec(v.amount)
+    const a = decAmount(v.amount)
     if (!byClient.has(id)) byClient.set(id, { revenue: 0, received: 0 })
     const row = byClient.get(id)
     row.revenue += a
-    if (v.paymentStatus === 'paid') row.received += a
-    if (v.paymentStatus === 'partial') row.received += a * 0.5
+    row.received += effectivePaidAmount(v)
   }
 
   const clients = await Client.find({ ...base }).select('name').lean()
@@ -67,10 +62,9 @@ export async function getDashboard(req) {
   let totalRevenue = 0
   let received = 0
   for (const v of allVisits) {
-    const a = dec(v.amount)
+    const a = decAmount(v.amount)
     totalRevenue += a
-    if (v.paymentStatus === 'paid') received += a
-    if (v.paymentStatus === 'partial') received += a * 0.5
+    received += effectivePaidAmount(v)
   }
   const pending = Math.max(0, totalRevenue - received)
 

@@ -6,6 +6,7 @@ import Site from '../models/Site.js'
 import InstrumentAssignment from '../models/InstrumentAssignment.js'
 import { ApiError } from '../utils/ApiError.js'
 import { optionalAdminIdQuery } from '../utils/scope.js'
+import { decAmount, effectivePaidAmount } from '../utils/visitPaymentMath.js'
 
 /** Distinct adminIds that have an active AccountManager row for this instrument (preferred). */
 async function adminIdsOnInstrumentViaAccountManagers(req, instrumentObjectId) {
@@ -58,24 +59,18 @@ export async function assertAccountManagerReadAccess(req, amLean) {
   }
 }
 
-function dec(v) {
-  if (v == null) return 0
-  return parseFloat(v.toString()) || 0
-}
-
 function formatInr(n) {
   return `₹${Math.round(n).toLocaleString('en-IN')}`
 }
 
 async function clientRowForManager(adminId, companyId, client) {
-  const visits = await SiteVisit.find({ clientId: client._id }).select('amount paymentStatus').lean()
+  const visits = await SiteVisit.find({ clientId: client._id }).select('amount paymentStatus paidAmount').lean()
   let revenue = 0
   let received = 0
   for (const v of visits) {
-    const a = dec(v.amount)
+    const a = decAmount(v.amount)
     revenue += a
-    if (v.paymentStatus === 'paid') received += a
-    if (v.paymentStatus === 'partial') received += a * 0.5
+    received += effectivePaidAmount(v)
   }
   const pending = Math.max(0, revenue - received)
   return {

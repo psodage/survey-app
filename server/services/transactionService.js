@@ -6,6 +6,7 @@ import Site from '../models/Site.js'
 import { ApiError } from '../utils/ApiError.js'
 import { resolveInstrumentScope, optionalAdminIdQuery, instrumentScopeMatch } from '../utils/scope.js'
 import * as accountManagerService from './accountManagerService.js'
+import { applyCreditToSiteVisits } from './visitCreditAllocation.js'
 
 function decNum(v) {
   return parseFloat((v ?? 0).toString()) || 0
@@ -70,24 +71,61 @@ export async function createTransaction(req, accountManagerId, body) {
     if (s) siteId = s._id
   }
 
-  const t = await Transaction.create({
+  const instrumentId = effectiveInstrumentId ?? allowedInstrumentIds[0]
+  const txPayload = {
     companyId: req.user.companyId,
     adminId: am.adminId,
     accountManagerId: am._id,
-    instrumentId: effectiveInstrumentId ?? allowedInstrumentIds[0],
+    instrumentId,
     type: body.type,
     amount: toDec128(body.amount),
     occurredOn: body.date ? new Date(body.date) : new Date(),
     reason: body.reason?.trim(),
     clientId,
     siteId,
-  })
+  }
+
+  const creditAmount = Number(body.amount) || 0
+  const allocateCredit =
+    body.type === 'credit' && siteId != null && instrumentId != null && Number.isFinite(creditAmount) && creditAmount > 0
+
+  if (!allocateCredit) {
+    const t = await Transaction.create(txPayload)
+    return {
+      id: t._id.toString(),
+      type: t.type,
+      amount: Number(body.amount) || 0,
+      date: t.occurredOn.toISOString().slice(0, 10),
+      reason: t.reason,
+      client: body.clientName,
+      site: body.siteName,
+    }
+  }
+
+  const session = await mongoose.startSession()
+  let created
+  try {
+    await session.withTransaction(async () => {
+      const [t] = await Transaction.create([txPayload], { session })
+      created = t
+      await applyCreditToSiteVisits(session, {
+        companyId: req.user.companyId,
+        adminId: am.adminId,
+        siteId,
+        instrumentId,
+        creditAmount,
+      })
+    })
+  } finally {
+    await session.endSession()
+  }
+
   return {
-    id: t._id.toString(),
-    type: t.type,
+    id: created._id.toString(),
+    type: created.type,
     amount: Number(body.amount) || 0,
-    date: t.occurredOn.toISOString().slice(0, 10),
-    reason: t.reason,
+    date: created.occurredOn.toISOString().slice(0, 10),
+    reason: created.reason,
     client: body.clientName,
     site: body.siteName,
   }

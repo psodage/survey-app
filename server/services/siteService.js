@@ -4,11 +4,7 @@ import Client from '../models/Client.js'
 import SiteVisit from '../models/SiteVisit.js'
 import { ApiError } from '../utils/ApiError.js'
 import { resolveInstrumentScope, adminIdFilter, instrumentScopeMatch } from '../utils/scope.js'
-
-function dec(v) {
-  if (v == null) return 0
-  return parseFloat(v.toString()) || 0
-}
+import { decAmount, effectivePaidAmount } from '../utils/visitPaymentMath.js'
 
 function formatInr(n) {
   return `₹${Math.round(n).toLocaleString('en-IN')}`
@@ -21,14 +17,13 @@ function statusLabel(s) {
 }
 
 async function sitePending(siteId) {
-  const visits = await SiteVisit.find({ siteId }).select('amount paymentStatus').lean()
+  const visits = await SiteVisit.find({ siteId }).select('amount paymentStatus paidAmount').lean()
   let total = 0
   let received = 0
   for (const v of visits) {
-    const a = dec(v.amount)
+    const a = decAmount(v.amount)
     total += a
-    if (v.paymentStatus === 'paid') received += a
-    if (v.paymentStatus === 'partial') received += a * 0.5
+    received += effectivePaidAmount(v)
   }
   return Math.max(0, total - received)
 }

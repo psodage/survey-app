@@ -24,6 +24,7 @@ import {
 import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Navigate, useLocation, useParams, useSearchParams, type NavigateFunction } from 'react-router-dom'
 import { AccountManagerSidebarBlock } from './AccountManagerSidebarBlock'
+import { ConfirmAlert } from './ConfirmAlert'
 import { CollaborationBrandMark } from './CollaborationBrandMark'
 import { type AccountRow, type LedgerTransaction } from './accountManagersData'
 import {
@@ -63,6 +64,12 @@ function parseCurrency(value: string) {
 
 function formatINR(value: number) {
   return `₹${value.toLocaleString('en-IN')}`
+}
+
+function formatDisplayDate(isoDate: string) {
+  const d = new Date(`${isoDate}T12:00:00`)
+  if (Number.isNaN(d.getTime())) return isoDate
+  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
 function slugToDisplayLabel(slug: string) {
@@ -142,8 +149,35 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
 
   const [transactionsByManager, setTransactionsByManager] = useState<Record<string, Transaction[]>>({})
   const [deletingTxId, setDeletingTxId] = useState<string | null>(null)
+  const [deleteConfirmTxId, setDeleteConfirmTxId] = useState<string | null>(null)
+  const [viewingTxId, setViewingTxId] = useState<string | null>(null)
   const routeKey = managerIdFromRoute ?? ''
   const transactions = transactionsByManager[routeKey] ?? []
+
+  const deleteConfirmTransaction = useMemo(
+    () => (deleteConfirmTxId ? transactions.find((t) => t.id === deleteConfirmTxId) : undefined),
+    [deleteConfirmTxId, transactions],
+  )
+
+  const viewingTransaction = useMemo(
+    () => (viewingTxId ? transactions.find((t) => t.id === viewingTxId) : undefined),
+    [viewingTxId, transactions],
+  )
+
+  useEffect(() => {
+    if (!viewingTxId) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setViewingTxId(null)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [viewingTxId])
+
+  useEffect(() => {
+    if (viewingTxId && !transactions.some((t) => t.id === viewingTxId)) {
+      setViewingTxId(null)
+    }
+  }, [viewingTxId, transactions])
 
   useEffect(() => {
     if (!managerIdFromRoute) return
@@ -383,9 +417,8 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
     setIsSidebarOpen(false)
   }
 
-  const deleteTransactionForRow = async (txId: string) => {
+  const performDeleteTransaction = async (txId: string) => {
     if (!managerIdFromRoute || !canEditLedger) return
-    if (!window.confirm('Delete this transaction? This cannot be undone.')) return
     setDeletingTxId(txId)
     try {
       const res = await http.delete<{ ok: boolean }>(`/api/transactions/item/${txId}`)
@@ -406,6 +439,8 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
         /* list updated; balances refresh on next navigation if this fails */
       }
       toast.success('Transaction deleted')
+      setDeleteConfirmTxId(null)
+      setViewingTxId((cur) => (cur === txId ? null : cur))
     } catch {
       toast.error('Could not delete transaction')
     } finally {
@@ -867,7 +902,8 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                     <div className="min-w-0">
                       <div className="truncate text-base font-extrabold text-neutral-900">Add Transaction</div>
                       <div className="mt-0.5 text-xs font-semibold text-neutral-500">
-                        Debit requires a reason. Credit requires client &amp; site.
+                        Debit requires a reason. Credit requires client &amp; site. Credits apply to that site&apos;s
+                        visits oldest-first (pending/partial) until the amount is used.
                       </div>
                     </div>
                     <button
@@ -1060,6 +1096,133 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
               </div>
             ) : null}
 
+            <ConfirmAlert
+              open={deleteConfirmTxId !== null}
+              title="Delete this transaction?"
+              description="This cannot be undone."
+              detail={
+                deleteConfirmTransaction
+                  ? `${deleteConfirmTransaction.type === 'debit' ? 'Debit' : 'Credit'} · ${formatINR(
+                      deleteConfirmTransaction.amount,
+                    )} · ${deleteConfirmTransaction.date}`
+                  : undefined
+              }
+              confirmLabel="Delete"
+              cancelLabel="Cancel"
+              variant="danger"
+              confirmBusy={deletingTxId !== null && deletingTxId === deleteConfirmTxId}
+              onCancel={() => {
+                if (deletingTxId !== null) return
+                setDeleteConfirmTxId(null)
+              }}
+              onConfirm={() => {
+                if (!deleteConfirmTxId) return
+                void performDeleteTransaction(deleteConfirmTxId)
+              }}
+            />
+
+            {viewingTransaction ? (
+              <div
+                className="fixed inset-0 z-[65] grid place-items-center bg-black/50 px-4 py-6"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="tx-view-title"
+              >
+                <button
+                  type="button"
+                  className="absolute inset-0 cursor-default"
+                  aria-label="Close transaction details"
+                  onClick={() => setViewingTxId(null)}
+                />
+                <div className="relative z-[66] w-full max-w-lg rounded-2xl bg-white p-4 shadow-xl ring-1 ring-black/10 sm:p-5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h2 id="tx-view-title" className="text-base font-extrabold tracking-tight text-neutral-900 sm:text-lg">
+                        Transaction details
+                      </h2>
+                      <p className="mt-0.5 text-xs font-semibold text-neutral-500">Summary for this ledger entry</p>
+                    </div>
+                    <button
+                      type="button"
+                      className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-neutral-100 text-neutral-700 transition hover:bg-neutral-200"
+                      aria-label="Close"
+                      onClick={() => setViewingTxId(null)}
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
+
+                  <div className="mt-4 space-y-3 rounded-xl bg-neutral-50 p-4 ring-1 ring-black/5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-xs font-extrabold uppercase tracking-wide text-neutral-500">Type</span>
+                      <span
+                        className={[
+                          'inline-flex items-center rounded-full px-3 py-1 text-xs font-extrabold ring-1',
+                          viewingTransaction.type === 'debit'
+                            ? 'bg-rose-50 text-rose-700 ring-rose-200'
+                            : 'bg-emerald-50 text-emerald-700 ring-emerald-200',
+                        ].join(' ')}
+                      >
+                        {viewingTransaction.type === 'debit' ? 'Debit' : 'Credit'}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-t border-neutral-200/80 pt-3">
+                      <span className="text-xs font-extrabold uppercase tracking-wide text-neutral-500">Amount</span>
+                      <span
+                        className={[
+                          'text-base font-extrabold',
+                          viewingTransaction.type === 'debit' ? 'text-rose-600' : 'text-emerald-600',
+                        ].join(' ')}
+                      >
+                        {formatINR(viewingTransaction.amount)}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-t border-neutral-200/80 pt-3">
+                      <span className="text-xs font-extrabold uppercase tracking-wide text-neutral-500">Date</span>
+                      <span className="text-sm font-bold text-neutral-900">{formatDisplayDate(viewingTransaction.date)}</span>
+                    </div>
+                    {viewingTransaction.type === 'debit' ? (
+                      <div className="border-t border-neutral-200/80 pt-3">
+                        <div className="text-xs font-extrabold uppercase tracking-wide text-neutral-500">Reason</div>
+                        <div className="mt-1 text-sm font-semibold text-neutral-900">
+                          {(viewingTransaction.reason ?? '').trim() || '—'}
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="border-t border-neutral-200/80 pt-3">
+                          <div className="text-xs font-extrabold uppercase tracking-wide text-neutral-500">Client</div>
+                          <div className="mt-1 text-sm font-semibold text-neutral-900">
+                            {(viewingTransaction.client ?? '').trim() || '—'}
+                          </div>
+                        </div>
+                        <div className="border-t border-neutral-200/80 pt-3">
+                          <div className="text-xs font-extrabold uppercase tracking-wide text-neutral-500">Site</div>
+                          <div className="mt-1 text-sm font-semibold text-neutral-900">
+                            {(viewingTransaction.site ?? '').trim() || '—'}
+                          </div>
+                        </div>
+                      </>
+                    )}
+                    <div className="border-t border-neutral-200/80 pt-3">
+                      <div className="text-xs font-extrabold uppercase tracking-wide text-neutral-500">Reference ID</div>
+                      <div className="mt-1 break-all font-mono text-[11px] font-semibold text-neutral-600">{viewingTransaction.id}</div>
+                    </div>
+                  </div>
+
+                  <div className="mt-5 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => setViewingTxId(null)}
+                      className="h-11 rounded-xl bg-neutral-900 px-5 text-sm font-extrabold text-white shadow-sm ring-1 ring-black/10 transition hover:bg-neutral-800"
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
             <section className="mt-4 md:mt-6">
               <CardShell title={ledgerCardTitle} className="overflow-hidden" bodyClassName="p-0">
                 <div className="md:hidden">
@@ -1117,6 +1280,7 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                               </div>
                               <button
                                 type="button"
+                                onClick={() => setViewingTxId(tx.id)}
                                 className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#f39b03]/12 text-[#f39b03] transition hover:bg-[#f39b03]/20 md:h-8 md:w-8"
                                 aria-label="View transaction"
                               >
@@ -1125,7 +1289,7 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                               {canEditLedger ? (
                                 <button
                                   type="button"
-                                  onClick={() => void deleteTransactionForRow(tx.id)}
+                                  onClick={() => setDeleteConfirmTxId(tx.id)}
                                   disabled={deletingTxId === tx.id}
                                   className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-rose-500/12 text-rose-600 transition hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-50 md:h-8 md:w-8"
                                   aria-label="Delete transaction"
@@ -1215,6 +1379,7 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                               <div className="flex items-center justify-center gap-2">
                                 <button
                                   type="button"
+                                  onClick={() => setViewingTxId(tx.id)}
                                   className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-[#f39b03]/12 text-[#f39b03] transition hover:bg-[#f39b03]/20"
                                   aria-label="View transaction"
                                 >
@@ -1223,7 +1388,7 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                                 {canEditLedger ? (
                                   <button
                                     type="button"
-                                    onClick={() => void deleteTransactionForRow(tx.id)}
+                                    onClick={() => setDeleteConfirmTxId(tx.id)}
                                     disabled={deletingTxId === tx.id}
                                     className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-rose-500/12 text-rose-600 transition hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-50"
                                     aria-label="Delete transaction"

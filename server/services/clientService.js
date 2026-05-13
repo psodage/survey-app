@@ -11,30 +11,20 @@ import {
   optionalAdminIdQuery,
   instrumentScopeMatch,
 } from '../utils/scope.js'
-
-function dec(v) {
-  if (v == null || v === undefined) return 0
-  if (typeof v === 'number') return v
-  try {
-    return parseFloat(v.toString())
-  } catch {
-    return 0
-  }
-}
+import { decAmount, effectivePaidAmount } from '../utils/visitPaymentMath.js'
 
 function formatInr(n) {
   return `₹${Math.round(n).toLocaleString('en-IN')}`
 }
 
 async function clientFinancials(clientId) {
-  const visits = await SiteVisit.find({ clientId }).select('amount paymentStatus').lean()
+  const visits = await SiteVisit.find({ clientId }).select('amount paymentStatus paidAmount').lean()
   let revenue = 0
   let received = 0
   for (const v of visits) {
-    const a = dec(v.amount)
+    const a = decAmount(v.amount)
     revenue += a
-    if (v.paymentStatus === 'paid') received += a
-    if (v.paymentStatus === 'partial') received += a * 0.5
+    received += effectivePaidAmount(v)
   }
   const pending = Math.max(0, revenue - received)
   return { revenue, received, pending }
