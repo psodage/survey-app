@@ -2,9 +2,9 @@
  * Upserts named admin users for the first company in the DB.
  * Password for each account = phone digits only (spaces removed).
  *
- * Run: npm run add-team-admins   (from server/)
+ * Run: npm run add-team-admins   (from backend/)
  *
- * Requires MONGODB_URI. If the company has no instruments, one default
+ * Requires MONGO_URI or MONGODB_URI. If the company has no instruments, one default
  * Total Station is created so admins can sign in with instrument scope.
  */
 import 'dotenv/config'
@@ -59,9 +59,9 @@ async function assignAllInstruments(companyId, adminId, instrumentIds, assignedB
 }
 
 async function run() {
-  const uri = process.env.MONGODB_URI
+  const uri = process.env.MONGO_URI || process.env.MONGODB_URI
   if (!uri) {
-    console.error('Set MONGODB_URI in server/.env')
+    console.error('Set MONGO_URI or MONGODB_URI in backend/.env')
     process.exit(1)
   }
   await connectMongo(uri)

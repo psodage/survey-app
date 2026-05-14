@@ -1,10 +1,14 @@
+# Optional Render Blueprint — create a Web Service from this repo.
+# Set all environment variables in the Render dashboard (do not commit secrets).
 services:
   - type: web
-    name: survey-app
-    runtime: static
-    buildCommand: npm install && npm run build
-    staticPublishPath: dist
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html
+    name: samarth-surveyos-api
+    runtime: node
+    plan: starter
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production

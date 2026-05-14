@@ -4,7 +4,7 @@
  *
  * Run from server/: npm run seed-admin-bank
  *
- * Requires MONGODB_URI in server/.env
+ * Requires MONGO_URI or MONGODB_URI in backend/.env
  */
 import 'dotenv/config'
 import fs from 'fs'
@@ -52,9 +52,9 @@ const ADMINS = [
 ]
 
 async function run() {
-  const uri = process.env.MONGODB_URI
+  const uri = process.env.MONGO_URI || process.env.MONGODB_URI
   if (!uri) {
-    console.error('Set MONGODB_URI in server/.env')
+    console.error('Set MONGO_URI or MONGODB_URI in backend/.env')
     process.exit(1)
   }
   await connectMongo(uri)

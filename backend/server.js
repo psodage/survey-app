@@ -10,7 +10,15 @@ import apiRouter from './routes/index.js'
 import { errorHandler } from './middleware/errorHandler.js'
 
 if (!env.mongodbUri) {
-  console.error('MONGODB_URI is required')
+  console.error('MongoDB connection string is required (set MONGO_URI or MONGODB_URI)')
+  process.exit(1)
+}
+
+if (
+  env.nodeEnv === 'production' &&
+  (!env.jwtSecret || env.jwtSecret === 'dev-only-change-in-production')
+) {
+  console.error('JWT_SECRET must be set to a strong random value in production')
   process.exit(1)
 }
 
@@ -18,12 +26,13 @@ configureCloudinary()
 registerMongoShutdownHandlers()
 
 const app = express()
+app.set('trust proxy', 1)
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }))
 app.use(
   cors({
     origin(origin, cb) {
       if (!origin) return cb(null, true)
-      if (origin === env.frontendOrigin) return cb(null, true)
+      if (env.frontendOrigins.includes(origin)) return cb(null, true)
       if (/^http:\/\/localhost:\d+$/.test(origin)) return cb(null, true)
       cb(null, false)
     },

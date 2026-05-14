@@ -20,8 +20,11 @@ export const tokenStorage = {
   },
 }
 
+const apiBase =
+  import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || ''
+
 const http = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || '',
+  baseURL: apiBase.replace(/\/$/, ''),
   headers: { 'Content-Type': 'application/json' },
 })
 

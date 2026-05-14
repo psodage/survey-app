@@ -19,7 +19,7 @@ const pwd = env.seedPassword
 
 async function run() {
   if (!env.mongodbUri) {
-    console.error('Set MONGODB_URI')
+    console.error('Set MONGO_URI or MONGODB_URI in backend/.env')
     process.exit(1)
   }
   await connectMongo(env.mongodbUri)

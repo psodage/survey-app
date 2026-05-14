@@ -8,16 +8,28 @@ import {
   RESET_EMAIL_KEY,
   RESET_STEP_AWAIT_OTP,
   RESET_STEP_KEY,
+  clearAuthResetFlow,
 } from './authResetFlow'
 import { AuthShell } from './components/AuthShell'
 import { useAuth } from './context/AuthContext'
+
+function readPendingSentEmail() {
+  try {
+    if (sessionStorage.getItem(RESET_STEP_KEY) === RESET_STEP_AWAIT_OTP) {
+      return sessionStorage.getItem(RESET_EMAIL_KEY) || ''
+    }
+  } catch {
+    /* ignore */
+  }
+  return ''
+}
 
 export default function ForgotPassword() {
   const navigate = useNavigate()
   const { token, isLoading } = useAuth()
   const [email, setEmail] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [codeSentFor, setCodeSentFor] = useState('')
+  const [codeSentFor, setCodeSentFor] = useState(readPendingSentEmail)
 
   if (!isLoading && token) {
     return <Navigate to="/dashboard" replace />
@@ -76,6 +88,17 @@ export default function ForgotPassword() {
             Enter verification code
           </button>
           <p className="text-center text-[14px] text-white/70">
+            <button
+              type="button"
+              className="font-medium text-[#f39b03] transition hover:text-[#f7b13a]"
+              onClick={() => {
+                clearAuthResetFlow()
+                setCodeSentFor('')
+              }}
+            >
+              Use a different email
+            </button>
+            <span className="mx-2 text-white/35">·</span>
             <Link to="/login" className="inline-flex items-center justify-center gap-2 font-medium text-[#f39b03] transition hover:text-[#f7b13a]">
               <ArrowLeft className="h-4 w-4" />
               Back to login

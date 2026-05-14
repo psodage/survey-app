@@ -16,9 +16,9 @@ export default defineConfig(({ mode }) => {
       includeAssets: ['favicon.svg'],
       manifest: {
         id: '/',
-        name: 'Samrath Land Surveyor',
-        short_name: 'Samrath',
-        description: 'Land Survey Management System',
+        name: 'Samarth SurveyOS',
+        short_name: 'SurveyOS',
+        description: 'Land Survey Management System — Samarth SurveyOS',
         start_url: '/',
         scope: '/',
         display: 'standalone',
@@ -108,7 +108,9 @@ export default defineConfig(({ mode }) => {
     },
   },
   server: {
-    allowedHosts: ['dandelion-tall-numerator.ngrok-free.dev'],
+    ...(fileEnv.VITE_DEV_ALLOWED_HOSTS
+      ? { allowedHosts: fileEnv.VITE_DEV_ALLOWED_HOSTS.split(',').map((h) => h.trim()).filter(Boolean) }
+      : {}),
     proxy: {
       '/api': {
         target: apiProxyTarget,

@@ -6,13 +6,33 @@ function required(name, fallback = '') {
   return v
 }
 
+function mongoConnectionString() {
+  const primary = required('MONGO_URI')
+  if (primary) return primary
+  return required('MONGODB_URI')
+}
+
+function parseOriginList(raw) {
+  return raw
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+}
+
+const nodeEnv = process.env.NODE_ENV || 'development'
+const jwtFromEnv = required('JWT_SECRET', '')
+/** Empty in production is invalid — validated at server startup. */
+const jwtSecret =
+  jwtFromEnv || (nodeEnv === 'production' ? '' : 'dev-only-change-in-production')
+
 export const env = {
-  nodeEnv: process.env.NODE_ENV || 'development',
+  nodeEnv,
   port: Number(process.env.PORT) || 4000,
-  mongodbUri: required('MONGODB_URI'),
-  jwtSecret: required('JWT_SECRET', 'dev-only-change-in-production'),
+  mongodbUri: mongoConnectionString(),
+  jwtSecret,
   jwtExpiresIn: required('JWT_EXPIRES_IN', '7d'),
-  frontendOrigin: required('FRONTEND_ORIGIN', 'http://localhost:5173'),
+  /** Comma-separated allowed browser origins (e.g. `https://app.vercel.app,http://localhost:5173`). */
+  frontendOrigins: parseOriginList(required('FRONTEND_ORIGIN', 'http://localhost:5173')),
   cloudinaryCloudName: required('CLOUDINARY_CLOUD_NAME'),
   cloudinaryApiKey: required('CLOUDINARY_API_KEY'),
   cloudinaryApiSecret: required('CLOUDINARY_API_SECRET'),

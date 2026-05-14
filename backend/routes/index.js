@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import multer from 'multer'
+import mongoose from 'mongoose'
 import { authenticate } from '../middleware/auth.js'
 import { requireRole } from '../middleware/requireRole.js'
 import { validateBody, validateQuery } from '../middleware/validate.js'
@@ -43,7 +44,15 @@ const upload = multer({
 const router = Router()
 
 router.get('/health', (_req, res) => {
-  res.json({ ok: true, service: 'survey-api' })
+  const dbState = mongoose.connection.readyState
+  const db =
+    dbState === 1 ? 'connected' : dbState === 2 ? 'connecting' : dbState === 3 ? 'disconnecting' : 'disconnected'
+  res.json({
+    ok: true,
+    service: 'samarth-surveyos-api',
+    time: new Date().toISOString(),
+    db,
+  })
 })
 
 router.post('/auth/login', authLimiter, validateBody(loginSchema), catchAsync(async (req, res) => {
@@ -368,5 +377,9 @@ router.post('/admins/:id/instruments', requireRole('super_admin'), validateBody(
   await authService.assignInstruments(req.user, id, ids)
   res.json({ ok: true })
 }))
+
+router.use((_req, res) => {
+  res.status(404).json({ ok: false, error: 'Not found' })
+})
 
 export default router

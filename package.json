@@ -1,31 +1,19 @@
 {
-  "devDependencies": {
-    "@vitejs/plugin-react": "^5.1.2",
-    "concurrently": "^9.2.1",
-    "sharp": "^0.34.5",
-    "vite": "^7.3.3",
-    "vite-plugin-pwa": "^1.3.0"
-  },
+  "name": "samarth-surveyos",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
   "scripts": {
-    "server": "npm run dev --prefix server",
-    "server:start": "npm run start --prefix server",
-    "dev:all": "concurrently -k -n api,web -c magenta,green \"npm run server\" \"npm run dev\"",
-    "dev": "vite",
-    "icons": "node scripts/generate-pwa-icons.mjs",
-    "prebuild": "node scripts/generate-pwa-icons.mjs",
-    "build": "vite build",
-    "preview": "vite preview"
+    "dev": "concurrently -k -n api,web -c magenta,green \"npm run dev -w backend\" \"npm run dev -w frontend\"",
+    "dev:frontend": "npm run dev -w frontend",
+    "dev:backend": "npm run dev -w backend",
+    "build": "npm run build -w frontend",
+    "preview": "npm run preview -w frontend",
+    "start": "npm run start -w backend"
   },
-  "dependencies": {
-    "@tailwindcss/postcss": "^4.2.4",
-    "axios": "^1.7.9",
-    "jspdf": "^4.2.1",
-    "jspdf-autotable": "^5.0.7",
-    "lucide-react": "^1.14.0",
-    "react": "^19.2.6",
-    "react-dom": "^19.2.6",
-    "react-router-dom": "^7.15.0",
-    "sonner": "^1.7.1",
-    "tailwindcss": "^4.2.4"
+  "devDependencies": {
+    "concurrently": "^9.2.1"
   }
 }

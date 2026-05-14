@@ -1,7 +1,7 @@
 /**
  * Adds (or updates) ONE temporary super-admin for local login — does NOT wipe the database.
  *
- * Run from server folder:  npm run add-temp-user
+ * Run from backend folder:  npm run add-temp-user
  *
  * Default credentials (override with env TEMP_USER_EMAIL / TEMP_USER_PASSWORD):
  *   Email:    temp@samarth.local
@@ -19,9 +19,9 @@ const email = (process.env.TEMP_USER_EMAIL || 'temp@samarth.local').trim().toLow
 const password = process.env.TEMP_USER_PASSWORD || 'TempLogin@123'
 
 async function run() {
-  const uri = process.env.MONGODB_URI
+  const uri = process.env.MONGO_URI || process.env.MONGODB_URI
   if (!uri) {
-    console.error('Set MONGODB_URI in server/.env')
+    console.error('Set MONGO_URI or MONGODB_URI in backend/.env')
     process.exit(1)
   }
   await connectMongo(uri)

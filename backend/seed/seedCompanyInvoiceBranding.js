@@ -3,7 +3,7 @@
  *
  * Run from server/: npm run seed-company-invoice
  *
- * Requires MONGODB_URI in server/.env
+ * Requires MONGO_URI or MONGODB_URI in backend/.env
  */
 import 'dotenv/config'
 import fs from 'fs'
@@ -23,9 +23,9 @@ const LOGO_PUBLIC_PATH = '/branding/logo-bg2.png'
 const LOGO_FILE = 'logo-bg2.png'
 
 async function run() {
-  const uri = process.env.MONGODB_URI
+  const uri = process.env.MONGO_URI || process.env.MONGODB_URI
   if (!uri) {
-    console.error('Set MONGODB_URI in server/.env')
+    console.error('Set MONGO_URI or MONGODB_URI in backend/.env')
     process.exit(1)
   }
   await connectMongo(uri)
