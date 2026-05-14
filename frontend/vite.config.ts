@@ -53,6 +53,7 @@ export default defineConfig(({ mode }) => {
         ],
       },
       workbox: {
+        maximumFileSizeToCacheInBytes: 12 * 1024 * 1024,
         globPatterns: ['**/*.{js,css,html,ico,png,svg,json,woff2,webmanifest}'],
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api/],
@@ -97,6 +98,7 @@ export default defineConfig(({ mode }) => {
     }),
   ],
   build: {
+    reportCompressedSize: false,
     rollupOptions: {
       output: {
         manualChunks: {

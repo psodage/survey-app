@@ -223,7 +223,13 @@ Returns JSON including service id, timestamp, and MongoDB connection state (`db`
 
 If the build fails with **Cannot find module `@rollup/rollup-linux-x64-gnu`**, that is an npm optional-dependency bug on Linux. This repo pins Rollup and lists the Linux native packages explicitly; commit the latest `package-lock.json` and redeploy. Use **Node 20+** on Vercel (Project → Settings → Node.js Version).
 
-On **Render** static builds, use the same committed lockfile; if `vite build` exits with code 1 and no Rollup message, check the full log for **out-of-memory** (try a larger plan or `NODE_OPTIONS=--max-old-space-size=4096` in the build command).
+On **Render** static builds, use the same committed lockfile; if `vite build` exits with code 1 and no Rollup message, check the full log for **out-of-memory** (this repo raises the Node heap during `npm run build` in `frontend`).
+
+**Render static site (SPA) checklist**
+
+1. **Node**: **20+** (22 recommended). In the service dashboard set **Node version** to match `.nvmrc`, or add env `NODE_VERSION=22` if your Render plan supports it.
+2. **Root directory**: Prefer the **monorepo root** (folder that contains `package-lock.json` and both `frontend/` and `backend/`), then build command: `npm ci && npm run build` and publish directory: `frontend/dist`. If you instead set the root directory to **`frontend`**, use build command `npm ci && npm run build` and publish directory **`dist`**. If `npm ci` fails with lockfile errors, use `npm install && npm run build` instead.
+3. Open the **full build log** and search for the first `error` line (Rollup, Workbox, or Node OOM). The line above `npm error Lifecycle script build failed` is the real failure; share that if you need help.
 
 ### Render (backend)
 
