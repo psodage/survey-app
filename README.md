@@ -141,6 +141,12 @@ npm run dev
 npm run build
 ```
 
+The committed files `frontend/public/icons/icon-192.png` and `icon-512.png` are used for the PWA manifest. Cloud hosts (e.g. Render) do **not** run icon generation during build. If you change `frontend/src/assets/logo.jpeg`, regenerate icons locally before committing:
+
+```bash
+npm run icons -w frontend
+```
+
 **Preview the production build:**
 
 ```bash

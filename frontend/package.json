@@ -5,7 +5,6 @@
   "scripts": {
     "dev": "vite",
     "icons": "node scripts/generate-pwa-icons.mjs",
-    "prebuild": "node scripts/generate-pwa-icons.mjs",
     "build": "vite build",
     "preview": "vite preview"
   },
