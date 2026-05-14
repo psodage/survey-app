@@ -221,7 +221,7 @@ Returns JSON including service id, timestamp, and MongoDB connection state (`db`
 5. Environment variable: `VITE_API_BASE_URL` = your public **Render API URL** (no `/api` suffix).
 6. Redeploy after any environment change.
 
-If the build fails with **Cannot find module `@rollup/rollup-linux-x64-gnu`**, that is an npm optional-dependency bug on Linux. This repo pins Rollup and lists the Linux native packages explicitly; commit the latest `package-lock.json` and redeploy. Use **Node 20+** on Vercel (Project → Settings → Node.js Version).
+If the build fails with **Cannot find module `@rollup/rollup-linux-x64-gnu`**, **`@esbuild/linux-x64`**, or **`lightningcss.linux-x64-gnu`**, that is usually npm’s optional-dependency handling with **workspaces** on Linux (Vercel / Render). This repo pins Rollup / esbuild / lightningcss and lists the matching **Linux x64** optional packages; commit the latest `package-lock.json` and redeploy. Clear the Vercel build cache once. Use **Node 20+** (22 recommended) on Vercel (Project → Settings → Node.js Version).
 
 On **Render** static builds, use the same committed lockfile; if `vite build` exits with code 1 and no Rollup message, check the full log for **out-of-memory** (this repo raises the Node heap during `npm run build` in `frontend`).
 
