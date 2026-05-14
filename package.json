@@ -5,6 +5,9 @@
     "frontend",
     "backend"
   ],
+  "overrides": {
+    "rollup": "4.60.3"
+  },
   "scripts": {
     "dev": "concurrently -k -n api,web -c magenta,green \"npm run dev -w backend\" \"npm run dev -w frontend\"",
     "dev:frontend": "npm run dev -w frontend",
