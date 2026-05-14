@@ -8,11 +8,11 @@
   "scripts": {
     "dev": "vite",
     "icons": "node scripts/generate-pwa-icons.mjs",
+    "prebuild": "node scripts/ensure-tailwind-native.cjs",
     "build": "cross-env NODE_OPTIONS=--max-old-space-size=8192 vite build",
     "preview": "vite preview"
   },
   "dependencies": {
-    "@tailwindcss/postcss": "^4.2.4",
     "axios": "^1.7.9",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.7",
@@ -24,6 +24,7 @@
     "tailwindcss": "^4.2.4"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.2.4",
     "@vitejs/plugin-react": "^5.1.2",
     "cross-env": "^7.0.3",
     "sharp": "^0.34.5",
