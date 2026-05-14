@@ -1,5 +1,6 @@
 import mongoose from 'mongoose'
 import SiteVisit from '../models/SiteVisit.js'
+import Transaction from '../models/Transaction.js'
 import { owedAmount, effectivePaidAmount, decAmount } from '../utils/visitPaymentMath.js'
 
 /**
@@ -64,5 +65,53 @@ export async function applyCreditToSiteVisits(session, { companyId, adminId, sit
     )
 
     remaining = Math.round((remaining - apply) * 100) / 100
+  }
+}
+
+/**
+ * After a site credit is removed (or the ledger changes), strip explicit `paidAmount` from visits on that
+ * site (ledger-driven rows only), then replay all remaining credit transactions in date order so pending
+ * matches FIFO allocation — same rule as {@link applyCreditToSiteVisits}.
+ */
+export async function recomputeVisitCreditsForSite(session, { companyId, adminId, siteId, instrumentId }) {
+  if (!siteId || !instrumentId) return
+
+  const instId =
+    instrumentId instanceof mongoose.Types.ObjectId ? instrumentId : new mongoose.Types.ObjectId(String(instrumentId))
+  const siteObjectId = siteId instanceof mongoose.Types.ObjectId ? siteId : new mongoose.Types.ObjectId(String(siteId))
+  const adminObjectId = adminId instanceof mongoose.Types.ObjectId ? adminId : new mongoose.Types.ObjectId(String(adminId))
+  const companyObjectId =
+    companyId instanceof mongoose.Types.ObjectId ? companyId : new mongoose.Types.ObjectId(String(companyId))
+
+  const clearFilter = {
+    companyId: companyObjectId,
+    adminId: adminObjectId,
+    siteId: siteObjectId,
+    instrumentId: instId,
+    paymentStatus: { $ne: 'waived' },
+    paidAmount: { $exists: true, $ne: null },
+  }
+  const opts = session != null ? { session } : {}
+  await SiteVisit.updateMany(clearFilter, { $unset: { paidAmount: '' }, $set: { paymentStatus: 'pending' } }, opts)
+
+  let q = Transaction.find({
+    companyId: companyObjectId,
+    adminId: adminObjectId,
+    siteId: siteObjectId,
+    instrumentId: instId,
+    type: 'credit',
+  }).sort({ occurredOn: 1, _id: 1 })
+  if (session != null) q = q.session(session)
+  const credits = await q.lean()
+
+  for (const tx of credits) {
+    const creditAmount = decAmount(tx.amount)
+    await applyCreditToSiteVisits(session, {
+      companyId: companyObjectId,
+      adminId: adminObjectId,
+      siteId: siteObjectId,
+      instrumentId: instId,
+      creditAmount,
+    })
   }
 }

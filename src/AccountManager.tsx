@@ -21,11 +21,12 @@ import {
   Wallet,
   X,
 } from 'lucide-react'
-import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Navigate, useLocation, useParams, useSearchParams, type NavigateFunction } from 'react-router-dom'
 import { AccountManagerSidebarBlock } from './AccountManagerSidebarBlock'
 import { ConfirmAlert } from './ConfirmAlert'
 import { CollaborationBrandMark } from './CollaborationBrandMark'
+import { LayoutFooter } from './LayoutFooter'
 import { type AccountRow, type LedgerTransaction } from './accountManagersData'
 import {
   CardPanel,
@@ -37,11 +38,12 @@ import {
   toolbarSecondaryButtonClass,
 } from './dashboardCards'
 import { layoutBrandLogo } from './brandLogo'
-import { getHeaderDateLabel } from './headerDateLabel'
+import { HeaderYearSelect } from './components/HeaderYearSelect'
 import { toast } from 'sonner'
 import http from './api/http'
 import { signOut } from './signOut'
 import { useAuth } from './context/AuthContext'
+import { useSelectedYear } from './context/SelectedYearContext'
 
 type NavItem = {
   label: string
@@ -102,6 +104,7 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
   const { user, company, managers } = useAuth()
   const [ledgerMeta, setLedgerMeta] = useState<LedgerMeta | null>(null)
   const [ledgerLoadState, setLedgerLoadState] = useState<'loading' | 'ok' | 'error'>('loading')
+  const prevManagerSlugRef = useRef<string | undefined>(undefined)
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const { managerId: managerIdFromRoute } = useParams<{ managerId: string }>()
   const [searchParams] = useSearchParams()
@@ -118,14 +121,21 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
             : 'all'
 
   const location = useLocation()
+  const { selectedYear, setSelectedYear } = useSelectedYear()
+  const appliedNavYearRef = useRef(false)
   const navState = location.state as
     | {
         selectedYear?: string
       }
     | undefined
 
-  const [selectedYear] = useState(() => navState?.selectedYear ?? String(new Date().getFullYear()))
-  const currentDateLabel = getHeaderDateLabel()
+  useEffect(() => {
+    if (appliedNavYearRef.current) return
+    appliedNavYearRef.current = true
+    const y = navState?.selectedYear
+    if (y && /^\d{4}$/.test(y)) setSelectedYear(y)
+  }, [navState?.selectedYear, setSelectedYear])
+
   const [accountRows, setAccountRows] = useState<AccountRow[]>([])
   const [clientSiteOptions, setClientSiteOptions] = useState<Record<string, string[]>>({})
   const clientOptions = useMemo(() => {
@@ -182,8 +192,12 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
   useEffect(() => {
     if (!managerIdFromRoute) return
     let cancelled = false
-    setLedgerLoadState('loading')
-    setLedgerMeta(null)
+    const switchedManager = prevManagerSlugRef.current !== managerIdFromRoute
+    if (switchedManager) {
+      setLedgerLoadState('loading')
+      setLedgerMeta(null)
+      setAccountRows([])
+    }
     ;(async () => {
       try {
         const [tRes, aRes, sRes] = await Promise.all([
@@ -195,7 +209,9 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
             accounts: AccountRow[]
             manager?: LedgerMeta
           }>(`/api/account-managers/${managerIdFromRoute}/accounts`),
-          http.get<{ ok: boolean; sites: Array<{ clientName: string; name: string }> }>('/api/sites'),
+          http.get<{ ok: boolean; sites: Array<{ clientName: string; name: string }> }>('/api/sites', {
+            params: { year: selectedYear },
+          }),
         ])
         if (cancelled) return
         if (!aRes.data?.ok) {
@@ -227,6 +243,7 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
           }
           setClientSiteOptions(m)
         }
+        prevManagerSlugRef.current = managerIdFromRoute
         setLedgerLoadState('ok')
       } catch {
         if (!cancelled) {
@@ -238,7 +255,7 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
     return () => {
       cancelled = true
     }
-  }, [managerIdFromRoute])
+  }, [managerIdFromRoute, selectedYear])
 
   const managerFromSession = useMemo(
     () => managers.find((m) => m.id === managerIdFromRoute),
@@ -276,6 +293,9 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
     () => user?.role === 'super_admin' || (!!user?.id && !!ledgerMeta?.adminId && ledgerMeta.adminId === user.id),
     [user?.role, user?.id, ledgerMeta?.adminId],
   )
+
+  const isLedgerLoading = ledgerLoadState === 'loading'
+  const canEditLedgerActions = canEditLedger && !isLedgerLoading
 
   useEffect(() => {
     if (!canEditLedger) setIsAddOpen(false)
@@ -374,14 +394,6 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
     return <Navigate to={{ pathname: '/account-manager', search: location.search }} replace />
   }
 
-  if (ledgerLoadState === 'loading') {
-    return (
-      <div className="flex min-h-[100svh] flex-col items-center justify-center gap-3 bg-neutral-100 px-6 text-center">
-        <p className="text-sm font-semibold text-neutral-700">Loading ledger…</p>
-      </div>
-    )
-  }
-
   if (!manager) {
     return <Navigate to={{ pathname: '/account-manager', search: location.search }} replace />
   }
@@ -413,7 +425,7 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
   const handleSummaryCardClick = (kind: 'debits' | 'credits' | 'pending' | 'net') => {
     const qs = new URLSearchParams()
     qs.set('view', kind)
-    onNavigate(`/account-manager/${managerIdFromRoute}?${qs.toString()}`, { state: { selectedYear } })
+    onNavigate(`/account-manager/${managerIdFromRoute}?${qs.toString()}`)
     setIsSidebarOpen(false)
   }
 
@@ -539,7 +551,7 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
           <button
             type="button"
             className="fixed inset-0 z-40 bg-black/40 lg:hidden"
-            aria-label="Close panel overlay"
+            aria-label="Close sidebar overlay"
             onClick={() => setIsSidebarOpen(false)}
           />
         ) : null}
@@ -623,7 +635,9 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                   }}
                   className={[
                     'flex flex-col items-center gap-1.5 rounded-xl px-2 py-3 text-[11px] font-bold ring-1 transition',
-                    'bg-white/5 text-white/85 ring-white/10 hover:bg-white/10',
+                    path === '/dashboard'
+                      ? 'bg-white/10 text-[#f39b03] ring-[#f39b03]/35'
+                      : 'bg-white/5 text-white/85 ring-white/10 hover:bg-white/10',
                   ].join(' ')}
                 >
                   <Icon size={18} />
@@ -674,14 +688,7 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                 <h1 className="min-w-0 truncate text-left text-base font-extrabold leading-tight tracking-tight text-white">
                   {pageTitle}
                 </h1>
-                <button
-                  type="button"
-                  className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-white/20 bg-neutral-900 px-2.5 text-[11px] font-semibold text-white transition hover:bg-neutral-800"
-                  aria-label="Current date"
-                >
-                  <Calendar size={13} className="text-[#f39b03]" />
-                  <span className="whitespace-nowrap">{currentDateLabel}</span>
-                </button>
+                <HeaderYearSelect variant="onDark" compact />
               </div>
             </div>
 
@@ -702,14 +709,7 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
               </div>
 
               <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-                <button
-                  type="button"
-                  className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-neutral-900 sm:px-4 sm:py-2.5 sm:text-sm"
-                  aria-label="Current date"
-                >
-                  <Calendar size={16} className="text-[#f39b03]" />
-                  <span className="whitespace-nowrap">{currentDateLabel}</span>
-                </button>
+                <HeaderYearSelect variant="onLight" />
                 <div className="hidden items-center gap-3 rounded-xl bg-neutral-100 px-3 py-2 ring-1 ring-black/5 sm:flex sm:px-4 sm:py-2.5">
                   <div className="grid h-9 w-9 place-items-center rounded-xl bg-[#f39b03]/15 text-[#f39b03]">
                     <CircleUserRound size={18} />
@@ -723,8 +723,11 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
             </div>
           </header>
 
-          <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-white p-4 pb-[calc(3.65rem+max(12px,env(safe-area-inset-bottom,0px)))] sm:px-6 sm:pt-6 sm:pb-[calc(3.65rem+max(12px,env(safe-area-inset-bottom,0px)))] md:p-6 md:pb-24 lg:p-8 lg:pb-28">
-            {!canEditLedger ? (
+          <div
+            className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-white p-4 pb-[calc(3.65rem+max(12px,env(safe-area-inset-bottom,0px)))] sm:px-6 sm:pt-6 sm:pb-[calc(3.65rem+max(12px,env(safe-area-inset-bottom,0px)))] md:p-6 md:pb-24 lg:p-8 lg:pb-28"
+            aria-busy={isLedgerLoading}
+          >
+            {!canEditLedger && ledgerLoadState === 'ok' ? (
               <div
                 className="mb-4 rounded-xl border border-amber-200/90 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950 ring-1 ring-amber-200/80 sm:mb-5"
                 role="status"
@@ -752,65 +755,78 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                 <p className="text-sm font-semibold text-neutral-600">{manager.phone}</p>
               </div>
             </CardShell>
-            <section className="grid grid-cols-2 gap-1.5 md:gap-4 xl:grid-cols-4">
+            <section
+              className={[
+                'grid grid-cols-2 gap-1.5 md:gap-4 xl:grid-cols-4',
+                isLedgerLoading ? 'pointer-events-none opacity-70' : '',
+              ].join(' ')}
+            >
               <button
                 type="button"
                 onClick={() => handleSummaryCardClick('debits')}
-                className="w-full cursor-pointer rounded-xl bg-transparent p-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f39b03]/70"
+                disabled={isLedgerLoading}
+                className="w-full cursor-pointer rounded-xl bg-transparent p-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f39b03]/70 disabled:cursor-default"
                 aria-label="Open debit transactions"
               >
                 <StatCard
                   title="Total Debit"
                   value={formatINR(totalDebit)}
-                  subtitle="This Financial Year"
+                  subtitle={selectedYear}
                   icon={<ReceiptIndianRupee size={20} className="text-rose-600" />}
                   toneClass="bg-rose-100"
                   mobileCardTint="bg-rose-50/90"
+                  loading={isLedgerLoading}
                 />
               </button>
               <button
                 type="button"
                 onClick={() => handleSummaryCardClick('credits')}
-                className="w-full cursor-pointer rounded-xl bg-transparent p-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f39b03]/70"
+                disabled={isLedgerLoading}
+                className="w-full cursor-pointer rounded-xl bg-transparent p-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f39b03]/70 disabled:cursor-default"
                 aria-label="Open credit transactions"
               >
                 <StatCard
                   title="Total Credit"
                   value={formatINR(totalCredit)}
-                  subtitle="This Financial Year"
+                  subtitle={selectedYear}
                   icon={<Wallet size={20} className="text-emerald-600" />}
                   toneClass="bg-emerald-100"
                   mobileCardTint="bg-emerald-50/90"
+                  loading={isLedgerLoading}
                 />
               </button>
               <button
                 type="button"
                 onClick={() => handleSummaryCardClick('net')}
-                className="w-full cursor-pointer rounded-xl bg-transparent p-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f39b03]/70"
+                disabled={isLedgerLoading}
+                className="w-full cursor-pointer rounded-xl bg-transparent p-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f39b03]/70 disabled:cursor-default"
                 aria-label="Open net balance details"
               >
                 <StatCard
                   title="Net Balance"
                   value={formatINR(netBalance)}
-                  subtitle="This Financial Year"
+                  subtitle={selectedYear}
                   icon={<Briefcase size={20} className="text-neutral-700 md:text-[#f39b03]" />}
                   toneClass="bg-neutral-200 md:bg-[#f39b03]/12"
                   mobileCardTint="bg-neutral-900/[0.07]"
+                  loading={isLedgerLoading}
                 />
               </button>
               <button
                 type="button"
                 onClick={() => handleSummaryCardClick('pending')}
-                className="w-full cursor-pointer rounded-xl bg-transparent p-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f39b03]/70"
+                disabled={isLedgerLoading}
+                className="w-full cursor-pointer rounded-xl bg-transparent p-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f39b03]/70 disabled:cursor-default"
                 aria-label="Open pending clients"
               >
                 <StatCard
                   title="Pending Amount"
                   value={formatINR(totalPending)}
-                  subtitle="This Financial Year"
+                  subtitle={selectedYear}
                   icon={<BarChart3 size={20} className="text-rose-600" />}
                   toneClass="bg-rose-100"
                   mobileCardTint="bg-rose-50/90"
+                  loading={isLedgerLoading}
                 />
               </button>
             </section>
@@ -822,6 +838,7 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                     type="text"
                     value={searchQuery}
                     onChange={(event) => setSearchQuery(event.target.value)}
+                    disabled={isLedgerLoading}
                     placeholder={viewMode === 'pending' ? 'Search client or phone...' : 'Search transactions...'}
                     className={toolbarSearchInputClass}
                   />
@@ -831,6 +848,7 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                     <select
                       value={pendingFilter}
                       onChange={(event) => setPendingFilter(event.target.value as 'all' | 'withPending' | 'cleared')}
+                      disabled={isLedgerLoading}
                       className={toolbarSecondaryButtonClass}
                       aria-label="Filter pending rows"
                     >
@@ -842,6 +860,7 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                     <select
                       value={transactionFilter}
                       onChange={(event) => setTransactionFilter(event.target.value as 'all' | TransactionType)}
+                      disabled={isLedgerLoading}
                       className={toolbarSecondaryButtonClass}
                       aria-label="Filter transactions by type"
                     >
@@ -854,6 +873,7 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                     <>
                       <button
                         type="button"
+                        disabled={isLedgerLoading}
                         className={toolbarSecondaryButtonClass}
                         aria-label="Export filtered transactions as PDF"
                         title="Download PDF of transactions shown for the selected year"
@@ -870,7 +890,7 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                       >
                         Export
                       </button>
-                      {canEditLedger ? (
+                      {canEditLedgerActions ? (
                         <button
                           type="button"
                           className={toolbarPrimaryButtonClass}
@@ -895,7 +915,7 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
               </CardPanel>
             </section>
 
-            {viewMode !== 'pending' && isAddOpen && canEditLedger ? (
+            {viewMode !== 'pending' && isAddOpen && canEditLedgerActions ? (
               <div className="fixed inset-0 z-[60] grid place-items-center bg-black/50 px-4 py-6">
                 <div className="w-full max-w-lg rounded-2xl bg-white p-3 shadow-xl ring-1 ring-black/10 sm:p-5">
                   <div className="flex items-center justify-between gap-3">
@@ -1226,7 +1246,25 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
             <section className="mt-4 md:mt-6">
               <CardShell title={ledgerCardTitle} className="overflow-hidden" bodyClassName="p-0">
                 <div className="md:hidden">
-                  {viewMode === 'pending' ? (
+                  {isLedgerLoading ? (
+                    <ul className="flex flex-col gap-1.5 px-3 pb-1.5 pt-1.5" aria-hidden>
+                      {[0, 1, 2, 3, 4, 5].map((i) => (
+                        <li key={`m-sk-${i}`}>
+                          <div className="flex items-center gap-2 rounded-xl border border-neutral-200 bg-white p-2 shadow-sm ring-1 ring-black/5 md:p-3">
+                            <div className="h-8 w-8 shrink-0 animate-pulse rounded-xl bg-neutral-200" />
+                            <div className="min-w-0 flex-1 py-0.5">
+                              <div className="h-3.5 max-w-[14rem] animate-pulse rounded bg-neutral-200" />
+                              <div className="mt-2 h-2.5 max-w-[9rem] animate-pulse rounded bg-neutral-100" />
+                            </div>
+                            <div className="flex shrink-0 flex-col items-end gap-1.5">
+                              <div className="h-3.5 w-16 animate-pulse rounded bg-neutral-200" />
+                              <div className="h-2.5 w-12 animate-pulse rounded bg-neutral-100" />
+                            </div>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : viewMode === 'pending' ? (
                     <ul className="flex flex-col gap-1.5 px-3 pb-1.5 pt-1.5">
                       {filteredPendingRows.map((row) => (
                         <li key={row.name}>
@@ -1286,7 +1324,7 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                               >
                                 <Eye size={14} />
                               </button>
-                              {canEditLedger ? (
+                              {canEditLedgerActions ? (
                                 <button
                                   type="button"
                                   onClick={() => setDeleteConfirmTxId(tx.id)}
@@ -1306,7 +1344,83 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                 </div>
 
                 <div className="hidden overflow-x-auto md:block">
-                  {viewMode === 'pending' ? (
+                  {isLedgerLoading ? (
+                    viewMode === 'pending' ? (
+                      <table className="w-full min-w-[980px] border-collapse">
+                        <thead className="bg-neutral-50">
+                          <tr className="text-left text-xs font-extrabold uppercase tracking-wide text-neutral-500">
+                            <th className="px-6 py-4">Client</th>
+                            <th className="px-4 py-4">Phone</th>
+                            <th className="px-4 py-4">Pending Amount (₹)</th>
+                            <th className="px-4 py-4">Debit (₹)</th>
+                            <th className="px-4 py-4">Credit (₹)</th>
+                            <th className="px-4 py-4">Net</th>
+                          </tr>
+                        </thead>
+                        <tbody className="text-sm font-semibold text-neutral-800" aria-hidden>
+                          {[0, 1, 2, 3, 4, 5].map((i) => (
+                            <tr key={`d-sk-p-${i}`} className="border-t border-neutral-200">
+                              <td className="px-6 py-4">
+                                <div className="h-4 max-w-[12rem] animate-pulse rounded bg-neutral-200" />
+                              </td>
+                              <td className="px-4 py-4">
+                                <div className="h-4 max-w-[6rem] animate-pulse rounded bg-neutral-200" />
+                              </td>
+                              <td className="px-4 py-4">
+                                <div className="h-4 max-w-[5rem] animate-pulse rounded bg-neutral-200" />
+                              </td>
+                              <td className="px-4 py-4">
+                                <div className="h-4 max-w-[5rem] animate-pulse rounded bg-neutral-200" />
+                              </td>
+                              <td className="px-4 py-4">
+                                <div className="h-4 max-w-[5rem] animate-pulse rounded bg-neutral-200" />
+                              </td>
+                              <td className="px-4 py-4">
+                                <div className="h-4 max-w-[5rem] animate-pulse rounded bg-neutral-200" />
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    ) : (
+                      <table className="w-full min-w-[980px] border-collapse">
+                        <thead className="bg-neutral-50">
+                          <tr className="text-left text-xs font-extrabold uppercase tracking-wide text-neutral-500">
+                            <th className="px-6 py-4">Type</th>
+                            <th className="px-4 py-4">Amount (₹)</th>
+                            <th className="px-4 py-4">Reason / Client</th>
+                            <th className="px-4 py-4">Site</th>
+                            <th className="px-4 py-4">Date</th>
+                            <th className="px-4 py-4 text-center">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody className="text-sm font-semibold text-neutral-800" aria-hidden>
+                          {[0, 1, 2, 3, 4, 5].map((i) => (
+                            <tr key={`d-sk-t-${i}`} className="border-t border-neutral-200">
+                              <td className="px-6 py-4">
+                                <div className="h-7 w-16 animate-pulse rounded-full bg-neutral-200" />
+                              </td>
+                              <td className="px-4 py-4">
+                                <div className="h-4 max-w-[5rem] animate-pulse rounded bg-neutral-200" />
+                              </td>
+                              <td className="px-4 py-4">
+                                <div className="h-4 max-w-[14rem] animate-pulse rounded bg-neutral-200" />
+                              </td>
+                              <td className="px-4 py-4">
+                                <div className="h-4 max-w-[8rem] animate-pulse rounded bg-neutral-200" />
+                              </td>
+                              <td className="px-4 py-4">
+                                <div className="h-4 max-w-[6rem] animate-pulse rounded bg-neutral-200" />
+                              </td>
+                              <td className="px-4 py-4">
+                                <div className="mx-auto h-9 w-20 animate-pulse rounded-xl bg-neutral-200" />
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )
+                  ) : viewMode === 'pending' ? (
                     <table className="w-full min-w-[980px] border-collapse">
                       <thead className="bg-neutral-50">
                         <tr className="text-left text-xs font-extrabold uppercase tracking-wide text-neutral-500">
@@ -1385,7 +1499,7 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                                 >
                                   <Eye size={16} />
                                 </button>
-                                {canEditLedger ? (
+                                {canEditLedgerActions ? (
                                   <button
                                     type="button"
                                     onClick={() => setDeleteConfirmTxId(tx.id)}
@@ -1405,7 +1519,7 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                   )}
                 </div>
 
-                {viewMode !== 'pending' && filteredTableTransactions.length > TX_PAGE_SIZE ? (
+                {viewMode !== 'pending' && !isLedgerLoading && filteredTableTransactions.length > TX_PAGE_SIZE ? (
                   <div className="flex flex-col gap-3 border-t border-neutral-200 px-4 py-4 sm:px-6 md:flex-row md:items-center md:justify-between">
                     <button
                       type="button"
@@ -1474,30 +1588,7 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
         <div aria-hidden className="mobile-nav-safe-spacer" />
       </nav>
 
-      <footer className="fixed inset-x-0 bottom-0 z-50 hidden border-t border-white/10 bg-gradient-to-b from-[#050505] via-[#0b0b0b] to-[#040404] text-white shadow-[0_-12px_30px_rgba(0,0,0,0.3)] md:block">
-        <div className="mx-auto flex w-full max-w-none items-center justify-between gap-3 px-3 py-2 sm:px-5 sm:py-3">
-          <img
-            src={layoutBrandLogo}
-            alt="Samarth Land Surveyors"
-            className="h-9 w-auto shrink-0 sm:h-10"
-            draggable={false}
-          />
-
-          <div className="hidden min-w-0 flex-1 items-center justify-end gap-3 text-xs font-bold text-white/95 md:flex">
-            {sessionEmail ? (
-              <a
-                href={`mailto:${sessionEmail}`}
-                className="flex min-w-0 max-w-[14rem] items-center gap-2 text-white/95 hover:text-white"
-              >
-                <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#f39b03]/20 text-[#f39b03] ring-1 ring-[#f39b03]/45">
-                  <Mail size={13} />
-                </span>
-                <span className="truncate">{sessionEmail}</span>
-              </a>
-            ) : null}
-          </div>
-        </div>
-      </footer>
+      <LayoutFooter />
     </div>
   )
 }

@@ -1,6 +1,7 @@
 import mongoose from 'mongoose'
 import { ApiError } from './ApiError.js'
 import { getAllowedInstrumentObjectIds } from './instrumentAccess.js'
+import { instrumentCoworkerAdminIdStrings } from './instrumentPeers.js'
 
 function readRequestedInstrumentId(req) {
   const h = req.headers['x-instrument-id']
@@ -43,6 +44,22 @@ export function adminIdFilter(req) {
   if (!user) return {}
   if (user.role === 'super_admin') return {}
   return { adminId: user.id }
+}
+
+/**
+ * For admins: when a valid assigned instrument is active (header/query), include all peer
+ * admins on that instrument in read queries; otherwise restrict to self. Super-admins: no filter.
+ */
+export async function peerAwareAdminScopeMatch(req) {
+  const user = req.user
+  if (!user) return {}
+  if (user.role === 'super_admin') return {}
+  const peers = await instrumentCoworkerAdminIdStrings(req)
+  if (!peers || peers.size === 0) return { adminId: user.id }
+  const selfStr = user.id.toString()
+  if (!peers.has(selfStr)) return { adminId: user.id }
+  const ids = [...peers].map((s) => new mongoose.Types.ObjectId(s))
+  return { adminId: { $in: ids } }
 }
 
 /**

@@ -26,6 +26,7 @@ export function StatCard({
   icon,
   toneClass,
   mobileCardTint,
+  loading,
 }: {
   title: string
   value: string
@@ -34,6 +35,8 @@ export function StatCard({
   toneClass: string
   /** Full-card soft tint on mobile only (md+ uses white card) */
   mobileCardTint: string
+  /** When true, value is replaced with a skeleton (layout stays stable). */
+  loading?: boolean
 }) {
   return (
     <div
@@ -57,7 +60,14 @@ export function StatCard({
         <div className="min-w-0 flex-1">
           <div className="text-[11px] font-semibold leading-tight text-neutral-700 md:text-sm">{title}</div>
           <div className="mt-0.5 text-base font-extrabold leading-tight tracking-tight text-neutral-950 md:mt-1 md:text-2xl">
-            {value}
+            {loading ? (
+              <span
+                className="inline-block h-5 min-w-[6.5rem] animate-pulse rounded-md bg-neutral-200/90 md:h-8 md:min-w-[8.5rem]"
+                aria-hidden
+              />
+            ) : (
+              value
+            )}
           </div>
           {subtitle ? (
             <div className="mt-0.5 text-[10px] font-medium leading-snug text-neutral-500 md:mt-1 md:text-xs">

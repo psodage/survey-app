@@ -17,6 +17,11 @@ export const env = {
   cloudinaryApiKey: required('CLOUDINARY_API_KEY'),
   cloudinaryApiSecret: required('CLOUDINARY_API_SECRET'),
   seedPassword: required('SEED_PASSWORD', 'Survey@123'),
+  brevoSmtpHost: required('BREVO_SMTP_HOST', ''),
+  brevoSmtpPort: Number(required('BREVO_SMTP_PORT', '587')) || 587,
+  brevoSmtpUser: required('BREVO_SMTP_USER', ''),
+  brevoSmtpPass: required('BREVO_SMTP_PASS', ''),
+  brevoFromEmail: required('BREVO_FROM_EMAIL', ''),
 }
 
 export function assertCloudinaryConfigured() {

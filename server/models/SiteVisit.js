@@ -13,6 +13,16 @@ const siteVisitSchema = new Schema(
     visitDate: { type: Date, required: true, index: true },
     workDescription: { type: String, trim: true },
     machineLabel: { type: String, trim: true },
+    /** Multiple billing line items: qty × rate, or a fixed line amount when qty/rate are not used. */
+    billingLines: [
+      {
+        particular: { type: String, trim: true },
+        quantity: { type: Number },
+        rate: { type: Number },
+        /** Flat rupees for this row when quantity/rate are not used (invoice-style fixed fee). */
+        amount: { type: Number },
+      },
+    ],
     billingParticular: { type: String, trim: true },
     billingQuantity: { type: Number },
     billingRate: { type: Number },

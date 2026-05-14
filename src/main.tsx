@@ -6,6 +6,7 @@ import { registerSW } from 'virtual:pwa-register'
 import './index.css'
 import App from './App.tsx'
 import { AuthProvider } from './context/AuthContext'
+import { SelectedYearProvider } from './context/SelectedYearContext'
 
 registerSW({ immediate: true })
 
@@ -13,8 +14,10 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
       <AuthProvider>
-        <App />
-        <Toaster richColors position="top-center" />
+        <SelectedYearProvider>
+          <App />
+          <Toaster richColors position="top-center" />
+        </SelectedYearProvider>
       </AuthProvider>
     </BrowserRouter>
   </StrictMode>,

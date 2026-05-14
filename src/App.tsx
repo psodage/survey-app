@@ -13,6 +13,9 @@ import { SiteDetails } from './SiteDetails'
 import Settings from './Settings'
 import InstallPrompt from './components/InstallPrompt.jsx'
 import Login from './Login.jsx'
+import ForgotPassword from './ForgotPassword.jsx'
+import VerifyOtp from './VerifyOtp.jsx'
+import ResetPassword from './ResetPassword.jsx'
 import { useAuth } from './context/AuthContext'
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
@@ -59,6 +62,9 @@ function AppRoutes() {
     <Routes location={location} key={location.pathname}>
       <Route path="/" element={<Navigate to="/login" replace />} />
       <Route path="/login" element={<Login />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/verify-reset-otp" element={<VerifyOtp />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
       <Route
         path="/dashboard"
         element={

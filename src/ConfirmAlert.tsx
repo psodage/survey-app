@@ -10,6 +10,8 @@ export type ConfirmAlertProps = {
   cancelLabel?: string
   confirmBusy?: boolean
   variant?: 'danger' | 'neutral'
+  /** Root overlay classes (stacking context). Defaults to z-[70]. */
+  rootClassName?: string
   onConfirm: () => void
   onCancel: () => void
 }
@@ -23,6 +25,7 @@ export function ConfirmAlert({
   cancelLabel = 'Cancel',
   confirmBusy = false,
   variant = 'neutral',
+  rootClassName = 'fixed inset-0 z-[70] flex items-center justify-center p-4',
   onConfirm,
   onCancel,
 }: ConfirmAlertProps) {
@@ -32,7 +35,7 @@ export function ConfirmAlert({
 
   return (
     <div
-      className="fixed inset-0 z-[70] flex items-center justify-center p-4"
+      className={rootClassName}
       role="alertdialog"
       aria-modal="true"
       aria-labelledby="confirm-alert-title"

@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useLocation as useRouterLocation } from 'react-router-dom'
+import { useSelectedYear } from './context/SelectedYearContext'
 import { AccountManagerSidebarBlock } from './AccountManagerSidebarBlock'
 import { CollaborationBrandMark } from './CollaborationBrandMark'
 import { LayoutFooter } from './LayoutFooter'
@@ -32,10 +33,10 @@ import {
   toolbarSearchInputClass,
   toolbarSecondaryButtonClass,
 } from './dashboardCards'
-import { exportCombinedSiteInvoicePdf, exportInvoicePdf } from './exportInvoicePdf'
+import { exportCombinedSiteInvoicePdf, exportInvoicePdf, type InvoicePdfBillingLine } from './exportInvoicePdf'
 import { exportVisitRecordPdf } from './exportVisitRecordPdf'
 import { layoutBrandLogo } from './brandLogo'
-import { getHeaderDateLabel } from './headerDateLabel'
+import { HeaderYearSelect } from './components/HeaderYearSelect'
 import { signOut } from './signOut'
 import http from './api/http'
 import { useAuth } from './context/AuthContext'
@@ -61,113 +62,185 @@ type SiteDetailsProps = {
 
 type SiteVisitRecord = {
   id: string
+  visitMongoId?: string
   client: string
   site: string
   date: string
   machine: string
   amount: string
+  /** Balance due (same display format as `amount`); from API `owedAmount` rules */
+  pendingAmount?: string
   paymentMode: string
   paymentStatus: string
   notes: string
   work?: string
   photoUrls?: string[]
+  billingLines?: InvoicePdfBillingLine[]
+  billingOtherCharges?: number
 }
 
 const toolbarSelectClass =
   'h-8 min-w-[128px] flex-1 rounded-md border border-neutral-200 bg-white px-2.5 text-xs font-bold text-neutral-700 outline-none transition focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20 md:h-10 md:min-w-[150px] md:rounded-lg md:px-3 md:text-sm sm:flex-initial'
 
-const siteVisitRecords: SiteVisitRecord[] = [
-  {
-    id: 'SV-2451',
-    client: 'Amit Developers',
-    site: 'Sai Residency',
-    date: '20 May 2025',
-    machine: 'Total Station',
-    amount: '15,000',
-    paymentMode: 'Cash',
-    paymentStatus: 'Paid',
-    notes: 'Completed boundary points and levels.',
-    work: 'Topographic survey for layout planning and road alignment.',
-  },
-  {
-    id: 'SV-2437',
-    client: 'Amit Developers',
-    site: 'Sai Residency',
-    date: '09 May 2025',
-    machine: 'Auto Level',
-    amount: '10,000',
-    paymentMode: 'UPI',
-    paymentStatus: 'Pending',
-    notes: 'Road level transfer done for internal roads.',
-    work: 'Road level transfer and benchmark verification.',
-  },
-  {
-    id: 'SV-2422',
-    client: 'Amit Developers',
-    site: 'Sunrise Enclave',
-    date: '01 May 2025',
-    machine: 'GPS / GNSS',
-    amount: '12,500',
-    paymentMode: 'Bank Transfer',
-    paymentStatus: 'Partial',
-    notes: 'Control points established for next phase.',
-    work: 'Plot boundary staking and control point marking.',
-  },
-]
-
 export function SiteDetails({ onNavigate }: SiteDetailsProps) {
   const { token } = useAuth()
+  const { selectedYear } = useSelectedYear()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [visitsSearchQuery, setVisitsSearchQuery] = useState('')
   const [visitMachineFilter, setVisitMachineFilter] = useState('all')
   const [visitPaymentFilter, setVisitPaymentFilter] = useState('all')
-  const { pathname: routerPathname } = useRouterLocation()
-  const headerDateLabel = getHeaderDateLabel()
-  const params = new URLSearchParams(window.location.search)
-  const mode = params.get('mode') ?? 'site'
+  const { pathname: routerPathname, search } = useRouterLocation()
+  const urlParams = useMemo(() => new URLSearchParams(search), [search])
+  const mode = urlParams.get('mode') ?? 'site'
   const isVisitMode = mode === 'visit'
-  const client = params.get('client') ?? 'Unknown Client'
-  const name = params.get('name') ?? 'Unknown Site'
-  const location = params.get('location') ?? 'Unknown Location'
-  const lastVisit = params.get('lastVisit') ?? '-'
-  const status = params.get('status') ?? 'Active'
-  const pending = params.get('pending') ?? '₹0'
-  const visitId = params.get('visitId') ?? '-'
-  const visitDate = params.get('date') ?? '-'
-  const machine = params.get('machine') ?? '-'
-  const amount = params.get('amount') ?? '0'
-  const paymentMode = params.get('paymentMode') ?? '-'
-  const paymentStatus = params.get('paymentStatus') ?? '-'
-  const notes = params.get('notes') ?? '-'
-  const work = params.get('work') ?? '-'
-  const engineerName = params.get('engineerName') ?? ''
-  const contactPerson = params.get('contactPerson') ?? engineerName
-  const visitMongoId = params.get('visitMongoId')
+  const client = urlParams.get('client') ?? 'Unknown Client'
+  const name = urlParams.get('name') ?? 'Unknown Site'
+  const location = urlParams.get('location') ?? 'Unknown Location'
+  const lastVisit = urlParams.get('lastVisit') ?? '-'
+  const status = urlParams.get('status') ?? 'Active'
+  const pending = urlParams.get('pending') ?? '₹0'
+  const visitId = urlParams.get('visitId') ?? '-'
+  const visitDate = urlParams.get('date') ?? '-'
+  const machine = urlParams.get('machine') ?? '-'
+  const amount = urlParams.get('amount') ?? '0'
+  const paymentMode = urlParams.get('paymentMode') ?? '-'
+  const paymentStatus = urlParams.get('paymentStatus') ?? '-'
+  const notes = urlParams.get('notes') ?? '-'
+  const work = urlParams.get('work') ?? '-'
+  const engineerName = urlParams.get('engineerName') ?? ''
+  const contactPerson = urlParams.get('contactPerson') ?? engineerName
+  const visitMongoId = urlParams.get('visitMongoId')
+  const siteId = urlParams.get('siteId')?.trim() ?? ''
+  const [relatedVisitRecords, setRelatedVisitRecords] = useState<SiteVisitRecord[]>([])
+  const [visitsFetchState, setVisitsFetchState] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle')
   const [visitPhotoUrls, setVisitPhotoUrls] = useState<string[]>([])
+  const [visitBillingForInvoice, setVisitBillingForInvoice] = useState<{
+    billingLines: InvoicePdfBillingLine[]
+    billingOtherCharges: number
+  }>({ billingLines: [], billingOtherCharges: 0 })
+  const [visitPendingForInvoice, setVisitPendingForInvoice] = useState<string | null>(null)
 
   useEffect(() => {
     if (!isVisitMode) {
       setVisitPhotoUrls([])
+      setVisitBillingForInvoice({ billingLines: [], billingOtherCharges: 0 })
+      setVisitPendingForInvoice(null)
       return
     }
     if (!visitMongoId || !token) return
     let cancelled = false
     void http
-      .get<{ ok: boolean; visit?: { photoUrls?: string[] } }>(`/api/visits/${visitMongoId}`)
+      .get<{
+        ok: boolean
+        visit?: {
+          photoUrls?: string[]
+          billingLines?: InvoicePdfBillingLine[]
+          billingOtherCharges?: number
+          pendingAmount?: string
+        }
+      }>(`/api/visits/${visitMongoId}`)
       .then((res) => {
         if (cancelled || !res.data?.ok || !res.data.visit) return
-        setVisitPhotoUrls(res.data.visit.photoUrls ?? [])
+        const v = res.data.visit
+        setVisitPhotoUrls(v.photoUrls ?? [])
+        setVisitBillingForInvoice({
+          billingLines: v.billingLines ?? [],
+          billingOtherCharges: Number(v.billingOtherCharges) || 0,
+        })
+        setVisitPendingForInvoice(v.pendingAmount ?? null)
       })
       .catch(() => {
-        if (!cancelled) setVisitPhotoUrls([])
+        if (!cancelled) {
+          setVisitPhotoUrls([])
+          setVisitBillingForInvoice({ billingLines: [], billingOtherCharges: 0 })
+          setVisitPendingForInvoice(null)
+        }
       })
     return () => {
       cancelled = true
     }
   }, [isVisitMode, visitMongoId, token])
 
-  const relatedVisitRecords = siteVisitRecords.filter((record) => record.client === client && record.site === name)
+  useEffect(() => {
+    if (isVisitMode) return
+    if (!token) {
+      setRelatedVisitRecords([])
+      setVisitsFetchState('idle')
+      return
+    }
+    let cancelled = false
+    setVisitsFetchState('loading')
+    ;(async () => {
+      try {
+        const params: { year: string; siteId?: string } = { year: selectedYear }
+        if (siteId) params.siteId = siteId
+        const res = await http.get<{
+          ok: boolean
+          visits: Array<{
+            id: string
+            visitMongoId?: string
+            client: string
+            site: string
+            date: string
+            machine: string
+            work: string
+            amount: string
+            pendingAmount?: string
+            paymentMode: string
+            paymentStatus: string
+            notes: string
+            photoUrls?: string[]
+            billingLines?: InvoicePdfBillingLine[]
+            billingOtherCharges?: number
+          }>
+        }>('/api/visits', { params })
+        if (cancelled) return
+        if (!res.data?.ok) {
+          setRelatedVisitRecords([])
+          setVisitsFetchState('error')
+          return
+        }
+        let rows: SiteVisitRecord[] = (res.data.visits ?? []).map((v) => ({
+          id: v.id,
+          visitMongoId: v.visitMongoId,
+          client: v.client,
+          site: v.site,
+          date: v.date,
+          machine: v.machine,
+          amount: v.amount,
+          pendingAmount: v.pendingAmount,
+          paymentMode: v.paymentMode,
+          paymentStatus: v.paymentStatus,
+          notes: v.notes,
+          work: v.work,
+          photoUrls: v.photoUrls,
+          billingLines: v.billingLines,
+          billingOtherCharges: v.billingOtherCharges,
+        }))
+        if (!siteId && client !== 'Unknown Client' && name !== 'Unknown Site') {
+          rows = rows.filter((v) => v.client === client && v.site === name)
+        }
+        setRelatedVisitRecords(rows)
+        setVisitsFetchState('ok')
+      } catch {
+        if (!cancelled) {
+          setRelatedVisitRecords([])
+          setVisitsFetchState('error')
+        }
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [isVisitMode, token, selectedYear, siteId, client, name])
+
   const parseVisitAmount = (amount: string) => Number(amount.replace(/[^\d.]/g, '')) || 0
+
+  const pendingAmountNum = (record: SiteVisitRecord) => {
+    const p = record.pendingAmount?.trim()
+    if (p) return parseVisitAmount(p)
+    return parseVisitAmount(record.amount)
+  }
 
   const visitPaymentStatusSummary = useMemo(() => {
     if (relatedVisitRecords.length === 0) return null
@@ -208,7 +281,17 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
     const q = visitsSearchQuery.trim().toLowerCase()
     if (!q) return list
     return list.filter((r) => {
-      const hay = [r.id, r.date, r.machine, r.paymentMode, r.paymentStatus, r.notes, r.amount, r.work ?? '']
+      const hay = [
+        r.id,
+        r.date,
+        r.machine,
+        r.paymentMode,
+        r.paymentStatus,
+        r.notes,
+        r.amount,
+        r.pendingAmount ?? '',
+        r.work ?? '',
+      ]
         .join(' ')
         .toLowerCase()
       return hay.includes(q)
@@ -230,8 +313,10 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
       visitId: r.id,
       date: r.date,
       machine: r.machine,
-      amount: parseVisitAmount(r.amount),
+      amount: pendingAmountNum(r),
       notes: r.notes,
+      work: r.work,
+      billingLines: r.billingLines,
     }))
     void exportCombinedSiteInvoicePdf({
       client,
@@ -242,7 +327,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
     })
   }
   const getVisitDetailsPath = (record: SiteVisitRecord) => {
-    const params = new URLSearchParams({
+    const next = new URLSearchParams({
       mode: 'visit',
       visitId: record.id,
       client: record.client,
@@ -255,7 +340,9 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
       notes: record.notes,
       work: record.work ?? '',
     })
-    return `/site-details?${params.toString()}`
+    if (record.visitMongoId) next.set('visitMongoId', record.visitMongoId)
+    if (siteId) next.set('siteId', siteId)
+    return `/site-details?${next.toString()}`
   }
   const pageTitle = isVisitMode ? 'Site Visit Details' : 'Site Details'
   const backPath = isVisitMode ? '/site-visits' : '/clients-sites'
@@ -269,7 +356,9 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
     // { label: 'Reports', path: '/reports', icon: FileBarChart },
     { label: 'Settings', path: '/settings', icon: Building2 },
   ] as const
-  const addSiteVisitPath = `/add-site-visit?${new URLSearchParams({ mode: 'add', client, name }).toString()}`
+  const addSiteVisitParams = new URLSearchParams({ mode: 'add', client, name })
+  if (siteId) addSiteVisitParams.set('siteId', siteId)
+  const addSiteVisitPath = `/add-site-visit?${addSiteVisitParams.toString()}`
 
   const handleNavClick = async (label: string) => {
     if (label === 'Log Out') {
@@ -302,17 +391,27 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
   const siteAddressLine = [name, location !== 'Unknown Location' ? location : ''].filter(Boolean).join(', ')
 
   const handleIndividualVisitInvoice = (record: SiteVisitRecord) => {
-    const amountNum = parseVisitAmount(record.amount)
+    const pendingNum = pendingAmountNum(record)
+    const hasBilling = Boolean(record.billingLines?.length)
     void exportInvoicePdf({
       client,
       site: `${siteAddressLine} (Visit ${record.id})`,
       workType: record.machine,
       totalPoints: 1,
-      ratePerPoint: amountNum > 0 ? amountNum : 0,
+      ratePerPoint: pendingNum > 0 ? pendingNum : 0,
       baseCharge: 0,
       extraCharges: 0,
       discount: 0,
       invoiceDate: new Date().toLocaleDateString('en-GB'),
+      visitId: record.id,
+      paymentStatus: record.paymentStatus,
+      pendingAmount: pendingNum,
+      ...(hasBilling
+        ? {
+            billingLines: record.billingLines,
+            billingOtherCharges: record.billingOtherCharges ?? 0,
+          }
+        : {}),
     })
   }
 
@@ -321,8 +420,10 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
       visitId: r.id,
       date: r.date,
       machine: r.machine,
-      amount: parseVisitAmount(r.amount),
+      amount: pendingAmountNum(r),
       notes: r.notes,
+      work: r.work,
+      billingLines: r.billingLines,
     }))
     void exportCombinedSiteInvoicePdf({
       client,
@@ -589,14 +690,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                   {pageTitle}
                 </h1>
                 <div className="flex shrink-0 items-center gap-2">
-                  <button
-                    type="button"
-                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-white/20 bg-neutral-900 px-2.5 text-[11px] font-semibold text-white transition hover:bg-neutral-800"
-                    aria-label="Current date"
-                  >
-                    <Calendar size={13} className="text-[#f39b03]" />
-                    <span className="whitespace-nowrap">{headerDateLabel}</span>
-                  </button>
+                  <HeaderYearSelect variant="onDark" compact />
                   <span className="inline-flex items-center rounded-xl border border-white/20 bg-neutral-900 px-2.5 py-2 text-[11px] font-semibold leading-tight text-white">
                     {statusLabel}
                   </span>
@@ -628,15 +722,8 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
               </div>
 
               <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-                <button
-                  type="button"
-                  className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-neutral-900 sm:px-4 sm:py-2.5 sm:text-sm"
-                  aria-label="Current date"
-                >
-                  <Calendar size={16} className="text-[#f39b03]" />
-                  <span className="whitespace-nowrap">{headerDateLabel}</span>
-                </button>
-               
+                <HeaderYearSelect variant="onLight" />
+
                 <div className="hidden items-center gap-3 rounded-xl bg-neutral-100 px-3 py-2 ring-1 ring-black/5 sm:flex sm:px-4 sm:py-2.5">
                   <div className="grid h-9 w-9 place-items-center rounded-xl bg-[#f39b03]/15 text-[#f39b03]">
                     <CircleUserRound size={18} />
@@ -782,19 +869,32 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                     </button>
                     <button
                       type="button"
-                      onClick={() =>
+                      onClick={() => {
+                        const pendingForVisit =
+                          visitPendingForInvoice != null && visitPendingForInvoice.trim() !== ''
+                            ? parseVisitAmount(visitPendingForInvoice)
+                            : parseVisitAmount(amount)
                         void exportInvoicePdf({
                           client,
                           site: `${siteAddressLine} (Visit ${visitId})`,
                           workType: machine,
                           totalPoints: 1,
-                          ratePerPoint: parseVisitAmount(amount),
+                          ratePerPoint: pendingForVisit > 0 ? pendingForVisit : 0,
                           baseCharge: 0,
                           extraCharges: 0,
                           discount: 0,
                           invoiceDate: new Date().toLocaleDateString('en-GB'),
+                          visitId: visitId !== '-' ? visitId : undefined,
+                          paymentStatus: paymentStatus !== '-' ? paymentStatus : undefined,
+                          pendingAmount: pendingForVisit,
+                          ...(visitBillingForInvoice.billingLines.length
+                            ? {
+                                billingLines: visitBillingForInvoice.billingLines,
+                                billingOtherCharges: visitBillingForInvoice.billingOtherCharges,
+                              }
+                            : {}),
                         })
-                      }
+                      }}
                       className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-white px-4 text-xs font-extrabold text-neutral-800 ring-1 ring-black/5 transition hover:bg-neutral-50 sm:text-sm"
                     >
                       <Calculator size={15} className="text-[#f39b03]" />
@@ -829,9 +929,18 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                       </p>
                     </div>
                   ) : null}
-                  {relatedVisitRecords.length === 0 ? (
+                  {visitsFetchState === 'loading' ? (
                     <div className="px-4 py-5 text-sm font-semibold text-neutral-600 sm:px-6">
-                      No visit records found for this site.
+                      Loading visit records…
+                    </div>
+                  ) : visitsFetchState === 'error' ? (
+                    <div className="px-4 py-5 text-sm font-semibold text-rose-700 sm:px-6">
+                      Could not load visit records. Check your connection and try again.
+                    </div>
+                  ) : relatedVisitRecords.length === 0 ? (
+                    <div className="px-4 py-5 text-sm font-semibold text-neutral-600 sm:px-6">
+                      No visit records found for this site
+                      {siteId ? ` in ${selectedYear}` : ''}.
                     </div>
                   ) : filteredVisitRecords.length === 0 ? (
                     <div className="px-4 py-5 text-sm font-semibold text-neutral-600 sm:px-6">
@@ -850,7 +959,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                         <ul className="flex flex-col gap-1.5 p-2 sm:p-3">
                           {filteredVisitRecords.map((record) => (
                             <li
-                              key={`${record.id}-mobile`}
+                              key={`${record.visitMongoId ?? record.id}-mobile`}
                               className="rounded-lg bg-white p-2 shadow-sm ring-1 ring-black/5"
                               role="button"
                               tabIndex={0}
@@ -928,7 +1037,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                           <tbody className="text-sm font-semibold text-neutral-800">
                             {filteredVisitRecords.map((record) => (
                               <tr
-                                key={record.id}
+                                key={record.visitMongoId ?? record.id}
                                 className="border-t border-neutral-200 hover:bg-neutral-50/60"
                                 role="button"
                                 tabIndex={0}

@@ -6,6 +6,7 @@ import {
   Calendar,
   ChevronDown,
   ClipboardList,
+  Download,
   CircleUserRound,
   Eye,
   FileBarChart,
@@ -14,6 +15,7 @@ import {
   MapPin,
   Menu,
   Plus,
+  Trash2,
   UsersRound,
   LayoutGrid,
   Mail,
@@ -34,11 +36,14 @@ import {
   toolbarSearchInputClass,
   toolbarSecondaryButtonClass,
 } from './dashboardCards'
+import { ConfirmAlert } from './ConfirmAlert'
 import { layoutBrandLogo } from './brandLogo'
+import { HeaderYearSelect } from './components/HeaderYearSelect'
 import { getHeaderDateLabel } from './headerDateLabel'
 import { toast } from 'sonner'
 import http from './api/http'
 import { useAuth } from './context/AuthContext'
+import { useSelectedYear } from './context/SelectedYearContext'
 import { signOut } from './signOut'
 
 type NavItem = {
@@ -99,24 +104,75 @@ type AddSiteVisitProps = {
   onNavigate: (path: string) => void
 }
 
+const visitToolbarSelectClass =
+  'h-10 min-w-[120px] flex-1 rounded-xl border border-neutral-200 bg-white px-2.5 text-xs font-bold text-neutral-700 outline-none transition focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20 sm:min-w-[140px] sm:px-3 sm:text-sm md:h-11 md:flex-initial'
+
+function escapeCsvCell(value: string) {
+  const t = String(value).replace(/"/g, '""')
+  if (/[",\n\r]/.test(t)) return `"${t}"`
+  return t
+}
+
+function downloadVisitRecordsCsv(rows: VisitRecord[], filename: string) {
+  const headers = ['Visit ID', 'Client', 'Site', 'Date', 'Machine', 'Pay status', 'Amount', 'Payment mode', 'Work', 'Notes']
+  const lines = [headers.map(escapeCsvCell).join(',')]
+  for (const r of rows) {
+    lines.push(
+      [
+        escapeCsvCell(r.id),
+        escapeCsvCell(r.client),
+        escapeCsvCell(r.site),
+        escapeCsvCell(r.date),
+        escapeCsvCell(r.machine),
+        escapeCsvCell(r.paymentStatus),
+        escapeCsvCell(r.amount),
+        escapeCsvCell(r.paymentMode),
+        escapeCsvCell(r.work ?? ''),
+        escapeCsvCell(r.notes),
+      ].join(','),
+    )
+  }
+  const body = `\uFEFF${lines.join('\n')}`
+  const blob = new Blob([body], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+type BillingLineDraft = { id: string; particular: string; quantity: string; rate: string; amount: string }
+
+function newBillingLineId() {
+  return `bl_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
+}
+
+function defaultBillingLines(): BillingLineDraft[] {
+  return [{ id: newBillingLineId(), particular: '', quantity: '1', rate: '80', amount: '' }]
+}
+
 export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
   const { token, user } = useAuth()
+  const { selectedYear } = useSelectedYear()
   const { pathname, search } = useLocation()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
-  const headerDateLabel = getHeaderDateLabel()
   const [clientOptions, setClientOptions] = useState<string[]>([])
   const [sitesByClient, setSitesByClient] = useState<Record<string, string[]>>({})
   const [apiSites, setApiSites] = useState<ApiSite[]>([])
   const [visitRecords, setVisitRecords] = useState<VisitRecord[]>([])
+  const [visitListSearch, setVisitListSearch] = useState('')
+  const [visitPaymentStatusFilter, setVisitPaymentStatusFilter] = useState('all')
+  const [visitMachineFilter, setVisitMachineFilter] = useState('all')
+  const [pendingDeleteVisit, setPendingDeleteVisit] = useState<VisitRecord | null>(null)
+  const [deleteVisitBusy, setDeleteVisitBusy] = useState(false)
   const [showAddForm, setShowAddForm] = useState(false)
   const [client, setClient] = useState('')
   const [site, setSite] = useState('')
   const [visitDate] = useState(() => getHeaderDateLabel())
   const [machine, setMachine] = useState('Total Station')
   const [engineerName, setEngineerName] = useState('')
-  const [billingParticular, setBillingParticular] = useState('')
-  const [billingQuantity, setBillingQuantity] = useState('1')
-  const [billingRate, setBillingRate] = useState('80')
+  const [billingLines, setBillingLines] = useState<BillingLineDraft[]>(() => defaultBillingLines())
   const [billingOtherCharges, setBillingOtherCharges] = useState('0')
   const [workDetails, setWorkDetails] = useState(
     'Topographic survey for layout planning',
@@ -134,7 +190,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
     if (!token) return
     try {
       const [cRes, sRes, vRes] = await Promise.all([
-        http.get<{ ok: boolean; clients: Array<{ name: string }> }>('/api/clients'),
+        http.get<{ ok: boolean; clients: Array<{ name: string }> }>('/api/clients', { params: { year: selectedYear } }),
         http.get<{
           ok: boolean
           sites: Array<{
@@ -144,8 +200,8 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
             instrumentName?: string
             instrumentCategory?: string
           }>
-        }>('/api/sites'),
-        http.get<{ ok: boolean; visits: VisitRecord[] }>('/api/visits'),
+        }>('/api/sites', { params: { year: selectedYear } }),
+        http.get<{ ok: boolean; visits: VisitRecord[] }>('/api/visits', { params: { year: selectedYear } }),
       ])
       const names = cRes.data?.ok ? cRes.data.clients.map((c) => c.name) : []
       setClientOptions(names)
@@ -164,7 +220,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
     } catch {
       toast.error('Could not load visits data')
     }
-  }, [token])
+  }, [token, selectedYear])
 
   useEffect(() => {
     void loadData()
@@ -199,15 +255,80 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
 
   const siteChoices = useMemo(() => sitesByClient[client] ?? [], [client])
   const amountRupees = useMemo(() => {
-    const q = parseFloat(billingQuantity.replace(/[^\d.-]/g, '')) || 0
-    const r = parseFloat(billingRate.replace(/[^\d.-]/g, '')) || 0
+    const lineSum = billingLines.reduce((sum, line) => {
+      const q = parseFloat(line.quantity.replace(/[^\d.-]/g, '')) || 0
+      const r = parseFloat(line.rate.replace(/[^\d.-]/g, '')) || 0
+      if (q !== 0 && r !== 0) return sum + q * r
+      const flat = parseFloat(line.amount.replace(/[^\d.-]/g, '')) || 0
+      return sum + flat
+    }, 0)
     const o = parseFloat(billingOtherCharges.replace(/[^\d.-]/g, '')) || 0
-    return Math.round(q * r + o)
-  }, [billingQuantity, billingRate, billingOtherCharges])
+    return Math.round(lineSum + o)
+  }, [billingLines, billingOtherCharges])
   const amountDisplay = useMemo(() => amountRupees.toLocaleString('en-IN'), [amountRupees])
-  const totalAmount = useMemo(
-    () => visitRecords.reduce((sum, record) => sum + Number(record.amount.replace(/[^\d.-]/g, '')), 0),
+  const visitMachineOptions = useMemo(
+    () => [...new Set(visitRecords.map((r) => r.machine || '—'))].sort(),
     [visitRecords],
+  )
+
+  const filteredVisitRecords = useMemo(() => {
+    let list = visitRecords
+    if (visitPaymentStatusFilter !== 'all') {
+      list = list.filter((r) => r.paymentStatus === visitPaymentStatusFilter)
+    }
+    if (visitMachineFilter !== 'all') {
+      const m = visitMachineFilter === '—' ? '—' : visitMachineFilter
+      list = list.filter((r) => (r.machine || '—') === m)
+    }
+    const q = visitListSearch.trim().toLowerCase()
+    if (!q) return list
+    return list.filter((r) => {
+      const hay = [r.id, r.client, r.site, r.date, r.machine, r.paymentMode, r.paymentStatus, r.notes, r.amount, r.work ?? '']
+        .join(' ')
+        .toLowerCase()
+      return hay.includes(q)
+    })
+  }, [visitRecords, visitListSearch, visitPaymentStatusFilter, visitMachineFilter])
+
+  const hasActiveVisitListFilters =
+    visitListSearch.trim() !== '' || visitPaymentStatusFilter !== 'all' || visitMachineFilter !== 'all'
+
+  const clearVisitListFilters = () => {
+    setVisitListSearch('')
+    setVisitPaymentStatusFilter('all')
+    setVisitMachineFilter('all')
+  }
+
+  const visitRowKey = (r: VisitRecord) => r.visitMongoId ?? r._id ?? r.id
+
+  const handleConfirmDeleteVisit = async () => {
+    if (!pendingDeleteVisit) return
+    const mid = pendingDeleteVisit.visitMongoId ?? pendingDeleteVisit._id
+    if (!mid) {
+      toast.error('Missing visit id')
+      setPendingDeleteVisit(null)
+      return
+    }
+    setDeleteVisitBusy(true)
+    try {
+      const res = await http.delete<{ ok?: boolean }>(`/api/visits/${mid}`)
+      if (!res.data?.ok) {
+        toast.error('Could not delete visit')
+        return
+      }
+      toast.success('Visit deleted')
+      setPendingDeleteVisit(null)
+      await loadData()
+    } catch {
+      toast.error('Could not delete visit')
+    } finally {
+      setDeleteVisitBusy(false)
+    }
+  }
+
+  const totalAmount = useMemo(
+    () => filteredVisitRecords.reduce((sum, record) => sum + Number(record.amount.replace(/[^\d.-]/g, '')), 0),
+    [filteredVisitRecords],
   )
 
   const mobileBottomNav = [
@@ -350,7 +471,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                 <div className="grid h-16 w-16 place-items-center rounded-2xl bg-white/10 text-white ring-1 ring-white/15">
                   <CircleUserRound size={32} strokeWidth={1.75} />
                 </div>
-                <div className="mt-3 text-base font-extrabold text-white">{user?.fullName || 'User'}</div>
+                <div className="mt-3 text-base font-extrabold text-white">Er. {user?.fullName || 'User'}</div>
                 <div className="mt-1 text-xs font-semibold text-white/65">{user?.role === 'super_admin' ? 'Super Admin' : 'Admin'}</div>
               </div>
               <div className="mt-4 space-y-2 border-t border-white/10 pt-4">
@@ -400,7 +521,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                   }}
                   className={[
                     'flex flex-col items-center gap-1.5 rounded-xl px-2 py-3 text-[11px] font-bold ring-1 transition',
-                    path === '/dashboard'
+                    path === '/site-visits'
                       ? 'bg-white/10 text-[#f39b03] ring-[#f39b03]/35'
                       : 'bg-white/5 text-white/85 ring-white/10 hover:bg-white/10',
                   ].join(' ')}
@@ -452,14 +573,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                 <h1 className="min-w-0 truncate text-left text-base font-extrabold leading-tight tracking-tight text-white">
                   Site Visits
                 </h1>
-                <button
-                  type="button"
-                  className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-white/20 bg-neutral-900 px-2.5 text-[11px] font-semibold text-white transition hover:bg-neutral-800"
-                  aria-label="Current date"
-                >
-                  <Calendar size={13} className="text-[#f39b03]" />
-                  <span className="whitespace-nowrap">{headerDateLabel}</span>
-                </button>
+                <HeaderYearSelect variant="onDark" compact />
               </div>
             </div>
             <div className="relative hidden w-full items-center justify-between gap-4 border-b border-neutral-200 bg-white px-4 py-2.5 shadow-[0_6px_20px_rgba(16,24,40,0.05)] sm:px-6 md:flex md:px-6 md:py-4 lg:px-8">
@@ -478,14 +592,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
               </div>
 
               <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-                <button
-                  type="button"
-                  className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-neutral-900 sm:px-4 sm:py-2.5 sm:text-sm"
-                  aria-label="Current date"
-                >
-                  <Calendar size={16} className="text-[#f39b03]" />
-                  <span className="whitespace-nowrap">{headerDateLabel}</span>
-                </button>
+                <HeaderYearSelect variant="onLight" />
                 <div className="hidden items-center gap-3 rounded-xl bg-neutral-100 px-3 py-2 ring-1 ring-black/5 sm:flex sm:px-4 sm:py-2.5">
                   <div className="grid h-9 w-9 place-items-center rounded-xl bg-[#f39b03]/15 text-[#f39b03]">
                     <CircleUserRound size={18} />
@@ -505,8 +612,10 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                 <section className="grid grid-cols-2 gap-1.5 md:gap-4 xl:grid-cols-4">
                   <StatCard
                     title="Total Visits"
-                    value={String(visitRecords.length)}
-                    subtitle="All records"
+                    value={String(filteredVisitRecords.length)}
+                    subtitle={
+                      hasActiveVisitListFilters ? `${selectedYear} · ${filteredVisitRecords.length} of ${visitRecords.length}` : selectedYear
+                    }
                     icon={<ClipboardList className="text-sky-600" />}
                     toneClass="bg-sky-100"
                     mobileCardTint="bg-sky-50/90"
@@ -514,22 +623,28 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                   <StatCard
                     title="Visit Revenue"
                     value={`₹ ${totalAmount.toLocaleString('en-IN')}`}
-                    subtitle="This period"
+                    subtitle={selectedYear}
                     icon={<Briefcase className="text-emerald-600" />}
                     toneClass="bg-emerald-100"
                     mobileCardTint="bg-emerald-50/90"
                   />
                   <StatCard
                     title="Received Amount"
-                    value={`₹ ${totalAmount.toLocaleString('en-IN')}`}
-                    subtitle="This period"
+                    value={`₹ ${filteredVisitRecords
+                      .filter((r) => r.paymentStatus === 'Paid')
+                      .reduce((s, r) => s + Number(r.amount.replace(/[^\d.-]/g, '')), 0)
+                      .toLocaleString('en-IN')}`}
+                    subtitle={selectedYear}
                     icon={<Calendar className="text-violet-600" />}
                     toneClass="bg-violet-100"
                     mobileCardTint="bg-violet-50/90"
                   />
                   <StatCard
                     title="Pending Visit Amount"
-                    value="₹ 0"
+                    value={`₹ ${filteredVisitRecords
+                      .filter((r) => r.paymentStatus === 'Pending' || r.paymentStatus === 'Partial')
+                      .reduce((s, r) => s + Number(r.amount.replace(/[^\d.-]/g, '')), 0)
+                      .toLocaleString('en-IN')}`}
                     subtitle="Outstanding"
                     icon={<MapPin className="text-rose-600" />}
                     toneClass="bg-rose-100"
@@ -549,15 +664,68 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                   </div>
                 </div>
               ) : (
-                <CardPanel className="flex flex-col gap-2.5 p-2.5 md:flex-row md:items-center md:justify-between md:gap-4 md:p-4">
-                  <div className="w-full md:max-w-[780px]">
-                    <input type="text" placeholder="Search visits records..." className={toolbarSearchInputClass} />
+                <CardPanel className="flex flex-col gap-2.5 p-2.5 md:flex-row md:flex-wrap md:items-center md:justify-between md:gap-4 md:p-4">
+                  <div className="flex w-full min-w-0 flex-col gap-2 sm:flex-row sm:items-center md:max-w-none md:flex-1">
+                    <input
+                      type="search"
+                      value={visitListSearch}
+                      onChange={(e) => setVisitListSearch(e.target.value)}
+                      placeholder="Search visits records..."
+                      className={[toolbarSearchInputClass, 'w-full sm:max-w-[min(100%,420px)]'].join(' ')}
+                      aria-label="Search visit records"
+                    />
+                    <div className="flex flex-wrap items-center gap-2">
+                      <label className="grid gap-1">
+                        <span className="sr-only">Pay status</span>
+                        <select
+                          value={visitPaymentStatusFilter}
+                          onChange={(e) => setVisitPaymentStatusFilter(e.target.value)}
+                          className={visitToolbarSelectClass}
+                          aria-label="Filter by payment status"
+                        >
+                          <option value="all">All pay status</option>
+                          <option value="Paid">Paid</option>
+                          <option value="Pending">Pending</option>
+                          <option value="Partial">Partial</option>
+                          <option value="Waived">Waived</option>
+                        </select>
+                      </label>
+                      <label className="grid gap-1">
+                        <span className="sr-only">Machine</span>
+                        <select
+                          value={visitMachineFilter}
+                          onChange={(e) => setVisitMachineFilter(e.target.value)}
+                          className={visitToolbarSelectClass}
+                          aria-label="Filter by machine"
+                        >
+                          <option value="all">All machines</option>
+                          {visitMachineOptions.map((m) => (
+                            <option key={m} value={m}>
+                              {m}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
-                    <button type="button" className={toolbarSecondaryButtonClass}>
-                      Filters
-                    </button>
-                    <button type="button" className={toolbarSecondaryButtonClass}>
+                    {hasActiveVisitListFilters ? (
+                      <button type="button" onClick={clearVisitListFilters} className={toolbarSecondaryButtonClass}>
+                        Clear filters
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      disabled={filteredVisitRecords.length === 0}
+                      onClick={() => {
+                        if (filteredVisitRecords.length === 0) return
+                        const safeYear = selectedYear.replace(/[^\d-]/g, '') || 'visits'
+                        downloadVisitRecordsCsv(filteredVisitRecords, `site-visits-${safeYear}.csv`)
+                        toast.success('Exported CSV')
+                      }}
+                      className={toolbarSecondaryButtonClass}
+                    >
+                      <Download className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
                       Export
                     </button>
                     <button
@@ -579,14 +747,16 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                   bodyClassName="p-0"
                   headerEnd={
                     <span className="text-xs font-semibold text-neutral-600">
-                      {visitRecords.length} records
+                      {hasActiveVisitListFilters
+                        ? `${filteredVisitRecords.length} of ${visitRecords.length} records`
+                        : `${visitRecords.length} records`}
                     </span>
                   }
                 >
                   <div className="md:hidden">
                     <ul className="flex flex-col gap-1.5 px-3 pb-1.5 pt-1.5">
-                      {visitRecords.map((record) => (
-                        <li key={`${record.id}-mobile`}>
+                      {filteredVisitRecords.map((record) => (
+                        <li key={`${visitRowKey(record)}-mobile`}>
                           <div
                             role="button"
                             tabIndex={0}
@@ -633,6 +803,17 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                               >
                                 <ArrowRight size={15} />
                               </button>
+                              <button
+                                type="button"
+                                className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-rose-600 transition hover:bg-rose-100 md:h-8 md:w-8"
+                                aria-label={`Delete ${record.id}`}
+                                onClick={(event) => {
+                                  event.stopPropagation()
+                                  setPendingDeleteVisit(record)
+                                }}
+                              >
+                                <Trash2 size={14} />
+                              </button>
                             </div>
                           </div>
                         </li>
@@ -641,12 +822,16 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                         <li className="rounded-xl border border-neutral-200 bg-white px-3 py-3 text-center text-xs font-semibold text-neutral-600">
                           No visit records found.
                         </li>
+                      ) : filteredVisitRecords.length === 0 ? (
+                        <li className="rounded-xl border border-neutral-200 bg-white px-3 py-3 text-center text-xs font-semibold text-neutral-600">
+                          No records match your search or filters.
+                        </li>
                       ) : null}
                     </ul>
                   </div>
 
                   <div className="hidden overflow-x-auto md:block">
-                    <table className="w-full min-w-[980px] border-collapse">
+                    <table className="w-full min-w-[1040px] border-collapse">
                       <thead className="bg-neutral-50">
                         <tr className="text-left text-xs font-extrabold uppercase tracking-wide text-neutral-500">
                           <th className="px-6 py-4">Visit ID</th>
@@ -660,9 +845,9 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                         </tr>
                       </thead>
                       <tbody className="text-sm font-semibold text-neutral-800">
-                        {visitRecords.map((record) => (
+                        {filteredVisitRecords.map((record) => (
                           <tr
-                            key={record.id}
+                            key={visitRowKey(record)}
                             className="border-t border-neutral-200 hover:bg-neutral-50/60"
                             onClick={() => onNavigate(getVisitDetailsPath(record))}
                             role="button"
@@ -705,14 +890,27 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                                 >
                                   <ArrowRight size={16} />
                                 </button>
+                                <button
+                                  type="button"
+                                  className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-rose-200 bg-rose-50 text-rose-600 transition hover:bg-rose-100"
+                                  aria-label={`Delete ${record.id}`}
+                                  onClick={(event) => {
+                                    event.stopPropagation()
+                                    setPendingDeleteVisit(record)
+                                  }}
+                                >
+                                  <Trash2 size={16} />
+                                </button>
                               </div>
                             </td>
                           </tr>
                         ))}
-                        {visitRecords.length === 0 ? (
+                        {filteredVisitRecords.length === 0 ? (
                           <tr className="border-t border-neutral-200">
                             <td className="px-6 py-8 text-sm font-semibold text-neutral-600" colSpan={8}>
-                              No visit records found.
+                              {visitRecords.length === 0
+                                ? 'No visit records found.'
+                                : 'No records match your search or filters.'}
                             </td>
                           </tr>
                         ) : null}
@@ -741,9 +939,20 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                         siteId: match.id,
                         workDescription: workDetails,
                         machineLabel: machine,
-                        billingParticular: billingParticular.trim() || undefined,
-                        billingQuantity: parseFloat(billingQuantity.replace(/[^\d.-]/g, '')) || 0,
-                        billingRate: parseFloat(billingRate.replace(/[^\d.-]/g, '')) || 0,
+                        billingLines: billingLines.map((line) => {
+                          const q = parseFloat(line.quantity.replace(/[^\d.-]/g, '')) || 0
+                          const r = parseFloat(line.rate.replace(/[^\d.-]/g, '')) || 0
+                          const flat = parseFloat(line.amount.replace(/[^\d.-]/g, '')) || 0
+                          if (q !== 0 && r !== 0) {
+                            return { particular: line.particular.trim(), quantity: q, rate: r }
+                          }
+                          return {
+                            particular: line.particular.trim(),
+                            quantity: 0,
+                            rate: 0,
+                            ...(flat > 0 ? { amount: flat } : {}),
+                          }
+                        }),
                         billingOtherCharges: parseFloat(billingOtherCharges.replace(/[^\d.-]/g, '')) || 0,
                         amount: amountNum,
                         paymentMode: '—',
@@ -778,6 +987,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                         engineerName,
                         contactPerson: engineerName,
                       })
+                      if (match.id) params.set('siteId', match.id)
                       setShowAddForm(false)
                       onNavigate(`/site-details?${params.toString()}`)
                     } catch {
@@ -878,35 +1088,119 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                       />
                     </label>
 
-                    <label className="grid gap-2 md:col-span-2">
-                      <span className="text-xs font-bold text-neutral-700">Particular</span>
-                      <input
-                        value={billingParticular}
-                        onChange={(e) => setBillingParticular(e.target.value)}
-                        placeholder="e.g. Topographic survey, boundary marking…"
-                        className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
-                      />
-                    </label>
-
-                    <label className="grid gap-2">
-                      <span className="text-xs font-bold text-neutral-700">Quantity</span>
-                      <input
-                        value={billingQuantity}
-                        onChange={(e) => setBillingQuantity(e.target.value)}
-                        inputMode="decimal"
-                        className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
-                      />
-                    </label>
-
-                    <label className="grid gap-2">
-                      <span className="text-xs font-bold text-neutral-700">Rate (₹)</span>
-                      <input
-                        value={billingRate}
-                        onChange={(e) => setBillingRate(e.target.value)}
-                        inputMode="decimal"
-                        className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
-                      />
-                    </label>
+                    <div className="grid gap-3 md:col-span-2">
+                      <div className="flex flex-wrap items-end justify-between gap-2">
+                        <span className="text-xs font-bold text-neutral-700">Particulars (billing)</span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setBillingLines((prev) => {
+                              const lastRate = prev[prev.length - 1]?.rate ?? '80'
+                              return [
+                                ...prev,
+                                { id: newBillingLineId(), particular: '', quantity: '1', rate: lastRate, amount: '' },
+                              ]
+                            })
+                          }
+                          className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-neutral-200 bg-white px-3 text-xs font-bold text-neutral-800 shadow-sm transition hover:border-[#f39b03]/50 hover:bg-[#f39b03]/[0.06]"
+                        >
+                          <Plus size={14} strokeWidth={2.5} aria-hidden />
+                          Add particular
+                        </button>
+                      </div>
+                      <p className="-mt-1 text-[11px] font-semibold text-neutral-500">
+                        Use quantity × rate for per-point work, or leave quantity and rate empty and enter a line amount
+                        for fixed fees (same style as a printed invoice).
+                      </p>
+                      <div className="space-y-3 rounded-xl border border-neutral-200 bg-neutral-50/50 p-3 md:p-4">
+                        {billingLines.map((line, idx) => (
+                          <div
+                            key={line.id}
+                            className="grid grid-cols-1 gap-3 border-b border-neutral-200/80 pb-3 last:border-b-0 last:pb-0 sm:grid-cols-[minmax(0,1fr)_80px_80px_96px_auto] sm:items-end sm:gap-3"
+                          >
+                            <label className="grid min-w-0 gap-1.5">
+                              <span className="text-[10px] font-bold uppercase tracking-wide text-neutral-500">
+                                Particular{billingLines.length > 1 ? ` #${idx + 1}` : ''}
+                              </span>
+                              <input
+                                value={line.particular}
+                                onChange={(e) => {
+                                  const v = e.target.value
+                                  setBillingLines((prev) =>
+                                    prev.map((row) => (row.id === line.id ? { ...row, particular: v } : row)),
+                                  )
+                                }}
+                                placeholder="e.g. Topographic survey, boundary marking…"
+                                className="h-11 w-full min-w-0 rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
+                              />
+                            </label>
+                            <label className="grid gap-1.5">
+                              <span className="text-[10px] font-bold uppercase tracking-wide text-neutral-500">Qty</span>
+                              <input
+                                value={line.quantity}
+                                onChange={(e) => {
+                                  const v = e.target.value
+                                  setBillingLines((prev) =>
+                                    prev.map((row) => (row.id === line.id ? { ...row, quantity: v } : row)),
+                                  )
+                                }}
+                                inputMode="decimal"
+                                className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
+                              />
+                            </label>
+                            <label className="grid gap-1.5">
+                              <span className="text-[10px] font-bold uppercase tracking-wide text-neutral-500">
+                                Rate (₹)
+                              </span>
+                              <input
+                                value={line.rate}
+                                onChange={(e) => {
+                                  const v = e.target.value
+                                  setBillingLines((prev) =>
+                                    prev.map((row) => (row.id === line.id ? { ...row, rate: v } : row)),
+                                  )
+                                }}
+                                inputMode="decimal"
+                                className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
+                              />
+                            </label>
+                            <label className="grid gap-1.5">
+                              <span className="text-[10px] font-bold uppercase tracking-wide text-neutral-500">
+                                Amount (₹)
+                              </span>
+                              <input
+                                value={line.amount}
+                                onChange={(e) => {
+                                  const v = e.target.value
+                                  setBillingLines((prev) =>
+                                    prev.map((row) => (row.id === line.id ? { ...row, amount: v } : row)),
+                                  )
+                                }}
+                                inputMode="decimal"
+                                placeholder="Fixed"
+                                title="Use when this line has no quantity/rate (fixed fee)"
+                                className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
+                              />
+                            </label>
+                            <div className="flex justify-end sm:justify-center sm:pb-0.5">
+                              <button
+                                type="button"
+                                disabled={billingLines.length <= 1}
+                                onClick={() =>
+                                  setBillingLines((prev) =>
+                                    prev.length <= 1 ? prev : prev.filter((row) => row.id !== line.id),
+                                  )
+                                }
+                                className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-neutral-200 bg-white text-neutral-500 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 disabled:pointer-events-none disabled:opacity-40"
+                                aria-label={`Remove particular row ${idx + 1}`}
+                              >
+                                <X size={18} strokeWidth={2} />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
 
                     <label className="grid gap-2">
                       <span className="text-xs font-bold text-neutral-700">Other charges (₹)</span>
@@ -926,7 +1220,8 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                         className="h-11 w-full cursor-default rounded-xl border border-neutral-200 bg-neutral-50 px-3 text-sm font-semibold text-emerald-800 outline-none"
                       />
                       <span className="text-[11px] font-semibold text-neutral-500">
-                        Quantity × Rate + Other charges (rounded)
+                        Sum of each row (quantity × rate when both set, otherwise the line amount) + other charges
+                        (rounded)
                       </span>
                     </label>
 
@@ -1053,6 +1348,28 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
           </div>
         </main>
       </div>
+
+      <ConfirmAlert
+        open={pendingDeleteVisit !== null}
+        title="Delete this site visit?"
+        description="This permanently removes the visit record, linked transactions, any invoice that includes this visit, and stored visit or invoice PDF file metadata. This cannot be undone."
+        detail={
+          pendingDeleteVisit
+            ? `${pendingDeleteVisit.client} • ${pendingDeleteVisit.site} • ${pendingDeleteVisit.id}`
+            : undefined
+        }
+        confirmLabel="Delete visit"
+        cancelLabel="Cancel"
+        confirmBusy={deleteVisitBusy}
+        variant="danger"
+        rootClassName="fixed inset-0 z-[80] flex items-center justify-center p-4"
+        onCancel={() => {
+          if (!deleteVisitBusy) setPendingDeleteVisit(null)
+        }}
+        onConfirm={() => {
+          void handleConfirmDeleteVisit()
+        }}
+      />
 
       <nav
         className="fixed inset-x-0 bottom-0 z-50 flex w-full flex-col border-t border-white/10 bg-black [transform:translate3d(0,0,0)] md:hidden"

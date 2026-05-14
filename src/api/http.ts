@@ -48,7 +48,8 @@ http.interceptors.response.use(
         tokenStorage.setInstrumentId(null)
       }
     }
-    if (status === 401 && !url.includes('/auth/login')) {
+    const publicAuthPaths = ['/auth/login', '/auth/forgot-password', '/auth/verify-reset-otp', '/auth/reset-password']
+    if (status === 401 && !publicAuthPaths.some((p) => url.includes(p))) {
       tokenStorage.clear()
       window.dispatchEvent(new CustomEvent('survey:unauthorized'))
     }

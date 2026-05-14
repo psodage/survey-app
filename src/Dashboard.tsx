@@ -3,7 +3,6 @@ import {
   Bell,
   Briefcase,
   Building2,
-  Calendar,
   CircleUserRound,
   ClipboardList,
   FileBarChart,
@@ -27,7 +26,8 @@ import { CollaborationBrandMark } from './CollaborationBrandMark'
 import { LayoutFooter } from './LayoutFooter'
 import { CardShell, StatCard } from './dashboardCards'
 import { layoutBrandLogo } from './brandLogo'
-import { getHeaderDateLabel } from './headerDateLabel'
+import { HeaderYearSelect } from './components/HeaderYearSelect'
+import { useSelectedYear } from './context/SelectedYearContext'
 import { signOut } from './signOut'
 
 type NavItem = {
@@ -65,9 +65,9 @@ type RecentVisitRow = {
 
 export default function Dashboard({ onNavigate }: DashboardProps) {
   const { user, token } = useAuth()
+  const { selectedYear } = useSelectedYear()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const { pathname } = useLocation()
-  const headerDateLabel = getHeaderDateLabel()
   const [recentVisits, setRecentVisits] = useState<RecentVisitRow[]>([])
   const [pendingAmountByClient, setPendingAmountByClient] = useState<[string, string][]>([])
   const [stats, setStats] = useState({
@@ -94,7 +94,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
             totalSites: number
             totalClients: number
           }
-        }>('/api/dashboard')
+        }>('/api/dashboard', { params: { year: selectedYear } })
         if (cancelled || !res.data?.ok) return
         setRecentVisits(res.data.recentVisits ?? [])
         setPendingAmountByClient(res.data.pendingAmountByClient ?? [])
@@ -112,7 +112,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
     return () => {
       cancelled = true
     }
-  }, [token])
+  }, [token, selectedYear])
 
   const getVisitDetailsPath = (visit: RecentVisitRow) => {
     const params = new URLSearchParams({
@@ -265,7 +265,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                 <div className="grid h-16 w-16 place-items-center rounded-2xl bg-white/10 text-white ring-1 ring-white/15">
                   <CircleUserRound size={32} strokeWidth={1.75} />
                 </div>
-                <div className="mt-3 text-base font-extrabold text-white">{user?.fullName || 'User'}</div>
+                <div className="mt-3 text-base font-extrabold text-white">Er. {user?.fullName || 'User'}</div>
                 <div className="mt-1 text-xs font-semibold text-white/65">{user?.role === 'super_admin' ? 'Super Admin' : 'Admin'}</div>
               </div>
               <div className="mt-4 space-y-2 border-t border-white/10 pt-4">
@@ -369,14 +369,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                 <h1 className="min-w-0 truncate text-left text-base font-extrabold leading-tight tracking-tight text-white">
                   Dashboard
                 </h1>
-                <button
-                  type="button"
-                  className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-white/20 bg-neutral-900 px-2.5 text-[11px] font-semibold text-white transition hover:bg-neutral-800"
-                  aria-label="Current date"
-                >
-                  <Calendar size={13} className="text-[#f39b03]" />
-                  <span className="whitespace-nowrap">{headerDateLabel}</span>
-                </button>
+                <HeaderYearSelect variant="onDark" compact />
               </div>
             </div>
 
@@ -396,14 +389,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
               </div>
 
               <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-                <button
-                  type="button"
-                  className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-neutral-900 sm:px-4 sm:py-2.5 sm:text-sm"
-                  aria-label="Current date"
-                >
-                  <Calendar size={16} className="text-[#f39b03]" />
-                  <span className="whitespace-nowrap">{headerDateLabel}</span>
-                </button>
+                <HeaderYearSelect variant="onLight" />
                 <div className="hidden items-center gap-3 rounded-xl bg-neutral-100 px-3 py-2 ring-1 ring-black/5 sm:flex sm:px-4 sm:py-2.5">
                   <div className="grid h-9 w-9 place-items-center rounded-xl bg-[#f39b03]/15 text-[#f39b03]">
                     <CircleUserRound size={18} />
@@ -426,7 +412,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
             <section className="grid grid-cols-2 gap-1.5 md:gap-4 xl:grid-cols-4">
               <button
                 type="button"
-                onClick={() => handleSummaryCardClick('total-revenue')}
+               
                 className="w-full cursor-pointer rounded-xl bg-transparent p-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f39b03]/70"
                 aria-label="Open Total Revenue records"
               >
@@ -441,7 +427,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
               </button>
               <button
                 type="button"
-                onClick={() => handleSummaryCardClick('received')}
+            
                 className="w-full cursor-pointer rounded-xl bg-transparent p-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f39b03]/70"
                 aria-label="Open Received Amount records"
               >
@@ -456,7 +442,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
               </button>
               <button
                 type="button"
-                onClick={() => handleSummaryCardClick('pending')}
+
                 className="w-full cursor-pointer rounded-xl bg-transparent p-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f39b03]/70"
                 aria-label="Open Pending Amount records"
               >
@@ -471,7 +457,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
               </button>
               <button
                 type="button"
-                onClick={() => handleSummaryCardClick('total-sites')}
+          
                 className="w-full cursor-pointer rounded-xl bg-transparent p-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f39b03]/70"
                 aria-label="Open Total Sites records"
               >

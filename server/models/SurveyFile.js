@@ -28,6 +28,7 @@ const surveyFileSchema = new Schema(
           'other',
           'invoice_signature',
           'invoice_stamp',
+          'user_bank_signature',
         ],
       },
       entityId: { type: Schema.Types.ObjectId },

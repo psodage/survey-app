@@ -2,9 +2,9 @@ import {
   Bell,
   Briefcase,
   Building2,
-  Calendar,
   CircleUserRound,
   ClipboardList,
+  Landmark,
   LayoutGrid,
   LogOut,
   Mail,
@@ -31,8 +31,8 @@ import { layoutBrandLogo } from './brandLogo'
 import { CollaborationBrandMark } from './CollaborationBrandMark'
 import { LayoutFooter } from './LayoutFooter'
 import { CardShell } from './dashboardCards'
+import { HeaderYearSelect } from './components/HeaderYearSelect'
 import { useAuth } from './context/AuthContext'
-import { getHeaderDateLabel } from './headerDateLabel'
 import { signOut } from './signOut'
 
 type NavItem = {
@@ -140,7 +140,6 @@ function Field({
 export default function Settings({ onNavigate }: SettingsProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const { pathname } = useLocation()
-  const headerDateLabel = getHeaderDateLabel()
   const { user } = useAuth()
   const isSuperAdmin = user?.role === 'super_admin'
   const displayName = user?.fullName?.trim() || user?.email || 'User'
@@ -200,6 +199,16 @@ export default function Settings({ onNavigate }: SettingsProps) {
   const [invoiceTheme, setInvoiceTheme] = useState<'modern' | 'classic' | 'minimal'>('modern')
   const [footerNote, setFooterNote] = useState('')
 
+  const [bdAccountName, setBdAccountName] = useState('')
+  const [bdAccountNumber, setBdAccountNumber] = useState('')
+  const [bdIfsc, setBdIfsc] = useState('')
+  const [bdBankName, setBdBankName] = useState('')
+  const [bdBranch, setBdBranch] = useState('')
+  const [bdUpiPhone, setBdUpiPhone] = useState('')
+  const [bdInvoiceSlot, setBdInvoiceSlot] = useState<string>('')
+  const [bankSigPreview, setBankSigPreview] = useState<string | null>(null)
+  const bankSigInputRef = useRef<HTMLInputElement | null>(null)
+
   const storagePercent =
     storageQuotaBytes > 0 ? Math.min(100, Math.round((storageUsedBytes / storageQuotaBytes) * 100)) : 0
 
@@ -243,6 +252,16 @@ export default function Settings({ onNavigate }: SettingsProps) {
           email: string
           profile?: { fullName?: string; phone?: string }
           preferences?: { theme?: string; language?: string }
+          bankDetails?: {
+            accountName?: string
+            accountNumber?: string
+            ifscCode?: string
+            bankName?: string
+            branch?: string
+            upiPhone?: string
+            invoiceSlot?: number
+          }
+          bankSignatureUrl?: string | null
         }>('/api/settings/me'),
       ])
 
@@ -280,10 +299,33 @@ export default function Settings({ onNavigate }: SettingsProps) {
       }
 
       const me = meRes.data
-      if (me?.preferences?.theme === 'light' || me.preferences?.theme === 'dark' || me.preferences?.theme === 'system') {
+      if (
+        me?.preferences?.theme === 'light' ||
+        me?.preferences?.theme === 'dark' ||
+        me?.preferences?.theme === 'system'
+      ) {
         setUiTheme(me.preferences.theme)
       }
       if (me?.preferences?.language) setLanguageCode(me.preferences.language)
+      const bd = me?.bankDetails
+      if (bd) {
+        setBdAccountName(bd.accountName ?? '')
+        setBdAccountNumber(bd.accountNumber ?? '')
+        setBdIfsc(bd.ifscCode ?? '')
+        setBdBankName(bd.bankName ?? '')
+        setBdBranch(bd.branch ?? '')
+        setBdUpiPhone(bd.upiPhone ?? '')
+        setBdInvoiceSlot(bd.invoiceSlot === 1 || bd.invoiceSlot === 2 ? String(bd.invoiceSlot) : '')
+      } else {
+        setBdAccountName('')
+        setBdAccountNumber('')
+        setBdIfsc('')
+        setBdBankName('')
+        setBdBranch('')
+        setBdUpiPhone('')
+        setBdInvoiceSlot('')
+      }
+      setBankSigPreview(me?.bankSignatureUrl ?? null)
     } catch (err) {
       window.alert(apiErrorMessage(err))
     } finally {
@@ -424,6 +466,24 @@ export default function Settings({ onNavigate }: SettingsProps) {
     }
   }
 
+  const handleBankSignaturePick = () => bankSigInputRef.current?.click()
+
+  const handleBankSignatureChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0]
+    if (!f) return
+    try {
+      const fd = new FormData()
+      fd.append('file', f)
+      await http.post('/api/settings/me/bank-signature', fd)
+      await loadSettings()
+      window.alert('Bank signature uploaded.')
+    } catch (err) {
+      window.alert(apiErrorMessage(err))
+    } finally {
+      e.target.value = ''
+    }
+  }
+
   const handleStampChange = async (e: ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]
     if (!f) return
@@ -514,6 +574,15 @@ export default function Settings({ onNavigate }: SettingsProps) {
         preferences: {
           theme: uiTheme,
           language: languageCode,
+        },
+        bankDetails: {
+          accountName: bdAccountName.trim(),
+          accountNumber: bdAccountNumber.trim(),
+          ifscCode: bdIfsc.trim(),
+          bankName: bdBankName.trim(),
+          branch: bdBranch.trim(),
+          upiPhone: bdUpiPhone.trim(),
+          invoiceSlot: bdInvoiceSlot === '1' || bdInvoiceSlot === '2' ? Number(bdInvoiceSlot) : null,
         },
       })
       if (isSuperAdmin) {
@@ -665,7 +734,7 @@ export default function Settings({ onNavigate }: SettingsProps) {
                 <div className="grid h-16 w-16 place-items-center rounded-2xl bg-white/10 text-white ring-1 ring-white/15">
                   <CircleUserRound size={32} strokeWidth={1.75} />
                 </div>
-                <div className="mt-3 text-base font-extrabold text-white">{displayName}</div>
+                <div className="mt-3 text-base font-extrabold text-white">Er. {displayName}</div>
                 <div className="mt-1 text-xs font-semibold text-white/65">
                   {isSuperAdmin ? 'Super admin' : 'Admin'}
                 </div>
@@ -728,7 +797,7 @@ export default function Settings({ onNavigate }: SettingsProps) {
                   }}
                   className={[
                     'flex flex-col items-center gap-1.5 rounded-xl px-2 py-3 text-[11px] font-bold ring-1 transition',
-                    path === '/dashboard'
+                    path === '/settings'
                       ? 'bg-white/10 text-[#f39b03] ring-[#f39b03]/35'
                       : 'bg-white/5 text-white/85 ring-white/10 hover:bg-white/10',
                   ].join(' ')}
@@ -782,14 +851,7 @@ export default function Settings({ onNavigate }: SettingsProps) {
                 <h1 className="min-w-0 truncate text-left text-base font-extrabold leading-tight tracking-tight text-white">
                   Settings
                 </h1>
-                <button
-                  type="button"
-                  className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-white/20 bg-neutral-900 px-2.5 text-[11px] font-semibold text-white transition hover:bg-neutral-800"
-                  aria-label="Current date"
-                >
-                  <Calendar size={13} className="text-[#f39b03]" />
-                  <span className="whitespace-nowrap">{headerDateLabel}</span>
-                </button>
+                <HeaderYearSelect variant="onDark" compact />
               </div>
             </div>
 
@@ -809,14 +871,7 @@ export default function Settings({ onNavigate }: SettingsProps) {
               </div>
 
               <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-                <button
-                  type="button"
-                  className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-neutral-900 sm:px-4 sm:py-2.5 sm:text-sm"
-                  aria-label="Current date"
-                >
-                  <Calendar size={16} className="text-[#f39b03]" />
-                  <span className="whitespace-nowrap">{headerDateLabel}</span>
-                </button>
+                <HeaderYearSelect variant="onLight" />
                 <div className="hidden items-center gap-3 rounded-xl bg-neutral-100 px-3 py-2 ring-1 ring-black/5 sm:flex sm:px-4 sm:py-2.5">
                   <div className="grid h-9 w-9 place-items-center rounded-xl bg-[#f39b03]/15 text-[#f39b03]">
                     <CircleUserRound size={18} />
@@ -1009,6 +1064,109 @@ export default function Settings({ onNavigate }: SettingsProps) {
                   </CardShell>
                 </div>
 
+                {/* Personal bank details (invoice PDF footer) */}
+                <div className="xl:col-span-2">
+                  <CardShell
+                    title="Your bank details (invoice PDF)"
+                    leadingIcon={<Landmark size={18} strokeWidth={2.25} />}
+                  >
+                    <p className="text-xs font-semibold leading-relaxed text-neutral-600">
+                      These details appear in the dual-column bank block at the bottom of generated invoices. Choose{' '}
+                      <span className="font-extrabold text-neutral-800">Left column</span> or{' '}
+                      <span className="font-extrabold text-neutral-800">Right column</span> so each signatory maps to the
+                      correct side (two different users should use slot 1 and slot 2).
+                    </p>
+                    <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <Field label="Account name">
+                        <input
+                          value={bdAccountName}
+                          onChange={(e) => setBdAccountName(e.target.value)}
+                          className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
+                        />
+                      </Field>
+                      <Field label="Account number">
+                        <input
+                          value={bdAccountNumber}
+                          onChange={(e) => setBdAccountNumber(e.target.value)}
+                          className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
+                        />
+                      </Field>
+                      <Field label="IFSC code">
+                        <input
+                          value={bdIfsc}
+                          onChange={(e) => setBdIfsc(e.target.value)}
+                          className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
+                        />
+                      </Field>
+                      <Field label="Bank name (optional)">
+                        <input
+                          value={bdBankName}
+                          onChange={(e) => setBdBankName(e.target.value)}
+                          placeholder="Shown in parentheses after IFSC"
+                          className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
+                        />
+                      </Field>
+                      <Field label="Branch">
+                        <input
+                          value={bdBranch}
+                          onChange={(e) => setBdBranch(e.target.value)}
+                          className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
+                        />
+                      </Field>
+                      <Field label="Google Pay / PhonePe number">
+                        <input
+                          value={bdUpiPhone}
+                          onChange={(e) => setBdUpiPhone(e.target.value)}
+                          className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
+                        />
+                      </Field>
+                      <Field label="Position on invoice PDF">
+                        <select
+                          value={bdInvoiceSlot}
+                          onChange={(e) => setBdInvoiceSlot(e.target.value)}
+                          className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
+                        >
+                          <option value="">Not shown as a column (omit from dual block)</option>
+                          <option value="1">Left column</option>
+                          <option value="2">Right column</option>
+                        </select>
+                      </Field>
+                    </div>
+                    <div className="mt-4 grid grid-cols-1 gap-3 sm:max-w-md">
+                      <div className="rounded-xl border border-neutral-100 bg-white p-2.5 md:p-3">
+                        <div className="text-xs font-extrabold text-neutral-900">Your signature (bank block)</div>
+                        <div className="mt-2 flex min-h-[100px] items-center justify-center overflow-hidden rounded-lg bg-neutral-50 ring-1 ring-black/5">
+                          {bankSigPreview ? (
+                            <img
+                              src={bankSigPreview}
+                              alt="Bank signature preview"
+                              className="max-h-28 w-full object-contain p-2"
+                            />
+                          ) : (
+                            <span className="px-3 text-center text-xs font-semibold text-neutral-500">
+                              No signature uploaded
+                            </span>
+                          )}
+                        </div>
+                        <input
+                          ref={bankSigInputRef}
+                          type="file"
+                          accept="image/*"
+                          className="sr-only"
+                          onChange={handleBankSignatureChange}
+                        />
+                        <button
+                          type="button"
+                          onClick={handleBankSignaturePick}
+                          className="mt-3 w-full rounded-xl border border-neutral-200 bg-white px-4 py-2 text-sm font-extrabold text-neutral-900 shadow-sm ring-1 ring-black/5 transition hover:border-[#f39b03]/40 hover:text-[#f39b03]"
+                        >
+                          Upload bank signature
+                        </button>
+                      </div>
+                    </div>
+                  </CardShell>
+                </div>
+
                 {/* Backup & Storage */}
                 <CardShell title="Backup & Storage">
                   <div className="grid gap-4">
@@ -1146,32 +1304,7 @@ export default function Settings({ onNavigate }: SettingsProps) {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                      <Field label="Invoice theme">
-                        <select
-                          value={invoiceTheme}
-                          disabled={companyLocked}
-                          onChange={(e) =>
-                            setInvoiceTheme(e.target.value as 'modern' | 'classic' | 'minimal')
-                          }
-                          className="h-11 w-full cursor-pointer appearance-none rounded-xl border border-neutral-200 bg-white px-3 pr-10 text-sm font-semibold text-neutral-900 outline-none transition hover:border-neutral-300 focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20 disabled:cursor-not-allowed disabled:bg-neutral-50"
-                        >
-                          <option value="modern">Modern</option>
-                          <option value="classic">Classic</option>
-                          <option value="minimal">Minimal</option>
-                        </select>
-                      </Field>
-
-                      <div className="flex items-end">
-                        <button
-                          type="button"
-                          onClick={handlePreviewInvoice}
-                          className="h-11 w-full rounded-xl border border-[#f39b03]/60 bg-[#f39b03]/10 px-4 text-sm font-extrabold text-[#f39b03] shadow-sm ring-1 ring-[#f39b03]/20 transition hover:bg-[#f39b03]/15"
-                        >
-                          Preview invoice
-                        </button>
-                      </div>
-                    </div>
+                 
 
                     <Field label="Footer note">
                       <textarea

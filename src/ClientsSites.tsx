@@ -2,7 +2,6 @@ import {
   Bell,
   ArrowRight,
   ArrowLeft,
-  Calendar,
   CircleUserRound,
   LogOut,
   Menu,
@@ -18,8 +17,9 @@ import {
   Phone,
   X,
   IndianRupee,
+  Trash2,
 } from 'lucide-react'
-import { Fragment, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useLocation } from 'react-router-dom'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
@@ -34,15 +34,16 @@ import {
 } from './dashboardCards'
 import { AccountManagerSidebarBlock } from './AccountManagerSidebarBlock'
 import { AddSiteForm } from './AddSiteForm'
+import { HeaderYearSelect } from './components/HeaderYearSelect'
 import { CollaborationBrandMark } from './CollaborationBrandMark'
 import { LayoutFooter } from './LayoutFooter'
-import { layoutBrandLogo } from './brandLogo'
-import { getHeaderDateLabel } from './headerDateLabel'
+import { useSelectedYear } from './context/SelectedYearContext'
 import axios from 'axios'
 import { toast } from 'sonner'
 import http from './api/http'
 import { useAuth } from './context/AuthContext'
 import { signOut } from './signOut'
+import { ConfirmAlert } from './ConfirmAlert'
 
 type NavItem = {
   label: string
@@ -74,6 +75,11 @@ function formatRupee(amount: number) {
   return `₹${Math.round(amount).toLocaleString('en-IN')}`
 }
 
+const actionTrashButtonClass =
+  'inline-flex h-9 w-9 items-center justify-center rounded-xl border border-rose-200 bg-rose-50 text-rose-700 transition hover:bg-rose-100'
+const actionTrashButtonClassMobile =
+  'inline-flex h-7 w-7 items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-rose-700 transition hover:bg-rose-100 md:h-8 md:w-8'
+
 type ClientRow = {
   id?: string
   name: string
@@ -85,6 +91,7 @@ type ClientRow = {
 }
 
 type SiteRow = {
+  id?: string
   name: string
   location: string
   lastVisit: string
@@ -98,6 +105,7 @@ type ClientsSitesProps = {
 
 export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
   const { token, user } = useAuth()
+  const { selectedYear } = useSelectedYear()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [clients, setClients] = useState<ClientRow[]>([])
@@ -111,6 +119,13 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
   const [newClientName, setNewClientName] = useState('')
   const [newClientPhone, setNewClientPhone] = useState('')
   const [addClientError, setAddClientError] = useState('')
+  const [pendingDeleteClient, setPendingDeleteClient] = useState<ClientRow | null>(null)
+  const [deleteClientBusy, setDeleteClientBusy] = useState(false)
+  const [pendingDeleteSite, setPendingDeleteSite] = useState<{ id: string; name: string; clientName: string } | null>(
+    null,
+  )
+  const [deleteSiteBusy, setDeleteSiteBusy] = useState(false)
+  const prevSelectedClientNameRef = useRef<string | null>(null)
   const location = useLocation()
 
   const refreshClientsAndSites = useCallback(async () => {
@@ -128,10 +143,11 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
             received: string
             pending: string
           }>
-        }>('/api/clients'),
+        }>('/api/clients', { params: { year: selectedYear } }),
         http.get<{
           ok: boolean
           sites: Array<{
+            id: string
             clientName: string
             name: string
             location: string
@@ -139,7 +155,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
             status: string
             pending: string
           }>
-        }>('/api/sites'),
+        }>('/api/sites', { params: { year: selectedYear } }),
       ])
       if (cRes.data?.ok) {
         setClients(
@@ -159,6 +175,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
         for (const s of sRes.data.sites) {
           if (!grouped[s.clientName]) grouped[s.clientName] = []
           grouped[s.clientName].push({
+            id: s.id,
             name: s.name,
             location: s.location,
             lastVisit: s.lastVisit,
@@ -171,7 +188,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
     } catch {
       toast.error('Could not load clients or sites.')
     }
-  }, [token])
+  }, [token, selectedYear])
 
   useEffect(() => {
     void refreshClientsAndSites()
@@ -181,7 +198,6 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
   const summary = searchParams.get('summary') ?? ''
   const requestedClient = searchParams.get('client') ?? ''
   const showAllSites = summary === 'total-sites'
-  const headerDateLabel = getHeaderDateLabel()
 
   useEffect(() => {
     // If we arrived here via `?summary=...` (Dashboard tiles), ensure we show the
@@ -201,6 +217,14 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
 
   useEffect(() => {
     setSitesSearchQuery('')
+  }, [selectedClientName])
+
+  useEffect(() => {
+    if (prevSelectedClientNameRef.current && !selectedClientName) {
+      setPendingDeleteClient(null)
+      setPendingDeleteSite(null)
+    }
+    prevSelectedClientNameRef.current = selectedClientName
   }, [selectedClientName])
 
   const mobileBottomNav = [
@@ -431,6 +455,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
       status: site.status,
       pending: site.pending,
     })
+    if (site.id) params.set('siteId', site.id)
     return `/site-details?${params.toString()}`
   }
 
@@ -479,6 +504,85 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
   const handleExportClientReport = () => {
     if (!selectedClient) return
     exportClientReport(selectedClient, selectedSites)
+  }
+
+  const handleOpenDeleteClient = () => {
+    if (!selectedClient?.id) {
+      toast.error('Client is not synced yet. Refresh the page.')
+      return
+    }
+    setPendingDeleteSite(null)
+    setPendingDeleteClient(selectedClient)
+  }
+
+  const openDeleteClientDialog = (row: ClientRow) => {
+    if (!row.id) {
+      toast.error('Client is not synced yet. Refresh the page.')
+      return
+    }
+    setPendingDeleteSite(null)
+    setPendingDeleteClient(row)
+  }
+
+  const openDeleteSiteDialog = (site: SiteRow, clientName: string) => {
+    if (!site.id) {
+      toast.error('Site is not synced yet. Refresh the page.')
+      return
+    }
+    setPendingDeleteClient(null)
+    setPendingDeleteSite({ id: site.id, name: site.name, clientName })
+  }
+
+  const handleConfirmDeleteClient = async () => {
+    const row = pendingDeleteClient
+    if (!row?.id) return
+    setDeleteClientBusy(true)
+    try {
+      const res = await http.delete<{ ok: boolean; sitesDeleted?: number; error?: string }>(`/api/clients/${row.id}`)
+      if (!res.data?.ok) {
+        toast.error(res.data?.error ?? 'Could not delete client.')
+        return
+      }
+      const n = res.data.sitesDeleted ?? 0
+      toast.success(n > 0 ? `Client deleted (${n} site${n === 1 ? '' : 's'} removed).` : 'Client deleted.')
+      setPendingDeleteClient(null)
+      await refreshClientsAndSites()
+      if (selectedClient?.id === row.id) {
+        handleBackFromClientDetails()
+      }
+    } catch (e) {
+      const msg =
+        axios.isAxiosError(e) && (e.response?.data as { error?: string })?.error
+          ? String((e.response?.data as { error?: string }).error)
+          : 'Could not delete client.'
+      toast.error(msg)
+    } finally {
+      setDeleteClientBusy(false)
+    }
+  }
+
+  const handleConfirmDeleteSite = async () => {
+    const target = pendingDeleteSite
+    if (!target) return
+    setDeleteSiteBusy(true)
+    try {
+      const res = await http.delete<{ ok: boolean; error?: string }>(`/api/sites/${target.id}`)
+      if (!res.data?.ok) {
+        toast.error(res.data?.error ?? 'Could not delete site.')
+        return
+      }
+      toast.success(`Site "${target.name}" deleted.`)
+      setPendingDeleteSite(null)
+      await refreshClientsAndSites()
+    } catch (e) {
+      const msg =
+        axios.isAxiosError(e) && (e.response?.data as { error?: string })?.error
+          ? String((e.response?.data as { error?: string }).error)
+          : 'Could not delete site.'
+      toast.error(msg)
+    } finally {
+      setDeleteSiteBusy(false)
+    }
   }
 
   const handleExportAllClientsReport = () => {
@@ -589,68 +693,111 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
             'fixed inset-y-0 left-0 z-50 flex w-[280px] flex-col overflow-y-auto bg-gradient-to-b from-[#050505] via-[#0b0b0b] to-[#040404] pb-20 text-white transition-transform duration-300 lg:hidden',
             isSidebarOpen ? 'translate-x-0' : '-translate-x-full',
           ].join(' ')}
+          aria-label="Profile"
         >
-          <div className="flex items-center justify-between px-6 pt-6">
-            <img
-              src={layoutBrandLogo}
-              alt="Samarth Land Surveyors"
-              className="h-10 w-auto"
-              draggable={false}
-            />
+          <div className="flex items-center justify-between px-5 pt-6">
+            <span className="text-sm font-extrabold tracking-tight text-white">Profile</span>
             <button
               type="button"
               className="grid h-9 w-9 place-items-center rounded-xl bg-white/10 hover:bg-white/20"
-              aria-label="Close menu"
+              aria-label="Close profile"
               onClick={() => setIsSidebarOpen(false)}
             >
               <X size={18} />
             </button>
           </div>
 
-          <nav className="mt-4 flex-1 px-3">
-            <div className="space-y-1">
-              {navItems.map((item) => {
-                if (item.label === 'Account Manager') {
-                  return (
-                    <Fragment key="account-manager-mobile">
-                      <AccountManagerSidebarBlock
-                        pathname={location.pathname}
-                        onNavigate={onNavigate}
-                        onAfterNavigate={() => setIsSidebarOpen(false)}
-                      />
-                    </Fragment>
-                  )
-                }
-                const active = item.label === 'Clients & Sites'
-                const isLogout = item.label === 'Log Out'
-                return (
-                  <button
-                    type="button"
-                    key={item.label}
-                    onClick={() => handleNavClick(item.label)}
-                    className={[
-                      'group flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-[13px] font-semibold transition',
-                      isLogout
-                        ? 'bg-red-500/15 text-red-300 ring-1 ring-red-400/35 hover:bg-red-500/20 hover:text-red-200'
-                        : active
-                          ? 'bg-[#f39b03]/18 text-[#f39b03] ring-1 ring-[#f39b03]/30'
-                          : 'text-white/85 hover:bg-white/5 hover:text-white',
-                    ].join(' ')}
+          <div className="mt-6 px-5">
+            <div className="rounded-2xl bg-white/5 p-4 ring-1 ring-white/10">
+              <div className="flex flex-col items-center text-center">
+                <div className="grid h-16 w-16 place-items-center rounded-2xl bg-white/10 text-white ring-1 ring-white/15">
+                  <CircleUserRound size={32} strokeWidth={1.75} />
+                </div>
+                <div className="mt-3 text-base font-extrabold text-white">Er. {user?.fullName || 'User'}</div>
+                <div className="mt-1 text-xs font-semibold text-white/65">
+                  {user?.role === 'super_admin' ? 'Super Admin' : 'Admin'}
+                </div>
+              </div>
+              <div className="mt-4 space-y-2 border-t border-white/10 pt-4">
+                {user?.email ? (
+                  <a
+                    href={`mailto:${user.email}`}
+                    className="flex items-center gap-2 rounded-xl px-2 py-2 text-left text-xs font-semibold text-white/90 hover:bg-white/5"
                   >
-                    <span
-                      className={[
-                        'grid h-8 w-8 place-items-center rounded-lg',
-                        isLogout ? 'bg-red-500/18 text-red-300' : active ? 'bg-[#f39b03]/14' : 'bg-white/5',
-                      ].join(' ')}
-                    >
-                      {item.icon}
+                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white/10 text-[#f39b03]">
+                      <Mail size={15} />
                     </span>
-                    <span className="truncate">{item.label}</span>
-                  </button>
-                )
-              })}
+                    <span className="min-w-0 truncate">{user.email}</span>
+                  </a>
+                ) : (
+                  <div className="flex items-center gap-2 rounded-xl px-2 py-2 text-left text-xs font-semibold text-white/50">
+                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white/10 text-[#f39b03]">
+                      <Mail size={15} />
+                    </span>
+                    <span className="min-w-0 truncate">—</span>
+                  </div>
+                )}
+                {user?.phone ? (
+                  <a
+                    href={`tel:${user.phone.replace(/\s/g, '')}`}
+                    className="flex items-center gap-2 rounded-xl px-2 py-2 text-left text-xs font-semibold text-white/90 hover:bg-white/5"
+                  >
+                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white/10 text-[#f39b03]">
+                      <Phone size={15} />
+                    </span>
+                    <span>{user.phone}</span>
+                  </a>
+                ) : null}
+              </div>
             </div>
-          </nav>
+          </div>
+
+          <div className="mt-5 px-5">
+            <div className="text-[11px] font-extrabold uppercase tracking-wide text-white/45">Quick navigation</div>
+            <div className="mt-2 space-y-2">
+              <AccountManagerSidebarBlock
+                pathname={location.pathname}
+                onNavigate={onNavigate}
+                onAfterNavigate={() => setIsSidebarOpen(false)}
+              />
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              {[
+                { label: 'Dashboard', path: '/dashboard', icon: LayoutGrid },
+                { label: 'Clients', path: '/clients-sites', icon: UsersRound },
+                { label: 'Visits', path: '/site-visits', icon: MapPin },
+              ].map(({ label, path, icon: Icon }) => (
+                <button
+                  type="button"
+                  key={path}
+                  onClick={() => {
+                    onNavigate(path)
+                    setIsSidebarOpen(false)
+                  }}
+                  className={[
+                    'flex flex-col items-center gap-1.5 rounded-xl px-2 py-3 text-[11px] font-bold ring-1 transition',
+                    path === '/clients-sites'
+                      ? 'bg-white/10 text-[#f39b03] ring-[#f39b03]/35'
+                      : 'bg-white/5 text-white/85 ring-white/10 hover:bg-white/10',
+                  ].join(' ')}
+                >
+                  <Icon size={18} />
+                  <span className="truncate">{label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-6 flex-1 px-5">
+            <button
+              type="button"
+              onClick={() => handleNavClick('Log Out')}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-red-500/15 py-3 text-sm font-bold text-red-200 ring-1 ring-red-400/35 hover:bg-red-500/25"
+            >
+              <LogOut size={18} />
+              Log Out
+            </button>
+          </div>
         </aside>
 
         {/* Main */}
@@ -696,14 +843,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                     {selectedClient ? 'Client Details' : 'Clients & Sites'}
                   </h1>
                 </div>
-                <button
-                  type="button"
-                  className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-white/20 bg-neutral-900 px-2.5 text-[11px] font-semibold text-white transition hover:bg-neutral-800"
-                  aria-label="Current date"
-                >
-                  <Calendar size={13} className="text-[#f39b03]" />
-                  <span className="whitespace-nowrap">{headerDateLabel}</span>
-                </button>
+                <HeaderYearSelect variant="onDark" compact />
               </div>
             </div>
             <div className="relative hidden w-full items-center justify-between gap-4 border-b border-neutral-200 bg-white px-4 py-2.5 shadow-[0_6px_20px_rgba(16,24,40,0.05)] sm:px-6 md:flex md:px-6 md:py-4 lg:px-8">
@@ -732,14 +872,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
               </div>
 
               <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-                <button
-                  type="button"
-                  className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-neutral-900 sm:px-4 sm:py-2.5 sm:text-sm"
-                  aria-label="Current date"
-                >
-                  <Calendar size={16} className="text-[#f39b03]" />
-                  <span className="whitespace-nowrap">{headerDateLabel}</span>
-                </button>
+                <HeaderYearSelect variant="onLight" />
                 <div className="hidden items-center gap-3 rounded-xl bg-neutral-100 px-3 py-2 ring-1 ring-black/5 sm:flex sm:px-4 sm:py-2.5">
                   <div className="grid h-9 w-9 place-items-center rounded-xl bg-[#f39b03]/15 text-[#f39b03]">
                     <CircleUserRound size={18} />
@@ -780,7 +913,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
               <button
                 type="button"
                 className="cursor-pointer bg-transparent p-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f39b03]/70"
-                onClick={() => handleSummaryCardClick(selectedClient ? 'received' : 'total-clients')}
+          
                 aria-label={selectedClient ? 'Open Received Amount records' : 'Open Total Clients records'}
               >
                 <StatCard
@@ -795,7 +928,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
               <button
                 type="button"
                 className="cursor-pointer bg-transparent p-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f39b03]/70"
-                onClick={() => handleSummaryCardClick('total-sites')}
+             
                 aria-label="Open Total Sites records"
               >
                 <StatCard
@@ -810,7 +943,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
               <button
                 type="button"
                 className="cursor-pointer bg-transparent p-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f39b03]/70"
-                onClick={() => handleSummaryCardClick('total-revenue')}
+             
                 aria-label="Open Total Revenue records"
               >
                 <StatCard
@@ -827,7 +960,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
               <button
                 type="button"
                 className="cursor-pointer bg-transparent p-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f39b03]/70"
-                onClick={() => handleSummaryCardClick('pending')}
+               
                 aria-label="Open Pending Amount records"
               >
                 <StatCard
@@ -930,6 +1063,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                     <button type="button" className={toolbarSecondaryButtonClass} onClick={handleExportClientReport}>
                       Export
                     </button>
+                   
                     <button type="button" onClick={handleOpenAddSiteModal} className={toolbarPrimaryButtonClass}>
                       <Plus className={toolbarPlusIconClass} />
                       Add New Site
@@ -956,7 +1090,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                 <div className="md:hidden">
                   <ul className="flex flex-col gap-1.5 px-3 pb-1.5 pt-1.5">
                     {filteredSitesForClient.map((site) => (
-                      <li key={site.name}>
+                      <li key={site.id ?? `${selectedClient.name}-${site.name}`}>
                         <div
                           role="button"
                           tabIndex={0}
@@ -1014,6 +1148,17 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                               >
                                 <ArrowRight size={15} />
                               </button>
+                              <button
+                                type="button"
+                                className={actionTrashButtonClassMobile}
+                                aria-label={`Delete ${site.name}`}
+                                onClick={(event) => {
+                                  event.stopPropagation()
+                                  openDeleteSiteDialog(site, selectedClient.name)
+                                }}
+                              >
+                                <Trash2 size={14} />
+                              </button>
                             </div>
                           </div>
                         </div>
@@ -1043,7 +1188,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                     <tbody className="text-sm font-semibold text-neutral-800">
                       {filteredSitesForClient.map((site) => (
                         <tr
-                          key={site.name}
+                          key={site.id ?? site.name}
                           className="border-t border-neutral-200 hover:bg-neutral-50/60"
                           onClick={() => onNavigate(getSiteDetailsPath(selectedClient.name, site))}
                           role="button"
@@ -1097,6 +1242,17 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                               >
                                 <ArrowRight size={16} />
                               </button>
+                              <button
+                                type="button"
+                                className={actionTrashButtonClass}
+                                aria-label={`Delete ${site.name}`}
+                                onClick={(event) => {
+                                  event.stopPropagation()
+                                  openDeleteSiteDialog(site, selectedClient.name)
+                                }}
+                              >
+                                <Trash2 size={16} />
+                              </button>
                             </div>
                           </td>
                         </tr>
@@ -1129,7 +1285,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                 <div className="md:hidden">
                   <ul className="flex flex-col gap-1.5 px-3 pb-1.5 pt-1.5">
                     {filteredAllSites.map((site) => (
-                      <li key={`${site.clientName}-${site.name}`}>
+                      <li key={site.id ?? `${site.clientName}-${site.name}`}>
                         <div
                           role="button"
                           tabIndex={0}
@@ -1187,6 +1343,17 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                               >
                                 <ArrowRight size={15} />
                               </button>
+                              <button
+                                type="button"
+                                className={actionTrashButtonClassMobile}
+                                aria-label={`Delete ${site.name}`}
+                                onClick={(event) => {
+                                  event.stopPropagation()
+                                  openDeleteSiteDialog(site, site.clientName)
+                                }}
+                              >
+                                <Trash2 size={14} />
+                              </button>
                             </div>
                           </div>
                         </div>
@@ -1216,7 +1383,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                     <tbody className="text-sm font-semibold text-neutral-800">
                       {filteredAllSites.map((site) => (
                         <tr
-                          key={`${site.clientName}-${site.name}`}
+                          key={site.id ?? `${site.clientName}-${site.name}`}
                           className="border-t border-neutral-200 hover:bg-neutral-50/60"
                           onClick={() => onNavigate(getSiteDetailsPath(site.clientName, site))}
                           role="button"
@@ -1271,6 +1438,17 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                               >
                                 <ArrowRight size={16} />
                               </button>
+                              <button
+                                type="button"
+                                className={actionTrashButtonClass}
+                                aria-label={`Delete ${site.name}`}
+                                onClick={(event) => {
+                                  event.stopPropagation()
+                                  openDeleteSiteDialog(site, site.clientName)
+                                }}
+                              >
+                                <Trash2 size={16} />
+                              </button>
                             </div>
                           </td>
                         </tr>
@@ -1300,28 +1478,38 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                   <ul className="flex flex-col gap-1.5 px-3 pb-1.5 pt-1.5">
                     {filteredRows.map((row) => (
                       <li key={row.name}>
-                        <button
-                          type="button"
-                          className="flex w-full items-center gap-2 rounded-xl border border-neutral-200 bg-white px-2 py-1.5 text-left shadow-sm ring-1 ring-black/5"
-                          onClick={() => setSelectedClientName(row.name)}
-                        >
-                          <div
-                            className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#f39b03]/15 text-[10px] font-extrabold text-[#c97702] ring-1 ring-[#f39b03]/25"
-                            aria-hidden
+                        <div className="flex items-stretch gap-2 rounded-xl border border-neutral-200 bg-white p-1.5 shadow-sm ring-1 ring-black/5">
+                          <button
+                            type="button"
+                            className="flex min-w-0 flex-1 items-center gap-2 rounded-lg px-1 py-0.5 text-left transition hover:bg-neutral-50"
+                            onClick={() => setSelectedClientName(row.name)}
                           >
-                            {getInitials(row.name)}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="truncate text-xs font-extrabold text-neutral-900">{row.name}</div>
-                            <div className="mt-0.5 text-[10px] font-semibold text-neutral-500">
-                              Sites: {row.sites} • Phone: {row.phone}
+                            <div
+                              className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#f39b03]/15 text-[10px] font-extrabold text-[#c97702] ring-1 ring-[#f39b03]/25"
+                              aria-hidden
+                            >
+                              {getInitials(row.name)}
                             </div>
-                          </div>
-                          <div className="text-right">
-                            <div className="text-[11px] font-extrabold text-emerald-600">{row.received}</div>
-                            <div className="text-[10px] font-bold text-rose-600">{row.pending}</div>
-                          </div>
-                        </button>
+                            <div className="min-w-0 flex-1">
+                              <div className="truncate text-xs font-extrabold text-neutral-900">{row.name}</div>
+                              <div className="mt-0.5 text-[10px] font-semibold text-neutral-500">
+                                Sites: {row.sites} • Phone: {row.phone}
+                              </div>
+                            </div>
+                            <div className="shrink-0 text-right">
+                              <div className="text-[11px] font-extrabold text-emerald-600">{row.received}</div>
+                              <div className="text-[10px] font-bold text-rose-600">{row.pending}</div>
+                            </div>
+                          </button>
+                          <button
+                            type="button"
+                            className={`${actionTrashButtonClassMobile} shrink-0 self-center`}
+                            aria-label={`Delete client ${row.name}`}
+                            onClick={() => openDeleteClientDialog(row)}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
                       </li>
                     ))}
                   </ul>
@@ -1393,6 +1581,17 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                                 }}
                               >
                                 <ArrowRight size={16} />
+                              </button>
+                              <button
+                                type="button"
+                                className={actionTrashButtonClass}
+                                aria-label={`Delete client ${row.name}`}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  openDeleteClientDialog(row)
+                                }}
+                              >
+                                <Trash2 size={16} />
                               </button>
                             </div>
                           </td>
@@ -1519,6 +1718,46 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
           </div>
         </div>
       ) : null}
+
+      <ConfirmAlert
+        open={pendingDeleteClient !== null}
+        title="Delete this client?"
+        description="This permanently removes the client, every site under them, all site visits, invoices, visit photos on file, and related account credits or debits. This cannot be undone."
+        detail={
+          pendingDeleteClient
+            ? `${pendingDeleteClient.name} • ${pendingDeleteClient.sites} site${pendingDeleteClient.sites === 1 ? '' : 's'}`
+            : undefined
+        }
+        confirmLabel="Delete permanently"
+        cancelLabel="Cancel"
+        confirmBusy={deleteClientBusy}
+        variant="danger"
+        rootClassName="fixed inset-0 z-[80] flex items-center justify-center p-4"
+        onCancel={() => {
+          if (!deleteClientBusy) setPendingDeleteClient(null)
+        }}
+        onConfirm={() => {
+          void handleConfirmDeleteClient()
+        }}
+      />
+
+      <ConfirmAlert
+        open={pendingDeleteSite !== null}
+        title="Delete this site?"
+        description="This permanently removes the site, its visits, invoices tied to those visits, visit photos on file, and related account transactions for this site. This cannot be undone."
+        detail={pendingDeleteSite ? `${pendingDeleteSite.clientName} • ${pendingDeleteSite.name}` : undefined}
+        confirmLabel="Delete site"
+        cancelLabel="Cancel"
+        confirmBusy={deleteSiteBusy}
+        variant="danger"
+        rootClassName="fixed inset-0 z-[80] flex items-center justify-center p-4"
+        onCancel={() => {
+          if (!deleteSiteBusy) setPendingDeleteSite(null)
+        }}
+        onConfirm={() => {
+          void handleConfirmDeleteSite()
+        }}
+      />
 
       {isAddSiteModalOpen && selectedClient ? (
         <div className="fixed inset-0 z-[72] flex items-center justify-center p-3 sm:p-4">

@@ -24,7 +24,7 @@ import { useAuth } from './context/AuthContext'
 import { CollaborationBrandMark } from './CollaborationBrandMark'
 import { LayoutFooter } from './LayoutFooter'
 import { CardPanel } from './dashboardCards'
-import { getHeaderDateLabel } from './headerDateLabel'
+import { HeaderYearSelect } from './components/HeaderYearSelect'
 import { signOut } from './signOut'
 
 type NavItem = {
@@ -109,7 +109,6 @@ export default function AccountManagerSelect({ onNavigate }: AccountManagerSelec
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const location = useLocation()
   const [searchParams] = useSearchParams()
-  const currentDateLabel = getHeaderDateLabel()
   const querySuffix = searchParams.toString() ? `?${searchParams.toString()}` : ''
 
   const handleNavClick = async (label: string) => {
@@ -324,13 +323,7 @@ export default function AccountManagerSelect({ onNavigate }: AccountManagerSelec
                 <h1 className="min-w-0 truncate text-left text-base font-extrabold leading-tight tracking-tight text-white">
                   Account manager
                 </h1>
-                <button
-                  type="button"
-                  className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-white/20 bg-neutral-900 px-2.5 text-[11px] font-semibold text-white transition hover:bg-neutral-800"
-                  aria-label="Current date"
-                >
-                  <span className="whitespace-nowrap">{currentDateLabel}</span>
-                </button>
+                <HeaderYearSelect variant="onDark" compact />
               </div>
             </div>
 
@@ -349,6 +342,7 @@ export default function AccountManagerSelect({ onNavigate }: AccountManagerSelec
                 </div>
               </div>
               <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+                <HeaderYearSelect variant="onLight" />
                 <div className="hidden items-center gap-3 rounded-xl bg-neutral-100 px-3 py-2 ring-1 ring-black/5 sm:flex sm:px-4 sm:py-2.5">
                   <div className="grid h-9 w-9 place-items-center rounded-xl bg-[#f39b03]/15 text-[#f39b03]">
                     <CircleUserRound size={18} />

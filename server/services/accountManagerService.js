@@ -1,42 +1,11 @@
-import mongoose from 'mongoose'
 import AccountManager from '../models/AccountManager.js'
 import Client from '../models/Client.js'
 import SiteVisit from '../models/SiteVisit.js'
 import Site from '../models/Site.js'
-import InstrumentAssignment from '../models/InstrumentAssignment.js'
 import { ApiError } from '../utils/ApiError.js'
-import { optionalAdminIdQuery } from '../utils/scope.js'
+import { instrumentCoworkerAdminIdStrings } from '../utils/instrumentPeers.js'
+import { optionalAdminIdQuery, peerAwareAdminScopeMatch } from '../utils/scope.js'
 import { decAmount, effectivePaidAmount } from '../utils/visitPaymentMath.js'
-
-/** Distinct adminIds that have an active AccountManager row for this instrument (preferred). */
-async function adminIdsOnInstrumentViaAccountManagers(req, instrumentObjectId) {
-  const rows = await AccountManager.find({
-    companyId: req.user.companyId,
-    instrumentId: instrumentObjectId,
-    isActive: true,
-  })
-    .select('adminId')
-    .lean()
-  if (!rows.length) return null
-  return new Set(rows.map((r) => r.adminId.toString()))
-}
-
-/** Admin user ids sharing the active instrument: from AccountManager.instrumentId when present, else InstrumentAssignment. */
-async function instrumentCoworkerAdminIdStrings(req) {
-  const raw = typeof req.get === 'function' ? req.get('x-instrument-id')?.trim() : ''
-  if (!raw || !mongoose.isValidObjectId(raw)) return null
-  const instrumentId = new mongoose.Types.ObjectId(raw)
-  const fromAm = await adminIdsOnInstrumentViaAccountManagers(req, instrumentId)
-  if (fromAm && fromAm.size > 0) return fromAm
-
-  const ids = await InstrumentAssignment.distinct('adminId', {
-    companyId: req.user.companyId,
-    instrumentId,
-    isActive: true,
-    revokedAt: { $exists: false },
-  })
-  return new Set(ids.map((id) => id.toString()))
-}
 
 /**
  * Admins may read their own ledger or another admin's on the same active instrument (header).
@@ -88,7 +57,7 @@ export async function listAccountManagers(req) {
   const q = optionalAdminIdQuery(req)
   const match = { companyId: req.user.companyId, isActive: true, ...q }
   if (req.user.role === 'admin') {
-    match.adminId = req.user.id
+    Object.assign(match, await peerAwareAdminScopeMatch(req))
   }
   const rows = await AccountManager.find(match).sort({ fullName: 1 }).lean()
   return rows.map((r) => ({

@@ -3,7 +3,6 @@ import {
   Bell,
   Briefcase,
   Building2,
-  Calendar,
   CircleUserRound,
   ClipboardList,
   FileBarChart,
@@ -23,10 +22,11 @@ import { CollaborationBrandMark } from './CollaborationBrandMark'
 import { LayoutFooter } from './LayoutFooter'
 import { CardPanel, toolbarSearchInputClass, toolbarSecondaryButtonClass } from './dashboardCards'
 import { layoutBrandLogo } from './brandLogo'
-import { getHeaderDateLabel } from './headerDateLabel'
+import { HeaderYearSelect } from './components/HeaderYearSelect'
 import { toast } from 'sonner'
 import http from './api/http'
 import { useAuth } from './context/AuthContext'
+import { useSelectedYear } from './context/SelectedYearContext'
 import { signOut } from './signOut'
 
 type AddSiteProps = {
@@ -35,6 +35,7 @@ type AddSiteProps = {
 
 export default function AddSite({ onNavigate }: AddSiteProps) {
   const { token } = useAuth()
+  const { selectedYear } = useSelectedYear()
   const location = useLocation()
   const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search])
   const clientFromQuery = searchParams.get('client')
@@ -45,13 +46,14 @@ export default function AddSite({ onNavigate }: AddSiteProps) {
   const [clientSearchQuery, setClientSearchQuery] = useState('')
   const [clientGroupFilter, setClientGroupFilter] = useState<'all' | 'a-m' | 'n-z'>('all')
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
-  const headerDateLabel = getHeaderDateLabel()
 
   useEffect(() => {
     if (!token) return
     ;(async () => {
       try {
-        const res = await http.get<{ ok: boolean; clients: Array<{ id: string; name: string }> }>('/api/clients')
+        const res = await http.get<{ ok: boolean; clients: Array<{ id: string; name: string }> }>('/api/clients', {
+          params: { year: selectedYear },
+        })
         if (!res.data?.ok) return
         const ids: Record<string, string> = {}
         const names = res.data.clients.map((c) => {
@@ -71,7 +73,7 @@ export default function AddSite({ onNavigate }: AddSiteProps) {
         toast.error('Could not load clients')
       }
     })()
-  }, [token, clientFromQuery])
+  }, [token, clientFromQuery, selectedYear])
 
   const filteredClientOptions = useMemo(() => {
     const normalizedQuery = clientSearchQuery.trim().toLowerCase()
@@ -192,14 +194,7 @@ export default function AddSite({ onNavigate }: AddSiteProps) {
                 <h1 className="min-w-0 truncate text-left text-base font-extrabold leading-tight tracking-tight text-white">
                   Add New Site
                 </h1>
-                <button
-                  type="button"
-                  className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-white/20 bg-neutral-900 px-2.5 text-[11px] font-semibold text-white transition hover:bg-neutral-800"
-                  aria-label="Current date"
-                >
-                  <Calendar size={13} className="text-[#f39b03]" />
-                  <span className="whitespace-nowrap">{headerDateLabel}</span>
-                </button>
+                <HeaderYearSelect variant="onDark" compact />
               </div>
             </div>
             <div className="relative hidden w-full items-center justify-between gap-4 border-b border-neutral-200 bg-white px-4 py-2.5 shadow-[0_6px_20px_rgba(16,24,40,0.05)] sm:px-6 md:flex md:px-6 md:py-4 lg:px-8">
@@ -215,14 +210,7 @@ export default function AddSite({ onNavigate }: AddSiteProps) {
                 <div className="truncate text-lg font-extrabold tracking-tight text-neutral-950 sm:text-xl">Add New Site</div>
               </div>
               <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-                <button
-                  type="button"
-                  className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-neutral-900 sm:px-4 sm:py-2.5 sm:text-sm"
-                  aria-label="Current date"
-                >
-                  <Calendar size={16} className="text-[#f39b03]" />
-                  <span className="whitespace-nowrap">{headerDateLabel}</span>
-                </button>
+                <HeaderYearSelect variant="onLight" />
                 <div className="hidden items-center gap-3 rounded-xl bg-neutral-100 px-4 py-2.5 ring-1 ring-black/5 sm:flex">
                   <div className="grid h-9 w-9 place-items-center rounded-xl bg-[#f39b03]/15 text-[#f39b03]"><CircleUserRound size={18} /></div>
                   <div className="min-w-0 text-left">

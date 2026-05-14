@@ -3,6 +3,9 @@ import Client from '../models/Client.js'
 import Site from '../models/Site.js'
 import SiteVisit from '../models/SiteVisit.js'
 import User from '../models/User.js'
+import Transaction from '../models/Transaction.js'
+import Invoice from '../models/Invoice.js'
+import SurveyFile from '../models/SurveyFile.js'
 import { ApiError } from '../utils/ApiError.js'
 import { parseObjectId } from '../utils/instrumentAccess.js'
 import {
@@ -10,15 +13,18 @@ import {
   adminIdFilter,
   optionalAdminIdQuery,
   instrumentScopeMatch,
+  peerAwareAdminScopeMatch,
 } from '../utils/scope.js'
 import { decAmount, effectivePaidAmount } from '../utils/visitPaymentMath.js'
+import { visitDateRangeForYear } from '../utils/yearQuery.js'
 
 function formatInr(n) {
   return `₹${Math.round(n).toLocaleString('en-IN')}`
 }
 
-async function clientFinancials(clientId) {
-  const visits = await SiteVisit.find({ clientId }).select('amount paymentStatus paidAmount').lean()
+async function clientFinancials(clientId, visitDateRange) {
+  const q = { clientId, ...(visitDateRange ? { visitDate: visitDateRange } : {}) }
+  const visits = await SiteVisit.find(q).select('amount paymentStatus paidAmount').lean()
   let revenue = 0
   let received = 0
   for (const v of visits) {
@@ -33,17 +39,18 @@ async function clientFinancials(clientId) {
 export async function listClients(req) {
   const { allowedInstrumentIds } = await resolveInstrumentScope(req)
   const adminQ = optionalAdminIdQuery(req)
+  const visitYearRange = visitDateRangeForYear(req.query?.year)
   const match = {
     companyId: req.user.companyId,
     ...instrumentScopeMatch(allowedInstrumentIds),
-    ...adminIdFilter(req),
+    ...(await peerAwareAdminScopeMatch(req)),
     ...adminQ,
   }
   const clients = await Client.find(match).sort({ updatedAt: -1 }).lean()
   const out = []
   for (const c of clients) {
     const sites = await Site.countDocuments({ clientId: c._id })
-    const { revenue, received, pending } = await clientFinancials(c._id)
+    const { revenue, received, pending } = await clientFinancials(c._id, visitYearRange)
     out.push({
       id: c._id.toString(),
       name: c.name,
@@ -135,8 +142,61 @@ export async function getClientById(req, id) {
     _id: id,
     companyId: req.user.companyId,
     ...instrumentScopeMatch(allowedInstrumentIds),
-    ...adminIdFilter(req),
+    ...(await peerAwareAdminScopeMatch(req)),
   }).lean()
   if (!client) throw new ApiError(404, 'Client not found')
   return client
+}
+
+/**
+ * Permanently removes the client, all of its sites, visits, invoices, linked files,
+ * and account-manager transactions that reference those records.
+ */
+export async function deleteClientWithSites(req, clientId) {
+  const { allowedInstrumentIds } = await resolveInstrumentScope(req)
+  const adminQ = optionalAdminIdQuery(req)
+  const client = await Client.findOne({
+    _id: clientId,
+    companyId: req.user.companyId,
+    ...instrumentScopeMatch(allowedInstrumentIds),
+    ...adminIdFilter(req),
+    ...adminQ,
+  }).select('_id')
+  if (!client) throw new ApiError(404, 'Client not found')
+
+  const sites = await Site.find({ clientId: client._id, companyId: req.user.companyId }).select('_id').lean()
+  const siteIds = sites.map((s) => s._id)
+
+  const visits = await SiteVisit.find({ clientId: client._id, companyId: req.user.companyId })
+    .select('_id photoFileIds')
+    .lean()
+  const visitIds = visits.map((v) => v._id)
+
+  const invoices = await Invoice.find({ clientId: client._id, companyId: req.user.companyId }).select('pdfFileId').lean()
+
+  const fileIdSet = new Set()
+  for (const v of visits) {
+    for (const fid of v.photoFileIds ?? []) {
+      if (fid) fileIdSet.add(fid.toString())
+    }
+  }
+  for (const inv of invoices) {
+    if (inv.pdfFileId) fileIdSet.add(inv.pdfFileId.toString())
+  }
+  const fileObjectIds = [...fileIdSet].map((id) => new mongoose.Types.ObjectId(id))
+
+  const txOr = [{ clientId: client._id }]
+  if (siteIds.length) txOr.push({ siteId: { $in: siteIds } })
+  if (visitIds.length) txOr.push({ siteVisitId: { $in: visitIds } })
+
+  await Transaction.deleteMany({ companyId: req.user.companyId, $or: txOr })
+  await Invoice.deleteMany({ companyId: req.user.companyId, clientId: client._id })
+  await SiteVisit.deleteMany({ clientId: client._id, companyId: req.user.companyId })
+  if (fileObjectIds.length) {
+    await SurveyFile.deleteMany({ companyId: req.user.companyId, _id: { $in: fileObjectIds } })
+  }
+  const deletedSites = await Site.deleteMany({ clientId: client._id, companyId: req.user.companyId })
+  await Client.deleteOne({ _id: client._id, companyId: req.user.companyId })
+
+  return { sitesDeleted: deletedSites.deletedCount }
 }

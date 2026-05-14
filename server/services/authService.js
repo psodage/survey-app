@@ -1,3 +1,4 @@
+import crypto from 'node:crypto'
 import bcrypt from 'bcryptjs'
 import User from '../models/User.js'
 import Company from '../models/Company.js'
@@ -7,6 +8,29 @@ import { ApiError } from '../utils/ApiError.js'
 import mongoose from 'mongoose'
 import { signAccessToken } from '../utils/token.js'
 import { getAllowedInstrumentObjectIds } from '../utils/instrumentAccess.js'
+import { isBrevoConfigured, sendPasswordResetOtpEmail } from './mailService.js'
+
+const OTP_TTL_MS = 10 * 60 * 1000
+const RESEND_COOLDOWN_MS = 60 * 1000
+const FORGOT_PASSWORD_RESPONSE = {
+  ok: true,
+  message: 'If an account is registered for this email, you will receive a password reset code shortly.',
+}
+
+function generateSixDigitOtp() {
+  return String(Math.floor(Math.random() * 1_000_000)).padStart(6, '0')
+}
+
+function otpMatches(stored, given) {
+  const a = String(stored ?? '')
+  const b = String(given ?? '').trim()
+  if (a.length !== 6 || b.length !== 6) return false
+  try {
+    return crypto.timingSafeEqual(Buffer.from(a, 'utf8'), Buffer.from(b, 'utf8'))
+  } catch {
+    return false
+  }
+}
 
 function serializeUser(user) {
   return {
@@ -218,4 +242,95 @@ export async function assignInstruments(user, adminId, instrumentIds) {
     )
   }
   return { ok: true }
+}
+
+export async function forgotPassword({ email }) {
+  const normalized = email.trim().toLowerCase()
+  const matches = await User.find({ email: normalized })
+  if (matches.length !== 1) {
+    return FORGOT_PASSWORD_RESPONSE
+  }
+  const user = matches[0]
+  if (!user.isActive) {
+    return FORGOT_PASSWORD_RESPONSE
+  }
+  if (user.resetOtpSentAt && Date.now() - new Date(user.resetOtpSentAt).getTime() < RESEND_COOLDOWN_MS) {
+    return FORGOT_PASSWORD_RESPONSE
+  }
+  if (!isBrevoConfigured()) {
+    console.error('[forgot-password] Brevo SMTP env is not fully configured; OTP email was not sent.')
+    return FORGOT_PASSWORD_RESPONSE
+  }
+  const otp = generateSixDigitOtp()
+  try {
+    await sendPasswordResetOtpEmail({ to: normalized, otp })
+  } catch (err) {
+    console.error('[forgot-password] Failed to send email:', err)
+    return FORGOT_PASSWORD_RESPONSE
+  }
+  user.resetOtp = otp
+  user.resetOtpExpiry = new Date(Date.now() + OTP_TTL_MS)
+  user.resetOtpVerified = false
+  user.resetOtpSentAt = new Date()
+  await user.save()
+  return FORGOT_PASSWORD_RESPONSE
+}
+
+export async function verifyResetOtp({ email, otp }) {
+  const normalized = email.trim().toLowerCase()
+  const matches = await User.find({ email: normalized }).select('+resetOtp')
+  if (matches.length > 1) {
+    throw new ApiError(400, 'Multiple accounts share this email. Contact support.')
+  }
+  if (matches.length === 0) {
+    throw new ApiError(400, 'Invalid or expired code.')
+  }
+  const user = matches[0]
+  if (!user.isActive) {
+    throw new ApiError(400, 'Invalid or expired code.')
+  }
+  if (!user.resetOtp || !user.resetOtpExpiry) {
+    throw new ApiError(400, 'Invalid or expired code.')
+  }
+  if (Date.now() > user.resetOtpExpiry.getTime()) {
+    throw new ApiError(400, 'Invalid or expired code.')
+  }
+  if (!otpMatches(user.resetOtp, otp)) {
+    throw new ApiError(400, 'Invalid or expired code.')
+  }
+  await User.updateOne({ _id: user._id }, { $set: { resetOtpVerified: true }, $unset: { resetOtp: '' } })
+  return { ok: true, message: 'Code verified. You can set a new password.' }
+}
+
+export async function resetPasswordWithOtp({ email, newPassword, confirmPassword }) {
+  if (newPassword !== confirmPassword) {
+    throw new ApiError(400, 'Passwords do not match')
+  }
+  const normalized = email.trim().toLowerCase()
+  const matches = await User.find({ email: normalized }).select('+passwordHash')
+  if (matches.length > 1) {
+    throw new ApiError(400, 'Multiple accounts share this email. Contact support.')
+  }
+  if (matches.length === 0) {
+    throw new ApiError(400, 'Reset session is invalid or has expired. Request a new code.')
+  }
+  const user = matches[0]
+  if (!user.isActive) {
+    throw new ApiError(400, 'Reset session is invalid or has expired. Request a new code.')
+  }
+  if (!user.resetOtpVerified) {
+    throw new ApiError(400, 'Please verify your email with the OTP first.')
+  }
+  if (!user.resetOtpExpiry || Date.now() > user.resetOtpExpiry.getTime()) {
+    throw new ApiError(400, 'Reset session has expired. Request a new code.')
+  }
+  const passwordHash = await bcrypt.hash(newPassword, 12)
+  await User.updateOne(
+    { _id: user._id },
+    {
+      $set: { passwordHash, resetOtpVerified: false },
+      $unset: { resetOtp: '', resetOtpExpiry: '', resetOtpSentAt: '' },
+    },
+  )
+  return { ok: true, message: 'Password updated. You can sign in with your new password.' }
 }

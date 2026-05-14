@@ -12,7 +12,7 @@ import {
   Zap,
 } from 'lucide-react'
 import { useState } from 'react'
-import { Navigate, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { useAuth } from './context/AuthContext'
 import { layoutBrandLogo } from './brandLogo'
@@ -219,9 +219,9 @@ function Login() {
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <label className="text-[15px] font-medium text-white/95">Password</label>
-                  <a href="#" className="text-[14px] font-medium text-[#f39b03] transition hover:text-[#f7b13a]">
+                  <Link to="/forgot-password" className="text-[14px] font-medium text-[#f39b03] transition hover:text-[#f7b13a]">
                     Forgot Password?
-                  </a>
+                  </Link>
                 </div>
                 <InputField
                   label=""

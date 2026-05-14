@@ -3,7 +3,7 @@ import multer from 'multer'
 import { authenticate } from '../middleware/auth.js'
 import { requireRole } from '../middleware/requireRole.js'
 import { validateBody, validateQuery } from '../middleware/validate.js'
-import { authLimiter, apiLimiter } from '../middleware/rateLimit.js'
+import { authLimiter, apiLimiter, forgotPasswordLimiter, verifyResetOtpLimiter } from '../middleware/rateLimit.js'
 import { catchAsync } from '../utils/catchAsync.js'
 import { z } from 'zod'
 import * as authService from '../services/authService.js'
@@ -21,6 +21,9 @@ import * as uploadService from '../services/uploadService.js'
 import { parseObjectId } from '../utils/instrumentAccess.js'
 import {
   loginSchema,
+  forgotPasswordSchema,
+  verifyResetOtpSchema,
+  resetPasswordSchema,
   changePasswordSchema,
   createClientSchema,
   createSiteSchema,
@@ -46,6 +49,31 @@ router.get('/health', (_req, res) => {
 router.post('/auth/login', authLimiter, validateBody(loginSchema), catchAsync(async (req, res) => {
   const data = await authService.login(req.body)
   res.json({ ok: true, ...data })
+}))
+
+router.post(
+  '/auth/forgot-password',
+  forgotPasswordLimiter,
+  validateBody(forgotPasswordSchema),
+  catchAsync(async (req, res) => {
+    const data = await authService.forgotPassword(req.body)
+    res.json(data)
+  }),
+)
+
+router.post(
+  '/auth/verify-reset-otp',
+  verifyResetOtpLimiter,
+  validateBody(verifyResetOtpSchema),
+  catchAsync(async (req, res) => {
+    const data = await authService.verifyResetOtp(req.body)
+    res.json(data)
+  }),
+)
+
+router.post('/auth/reset-password', authLimiter, validateBody(resetPasswordSchema), catchAsync(async (req, res) => {
+  const data = await authService.resetPasswordWithOtp(req.body)
+  res.json(data)
 }))
 
 router.get('/auth/me', authenticate, catchAsync(async (req, res) => {
@@ -77,6 +105,12 @@ router.get('/clients/:id/sites', catchAsync(async (req, res) => {
   res.json({ ok: true, sites: data })
 }))
 
+router.delete('/clients/:id', catchAsync(async (req, res) => {
+  const id = parseObjectId(req.params.id, 'client id')
+  const data = await clientService.deleteClientWithSites(req, id)
+  res.json({ ok: true, ...data })
+}))
+
 router.post('/sites', validateBody(createSiteSchema), catchAsync(async (req, res) => {
   const clientId = parseObjectId(req.body.clientId, 'clientId')
   const data = await siteService.createSite(req, { ...req.body, clientId })
@@ -86,6 +120,12 @@ router.post('/sites', validateBody(createSiteSchema), catchAsync(async (req, res
 router.get('/sites', catchAsync(async (req, res) => {
   const data = await siteService.listAllSites(req)
   res.json({ ok: true, sites: data })
+}))
+
+router.delete('/sites/:id', catchAsync(async (req, res) => {
+  const id = parseObjectId(req.params.id, 'site id')
+  await siteService.deleteSiteWithRelated(req, id)
+  res.json({ ok: true })
 }))
 
 router.get('/visits', catchAsync(async (req, res) => {
@@ -102,6 +142,12 @@ router.get('/visits/:id', catchAsync(async (req, res) => {
   const id = parseObjectId(req.params.id, 'visit id')
   const data = await visitService.getVisitById(req, id)
   res.json({ ok: true, visit: data })
+}))
+
+router.delete('/visits/:id', catchAsync(async (req, res) => {
+  const id = parseObjectId(req.params.id, 'visit id')
+  await visitService.deleteVisit(req, id)
+  res.json({ ok: true })
 }))
 
 router.post(
@@ -212,6 +258,25 @@ router.patch('/settings/me', catchAsync(async (req, res) => {
   await settingsService.updateUserSettings(req, req.body)
   res.json({ ok: true })
 }))
+
+router.get('/settings/invoice-bank-columns', catchAsync(async (req, res) => {
+  const bankColumns = await settingsService.getInvoiceBankColumns(req)
+  res.json({ ok: true, bankColumns })
+}))
+
+router.get('/settings/invoice-company-header', catchAsync(async (req, res) => {
+  const companyHeader = await settingsService.getInvoiceCompanyHeader(req)
+  res.json({ ok: true, companyHeader })
+}))
+
+router.post(
+  '/settings/me/bank-signature',
+  upload.single('file'),
+  catchAsync(async (req, res) => {
+    const data = await settingsService.attachUserBankSignature(req, req.file)
+    res.json({ ok: true, ...data })
+  }),
+)
 
 router.post('/auth/change-password', validateBody(changePasswordSchema), catchAsync(async (req, res) => {
   await authService.changePassword(req.user.id, req.body)

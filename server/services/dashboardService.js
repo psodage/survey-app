@@ -1,7 +1,8 @@
 import Client from '../models/Client.js'
 import Site from '../models/Site.js'
 import SiteVisit from '../models/SiteVisit.js'
-import { resolveInstrumentScope, adminIdFilter, instrumentScopeMatch } from '../utils/scope.js'
+import { resolveInstrumentScope, instrumentScopeMatch, peerAwareAdminScopeMatch } from '../utils/scope.js'
+import { visitDateRangeForYear } from '../utils/yearQuery.js'
 import { decAmount, effectivePaidAmount } from '../utils/visitPaymentMath.js'
 
 function formatInr(n) {
@@ -15,13 +16,14 @@ function paymentLabel(s) {
 
 export async function getDashboard(req) {
   const { allowedInstrumentIds } = await resolveInstrumentScope(req)
+  const visitYearRange = visitDateRangeForYear(req.query?.year)
   const base = {
     companyId: req.user.companyId,
     ...instrumentScopeMatch(allowedInstrumentIds),
-    ...adminIdFilter(req),
+    ...(await peerAwareAdminScopeMatch(req)),
   }
 
-  const visitMatch = { ...base }
+  const visitMatch = { ...base, ...(visitYearRange ? { visitDate: visitYearRange } : {}) }
   const visits = await SiteVisit.find(visitMatch).sort({ visitDate: -1 }).limit(10).populate('clientId', 'name').populate('siteId', 'name').lean()
 
   const recentVisits = visits.map((v) => ({

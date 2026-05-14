@@ -23,7 +23,7 @@ import { LayoutFooter } from './LayoutFooter'
 import { CardShell } from './dashboardCards'
 import { exportInvoicePdf } from './exportInvoicePdf'
 import { layoutBrandLogo } from './brandLogo'
-import { getHeaderDateLabel } from './headerDateLabel'
+import { HeaderYearSelect } from './components/HeaderYearSelect'
 import { signOut } from './signOut'
 
 type NavItem = {
@@ -52,7 +52,6 @@ function FieldLabel({ label }: { label: string }) {
 export default function Invoice({ onNavigate }: InvoiceProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const { pathname } = useLocation()
-  const headerDateLabel = getHeaderDateLabel()
   const [formValues, setFormValues] = useState({
     client: 'RN Construction',
     site: 'Kolhapur Cancer Centre, Kolhapur',
@@ -306,14 +305,7 @@ export default function Invoice({ onNavigate }: InvoiceProps) {
                 <h1 className="min-w-0 truncate text-left text-base font-extrabold leading-tight tracking-tight text-white">
                   Invoice
                 </h1>
-                <button
-                  type="button"
-                  className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-white/20 bg-neutral-900 px-2.5 text-[11px] font-semibold text-white transition hover:bg-neutral-800"
-                  aria-label="Current date"
-                >
-                  <Calendar size={13} className="text-[#f39b03]" />
-                  <span className="whitespace-nowrap">{headerDateLabel}</span>
-                </button>
+                <HeaderYearSelect variant="onDark" compact />
               </div>
             </div>
 
@@ -332,14 +324,7 @@ export default function Invoice({ onNavigate }: InvoiceProps) {
                 </div>
               </div>
               <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-                <button
-                  type="button"
-                  className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-neutral-900 sm:px-4 sm:py-2.5 sm:text-sm"
-                  aria-label="Current date"
-                >
-                  <Calendar size={16} className="text-[#f39b03]" />
-                  <span className="whitespace-nowrap">{headerDateLabel}</span>
-                </button>
+                <HeaderYearSelect variant="onLight" />
                 <div className="hidden items-center gap-3 rounded-xl bg-neutral-100 px-3 py-2 ring-1 ring-black/5 sm:flex sm:px-4 sm:py-2.5">
                   <div className="grid h-9 w-9 place-items-center rounded-xl bg-[#f39b03]/15 text-[#f39b03]">
                     <CircleUserRound size={18} />

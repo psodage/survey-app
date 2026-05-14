@@ -3,10 +3,11 @@ import Transaction from '../models/Transaction.js'
 import AccountManager from '../models/AccountManager.js'
 import Client from '../models/Client.js'
 import Site from '../models/Site.js'
+import SiteVisit from '../models/SiteVisit.js'
 import { ApiError } from '../utils/ApiError.js'
-import { resolveInstrumentScope, optionalAdminIdQuery, instrumentScopeMatch } from '../utils/scope.js'
+import { resolveInstrumentScope, optionalAdminIdQuery, instrumentScopeMatch, peerAwareAdminScopeMatch } from '../utils/scope.js'
 import * as accountManagerService from './accountManagerService.js'
-import { applyCreditToSiteVisits } from './visitCreditAllocation.js'
+import { applyCreditToSiteVisits, recomputeVisitCreditsForSite } from './visitCreditAllocation.js'
 
 function decNum(v) {
   return parseFloat((v ?? 0).toString()) || 0
@@ -58,6 +59,8 @@ export async function createTransaction(req, accountManagerId, body) {
 
   let clientId
   let siteId
+  /** When crediting a site, visits are keyed by the site's instrument — not only the active header instrument. */
+  let siteInstrumentId
   if (body.clientName) {
     const c = await Client.findOne({
       companyId: req.user.companyId,
@@ -68,10 +71,41 @@ export async function createTransaction(req, accountManagerId, body) {
   }
   if (body.siteName && clientId) {
     const s = await Site.findOne({ clientId, name: new RegExp(`^${escape(body.siteName.trim())}$`, 'i') })
-    if (s) siteId = s._id
+      .select('_id instrumentId')
+      .lean()
+    if (s) {
+      siteId = s._id
+      siteInstrumentId = s.instrumentId
+    }
   }
 
-  const instrumentId = effectiveInstrumentId ?? allowedInstrumentIds[0]
+  let siteVisitObjectId
+  const rawVisitId = typeof body.siteVisitId === 'string' ? body.siteVisitId.trim() : ''
+  if (rawVisitId && mongoose.isValidObjectId(rawVisitId)) {
+    const v = await SiteVisit.findOne({
+      _id: rawVisitId,
+      companyId: req.user.companyId,
+      ...instrumentScopeMatch(allowedInstrumentIds),
+      ...(await peerAwareAdminScopeMatch(req)),
+    })
+      .select('_id siteId clientId instrumentId')
+      .lean()
+    if (!v) throw new ApiError(404, 'Site visit not found')
+    if (siteId != null && !v.siteId.equals(siteId)) {
+      throw new ApiError(400, 'siteVisitId does not match the selected site')
+    }
+    if (!siteId) {
+      siteId = v.siteId
+      siteInstrumentId = v.instrumentId
+    }
+    if (!clientId && v.clientId) {
+      clientId = v.clientId
+    }
+    siteVisitObjectId = v._id
+  }
+
+  const instrumentId = siteInstrumentId ?? effectiveInstrumentId ?? allowedInstrumentIds[0]
+
   const txPayload = {
     companyId: req.user.companyId,
     adminId: am.adminId,
@@ -83,6 +117,7 @@ export async function createTransaction(req, accountManagerId, body) {
     reason: body.reason?.trim(),
     clientId,
     siteId,
+    ...(siteVisitObjectId ? { siteVisitId: siteVisitObjectId } : {}),
   }
 
   const creditAmount = Number(body.amount) || 0
@@ -144,5 +179,16 @@ export async function deleteTransaction(req, txId) {
     ...(req.user.role === 'admin' ? { adminId: req.user.id } : {}),
   })
   if (!t) throw new ApiError(404, 'Transaction not found')
+
+  const shouldRecompute = t.type === 'credit' && t.siteId != null && t.instrumentId != null
+  if (shouldRecompute) {
+    await recomputeVisitCreditsForSite(null, {
+      companyId: t.companyId,
+      adminId: t.adminId,
+      siteId: t.siteId,
+      instrumentId: t.instrumentId,
+    })
+  }
+
   return { ok: true }
 }

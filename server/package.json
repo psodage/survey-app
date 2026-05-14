@@ -6,6 +6,8 @@
     "dev": "node --watch server.js",
     "start": "node server.js",
     "seed": "node seed/seed.js",
+    "seed-admin-bank": "node seed/seedAdminBankDetails.js",
+    "seed-company-invoice": "node seed/seedCompanyInvoiceBranding.js",
     "add-temp-user": "node seed/addTempUser.js",
     "add-team-admins": "node seed/addTeamAdmins.js"
   },
@@ -20,6 +22,7 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.8.0",
     "multer": "^1.4.5-lts.1",
+    "nodemailer": "^8.0.7",
     "zod": "^3.23.8"
   }
 }

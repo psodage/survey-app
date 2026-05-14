@@ -1,10 +1,26 @@
 import Company from '../models/Company.js'
 import User from '../models/User.js'
 import SurveyFile from '../models/SurveyFile.js'
+import mongoose from 'mongoose'
 import Client from '../models/Client.js'
 import Site from '../models/Site.js'
 import * as uploadService from './uploadService.js'
 import { ApiError } from '../utils/ApiError.js'
+
+function bankLinesFromDetails(bd) {
+  if (!bd?.accountName?.trim()) return null
+  const ifsc = (bd.ifscCode ?? '').trim()
+  const bankNm = (bd.bankName ?? '').trim()
+  const ifscLine = bankNm ? `${ifsc} (${bankNm})` : ifsc
+  return [
+    `ACCOUNT NAME - ${bd.accountName.trim()}`,
+    `ACCOUNT NO.- ${(bd.accountNumber ?? '').trim()}`,
+    `IFSC CODE - ${ifscLine}`,
+    `BRANCH- ${(bd.branch ?? '').trim()}`,
+    '',
+    `Google Pay/ Phonepe no.- ${(bd.upiPhone ?? '').trim()}`,
+  ]
+}
 
 export async function getCompanySettings(req) {
   const company = await Company.findById(req.user.companyId)
@@ -84,12 +100,18 @@ export async function updateCompanySettings(req, body) {
 }
 
 export async function getUserSettings(req) {
-  const user = await User.findById(req.user.id).select('profile preferences email').lean()
+  const user = await User.findById(req.user.id)
+    .select('profile preferences email bankDetails bankSignatureFileId')
+    .populate({ path: 'bankSignatureFileId', select: 'url' })
+    .lean()
   if (!user) throw new ApiError(404, 'User not found')
+  const bankSig = user.bankSignatureFileId
   return {
     email: user.email,
     profile: user.profile,
     preferences: user.preferences,
+    bankDetails: user.bankDetails ?? {},
+    bankSignatureUrl: bankSig && typeof bankSig === 'object' ? bankSig.url ?? null : null,
   }
 }
 
@@ -104,8 +126,83 @@ export async function updateUserSettings(req, body) {
     user.preferences = user.preferences || {}
     Object.assign(user.preferences, body.preferences)
   }
+  if (body.bankDetails && typeof body.bankDetails === 'object') {
+    user.bankDetails = user.bankDetails || {}
+    const b = body.bankDetails
+    for (const k of ['accountName', 'accountNumber', 'ifscCode', 'bankName', 'branch', 'upiPhone']) {
+      if (b[k] !== undefined) user.bankDetails[k] = typeof b[k] === 'string' ? b[k].trim() : b[k]
+    }
+    if ('invoiceSlot' in b) {
+      if (b.invoiceSlot === 1 || b.invoiceSlot === 2) user.bankDetails.invoiceSlot = b.invoiceSlot
+      else user.bankDetails.invoiceSlot = undefined
+    }
+    user.markModified('bankDetails')
+  }
   await user.save()
   return { ok: true }
+}
+
+/** Company letterhead text for PDF invoices (logo is always bundled `src/assets/logo.jpeg`). */
+export async function getInvoiceCompanyHeader(req) {
+  const company = await Company.findById(req.user.companyId).lean()
+  if (!company) throw new ApiError(404, 'Company not found')
+  return {
+    companyName: company.name ?? '',
+    email: company.email ?? '',
+    officeAddress: company.officeAddress ?? '',
+    gstNumber: (company.gstNumber ?? '').trim(),
+    contactPhone: company.contactPhone ?? '',
+  }
+}
+
+/** Dual-column bank panel for PDF invoices (left/right slots on user records). */
+export async function getInvoiceBankColumns(req) {
+  const companyId = req.user.companyId
+  const [leftUser, rightUser] = await Promise.all([
+    User.findOne({ companyId, 'bankDetails.invoiceSlot': 1 })
+      .populate('bankSignatureFileId', 'url')
+      .lean(),
+    User.findOne({ companyId, 'bankDetails.invoiceSlot': 2 })
+      .populate('bankSignatureFileId', 'url')
+      .lean(),
+  ])
+  const leftLines = bankLinesFromDetails(leftUser?.bankDetails) ?? []
+  const rightLines = bankLinesFromDetails(rightUser?.bankDetails) ?? []
+  const leftSigUrl =
+    leftUser?.bankSignatureFileId && typeof leftUser.bankSignatureFileId === 'object'
+      ? leftUser.bankSignatureFileId.url ?? null
+      : null
+  const rightSigUrl =
+    rightUser?.bankSignatureFileId && typeof rightUser.bankSignatureFileId === 'object'
+      ? rightUser.bankSignatureFileId.url ?? null
+      : null
+  return {
+    left: { lines: leftLines, signatureUrl: leftSigUrl },
+    right: { lines: rightLines, signatureUrl: rightSigUrl },
+  }
+}
+
+export async function attachUserBankSignature(req, file) {
+  if (!file?.buffer) throw new ApiError(400, 'File is required')
+  const uid = new mongoose.Types.ObjectId(req.user.id)
+  const folder = `survey-app/user/${uid.toString()}/bank-signature`
+  const up = await uploadService.uploadBufferToCloudinary({
+    buffer: file.buffer,
+    mimeType: file.mimetype,
+    folder,
+  })
+  const reg = await uploadService.registerSurveyFile(req, {
+    url: up.url,
+    publicId: up.publicId,
+    mimeType: file.mimetype,
+    sizeBytes: up.bytes ?? file.size,
+    linked: { entityType: 'user_bank_signature', entityId: uid },
+  })
+  const user = await User.findById(req.user.id)
+  if (!user) throw new ApiError(404, 'User not found')
+  user.bankSignatureFileId = reg.id
+  await user.save()
+  return { ok: true, url: up.url, fileId: reg.id }
 }
 
 export async function recordBackup(req) {
