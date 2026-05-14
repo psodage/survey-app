@@ -4,10 +4,15 @@ import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import axios from 'axios'
 import http from './api/http'
+import {
+  RESET_EMAIL_KEY,
+  RESET_STEP_AWAIT_OTP,
+  RESET_STEP_KEY,
+  RESET_STEP_SET_PASSWORD,
+  clearAuthResetFlow,
+} from './authResetFlow'
 import { AuthShell } from './components/AuthShell'
 import { useAuth } from './context/AuthContext'
-
-const RESET_EMAIL_KEY = 'survey_reset_email'
 
 export default function VerifyOtp() {
   const navigate = useNavigate()
@@ -20,10 +25,12 @@ export default function VerifyOtp() {
   useEffect(() => {
     const fromState = location.state?.email
     const stored = sessionStorage.getItem(RESET_EMAIL_KEY)
+    const step = sessionStorage.getItem(RESET_STEP_KEY)
     const resolved = (typeof fromState === 'string' ? fromState : '') || stored || ''
     setEmail(resolved)
-    if (!resolved) {
-      toast.error('Start from the forgot password page.')
+    if (!resolved || step !== RESET_STEP_AWAIT_OTP) {
+      toast.error('Start from the forgot password page and send a code first.')
+      clearAuthResetFlow()
       navigate('/forgot-password', { replace: true })
     }
   }, [location.state, navigate])
@@ -41,6 +48,7 @@ export default function VerifyOtp() {
     setIsSubmitting(true)
     try {
       await http.post('/api/auth/verify-reset-otp', { email: email.trim().toLowerCase(), otp: otp.trim() })
+      sessionStorage.setItem(RESET_STEP_KEY, RESET_STEP_SET_PASSWORD)
       toast.success('Code verified. Set your new password.')
       navigate('/reset-password', { replace: true, state: { email: email.trim().toLowerCase() } })
     } catch (err) {

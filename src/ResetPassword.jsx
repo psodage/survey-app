@@ -4,10 +4,14 @@ import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import axios from 'axios'
 import http from './api/http'
+import {
+  RESET_EMAIL_KEY,
+  RESET_STEP_KEY,
+  RESET_STEP_SET_PASSWORD,
+  clearAuthResetFlow,
+} from './authResetFlow'
 import { AuthShell } from './components/AuthShell'
 import { useAuth } from './context/AuthContext'
-
-const RESET_EMAIL_KEY = 'survey_reset_email'
 
 export default function ResetPassword() {
   const navigate = useNavigate()
@@ -23,10 +27,12 @@ export default function ResetPassword() {
   useEffect(() => {
     const fromState = location.state?.email
     const stored = sessionStorage.getItem(RESET_EMAIL_KEY)
+    const step = sessionStorage.getItem(RESET_STEP_KEY)
     const resolved = (typeof fromState === 'string' ? fromState : '') || stored || ''
     setEmail(resolved)
-    if (!resolved) {
+    if (!resolved || step !== RESET_STEP_SET_PASSWORD) {
       toast.error('Verify your code first.')
+      clearAuthResetFlow()
       navigate('/forgot-password', { replace: true })
     }
   }, [location.state, navigate])
@@ -49,7 +55,7 @@ export default function ResetPassword() {
         newPassword: password,
         confirmPassword: confirm,
       })
-      sessionStorage.removeItem(RESET_EMAIL_KEY)
+      clearAuthResetFlow()
       toast.success('Password updated. Sign in with your new password.')
       navigate('/login', { replace: true })
     } catch (err) {

@@ -4,19 +4,27 @@ import { env } from '../config/env.js'
 let transporter = null
 
 export function isBrevoConfigured() {
-  return Boolean(env.brevoSmtpHost && env.brevoSmtpUser && env.brevoSmtpPass && env.brevoFromEmail)
+  return Boolean(
+    env.brevoSmtpHost?.trim() &&
+      env.brevoSmtpUser?.trim() &&
+      env.brevoSmtpPass?.trim() &&
+      env.brevoFromEmail?.trim(),
+  )
 }
 
 function getTransporter() {
   if (!isBrevoConfigured()) return null
   if (!transporter) {
+    const port = env.brevoSmtpPort
+    const useSsl = port === 465
     transporter = nodemailer.createTransport({
-      host: env.brevoSmtpHost,
-      port: env.brevoSmtpPort,
-      secure: env.brevoSmtpPort === 465,
+      host: env.brevoSmtpHost.trim(),
+      port,
+      secure: useSsl,
+      requireTLS: !useSsl,
       auth: {
-        user: env.brevoSmtpUser,
-        pass: env.brevoSmtpPass,
+        user: env.brevoSmtpUser.trim(),
+        pass: env.brevoSmtpPass.trim(),
       },
     })
   }
@@ -64,7 +72,7 @@ export async function sendPasswordResetOtpEmail({ to, otp }) {
     throw new Error('Brevo SMTP is not configured')
   }
   await transport.sendMail({
-    from: `"Samarth SurveyOS" <${env.brevoFromEmail}>`,
+    from: `"Samarth SurveyOS" <${env.brevoFromEmail.trim()}>`,
     to,
     subject: 'Password Reset OTP - Samarth SurveyOS',
     text: `Your password reset OTP is ${otp}. It is valid for 10 minutes. Do not share this OTP with anyone.`,

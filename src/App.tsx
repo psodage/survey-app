@@ -1,5 +1,13 @@
-import { type ReactNode, useEffect, useState } from 'react'
-import { Navigate, Route, Routes, useLocation, useNavigate, type NavigateFunction } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import {
+  Navigate,
+  Outlet,
+  Route,
+  Routes,
+  useLocation,
+  useNavigate,
+  type NavigateFunction,
+} from 'react-router-dom'
 import AccountManager from './AccountManager'
 import AccountManagerSelect from './AccountManagerSelect'
 import { DEFAULT_ACCOUNT_MANAGER_ID } from './accountManagersData'
@@ -18,15 +26,42 @@ import VerifyOtp from './VerifyOtp.jsx'
 import ResetPassword from './ResetPassword.jsx'
 import { useAuth } from './context/AuthContext'
 
-function ProtectedRoute({ children }: { children: ReactNode }) {
+function AuthLoading() {
+  return <div className="min-h-[100svh] bg-neutral-100 md:bg-neutral-100" aria-busy="true" />
+}
+
+const PUBLIC_PATHS = new Set(['/login', '/forgot-password', '/verify-reset-otp', '/reset-password'])
+
+/** Require a session for app routes; allow login + full password-reset flow without a session. */
+function AuthBoundary() {
+  const { token, isLoading } = useAuth()
+  const location = useLocation()
+  if (isLoading) {
+    return <AuthLoading />
+  }
+  if (!token && !PUBLIC_PATHS.has(location.pathname)) {
+    return <Navigate to="/login" replace state={{ from: location.pathname }} />
+  }
+  if (token && PUBLIC_PATHS.has(location.pathname) && location.pathname !== '/login') {
+    return <Navigate to="/dashboard" replace />
+  }
+  return <Outlet />
+}
+
+function HomeRedirect() {
   const { token, isLoading } = useAuth()
   if (isLoading) {
-    return <div className="min-h-[100svh] bg-neutral-100 md:bg-neutral-100" aria-busy="true" />
+    return <AuthLoading />
   }
-  if (!token) {
-    return <Navigate to="/login" replace />
+  return <Navigate to={token ? '/dashboard' : '/login'} replace />
+}
+
+function CatchAllRedirect() {
+  const { token, isLoading } = useAuth()
+  if (isLoading) {
+    return <AuthLoading />
   }
-  return <>{children}</>
+  return <Navigate to={token ? '/dashboard' : '/login'} replace />
 }
 
 /** Mobile: pick a manager. Desktop (md+): same URL redirects to default manager ledger. */
@@ -59,101 +94,26 @@ function AppRoutes() {
   const navigate = useNavigate()
 
   return (
-    <Routes location={location} key={location.pathname}>
-      <Route path="/" element={<Navigate to="/login" replace />} />
-      <Route path="/login" element={<Login />} />
-      <Route path="/forgot-password" element={<ForgotPassword />} />
-      <Route path="/verify-reset-otp" element={<VerifyOtp />} />
-      <Route path="/reset-password" element={<ResetPassword />} />
-      <Route
-        path="/dashboard"
-        element={
-          <ProtectedRoute>
-            <Dashboard onNavigate={navigate} />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/invoice"
-        element={
-          <ProtectedRoute>
-            <Invoice onNavigate={navigate} />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/account-manager"
-        element={
-          <ProtectedRoute>
-            <AccountManagerIndex onNavigate={navigate} />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/account-manager/:managerId"
-        element={
-          <ProtectedRoute>
-            <AccountManager onNavigate={navigate} />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/clients-sites"
-        element={
-          <ProtectedRoute>
-            <ClientsSites onNavigate={navigate} />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/add-site"
-        element={
-          <ProtectedRoute>
-            <AddSite onNavigate={navigate} />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/site-visits"
-        element={
-          <ProtectedRoute>
-            <AddSiteVisit onNavigate={navigate} />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/add-site-visit"
-        element={
-          <ProtectedRoute>
-            <AddSiteVisit onNavigate={navigate} />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/site-details"
-        element={
-          <ProtectedRoute>
-            <SiteDetails onNavigate={navigate} />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/reports"
-        element={
-          <ProtectedRoute>
-            <Reports onNavigate={navigate} />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/settings"
-        element={
-          <ProtectedRoute>
-            <Settings onNavigate={navigate} />
-          </ProtectedRoute>
-        }
-      />
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+    <Routes location={location}>
+      <Route element={<AuthBoundary />}>
+        <Route path="/" element={<HomeRedirect />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/verify-reset-otp" element={<VerifyOtp />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/dashboard" element={<Dashboard onNavigate={navigate} />} />
+        <Route path="/invoice" element={<Invoice onNavigate={navigate} />} />
+        <Route path="/account-manager" element={<AccountManagerIndex onNavigate={navigate} />} />
+        <Route path="/account-manager/:managerId" element={<AccountManager onNavigate={navigate} />} />
+        <Route path="/clients-sites" element={<ClientsSites onNavigate={navigate} />} />
+        <Route path="/add-site" element={<AddSite onNavigate={navigate} />} />
+        <Route path="/site-visits" element={<AddSiteVisit onNavigate={navigate} />} />
+        <Route path="/add-site-visit" element={<AddSiteVisit onNavigate={navigate} />} />
+        <Route path="/site-details" element={<SiteDetails onNavigate={navigate} />} />
+        <Route path="/reports" element={<Reports onNavigate={navigate} />} />
+        <Route path="/settings" element={<Settings onNavigate={navigate} />} />
+        <Route path="*" element={<CatchAllRedirect />} />
+      </Route>
     </Routes>
   )
 }
