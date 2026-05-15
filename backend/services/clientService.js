@@ -10,7 +10,6 @@ import { ApiError } from '../utils/ApiError.js'
 import { parseObjectId } from '../utils/instrumentAccess.js'
 import {
   resolveInstrumentScope,
-  adminIdFilter,
   optionalAdminIdQuery,
   instrumentScopeMatch,
   peerAwareAdminScopeMatch,
@@ -163,7 +162,7 @@ export async function deleteClientWithSites(req, clientId) {
     _id: clientId,
     companyId: req.user.companyId,
     ...instrumentScopeMatch(allowedInstrumentIds),
-    ...adminIdFilter(req),
+    ...(await peerAwareAdminScopeMatch(req)),
     ...adminQ,
   }).select('_id')
   if (!client) throw new ApiError(404, 'Client not found')

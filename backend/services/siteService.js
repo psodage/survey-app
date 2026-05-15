@@ -6,7 +6,7 @@ import Transaction from '../models/Transaction.js'
 import Invoice from '../models/Invoice.js'
 import SurveyFile from '../models/SurveyFile.js'
 import { ApiError } from '../utils/ApiError.js'
-import { resolveInstrumentScope, adminIdFilter, optionalAdminIdQuery, instrumentScopeMatch, peerAwareAdminScopeMatch } from '../utils/scope.js'
+import { resolveInstrumentScope, optionalAdminIdQuery, instrumentScopeMatch, peerAwareAdminScopeMatch } from '../utils/scope.js'
 import { visitDateRangeForYear } from '../utils/yearQuery.js'
 import { decAmount, effectivePaidAmount } from '../utils/visitPaymentMath.js'
 
@@ -153,7 +153,7 @@ export async function deleteSiteWithRelated(req, siteId) {
     _id: siteId,
     companyId: req.user.companyId,
     ...instrumentScopeMatch(allowedInstrumentIds),
-    ...adminIdFilter(req),
+    ...(await peerAwareAdminScopeMatch(req)),
     ...adminQ,
   }).select('_id')
   if (!site) throw new ApiError(404, 'Site not found')
