@@ -263,7 +263,7 @@ export async function forgotPassword({ email }) {
     })
   }
   if (!isBrevoConfigured()) {
-    console.error('[forgot-password] Brevo SMTP env is not fully configured; OTP email was not sent.')
+    console.error('[forgot-password] Brevo mail env is not configured (BREVO_API_KEY or BREVO_SMTP_*).')
     throw new ApiError(
       503,
       'Password reset email is not available right now. Please contact your administrator.',

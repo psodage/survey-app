@@ -1,12 +1,18 @@
 import nodemailer from 'nodemailer'
 import { env } from '../config/env.js'
 
+const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email'
+const API_TIMEOUT_MS = 12_000
+/** Fail fast on SMTP (Render often blocks or stalls port 587). */
+const SMTP_TIMEOUT_MS = 10_000
+
 let transporter = null
 
-/** Fail fast instead of hanging ~2 minutes on bad SMTP/network. */
-const SMTP_TIMEOUT_MS = 15_000
+export function isBrevoApiConfigured() {
+  return Boolean(env.brevoApiKey?.trim() && env.brevoFromEmail?.trim())
+}
 
-export function isBrevoConfigured() {
+export function isBrevoSmtpConfigured() {
   return Boolean(
     env.brevoSmtpHost?.trim() &&
       env.brevoSmtpUser?.trim() &&
@@ -15,8 +21,19 @@ export function isBrevoConfigured() {
   )
 }
 
+export function isBrevoConfigured() {
+  return isBrevoApiConfigured() || isBrevoSmtpConfigured()
+}
+
+/** @returns {'api' | 'smtp' | 'none'} */
+export function getBrevoMailMode() {
+  if (isBrevoApiConfigured()) return 'api'
+  if (isBrevoSmtpConfigured()) return 'smtp'
+  return 'none'
+}
+
 function getTransporter() {
-  if (!isBrevoConfigured()) return null
+  if (!isBrevoSmtpConfigured()) return null
   if (!transporter) {
     const port = env.brevoSmtpPort
     const useSsl = port === 465
@@ -69,10 +86,56 @@ function buildOtpEmailHtml(otp) {
 </html>`
 }
 
-/**
- * @param {{ to: string, otp: string }} params
- */
-export async function sendPasswordResetOtpEmail({ to, otp }) {
+function otpEmailText(otp) {
+  return `Your password reset OTP is ${otp}. It is valid for 10 minutes. Do not share this OTP with anyone.`
+}
+
+async function sendPasswordResetOtpEmailViaApi({ to, otp }) {
+  const fromEmail = env.brevoFromEmail.trim()
+  const htmlContent = buildOtpEmailHtml(otp)
+  const textContent = otpEmailText(otp)
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), API_TIMEOUT_MS)
+
+  try {
+    const res = await fetch(BREVO_API_URL, {
+      method: 'POST',
+      headers: {
+        accept: 'application/json',
+        'content-type': 'application/json',
+        'api-key': env.brevoApiKey.trim(),
+      },
+      body: JSON.stringify({
+        sender: { name: 'Samarth SurveyOS', email: fromEmail },
+        to: [{ email: to }],
+        subject: 'Password Reset OTP - Samarth SurveyOS',
+        htmlContent,
+        textContent,
+      }),
+      signal: controller.signal,
+    })
+
+    if (!res.ok) {
+      let detail = ''
+      try {
+        const body = await res.json()
+        detail = body?.message || body?.error || JSON.stringify(body)
+      } catch {
+        detail = await res.text().catch(() => '')
+      }
+      throw new Error(`Brevo API ${res.status}${detail ? `: ${detail}` : ''}`)
+    }
+  } catch (err) {
+    if (err?.name === 'AbortError') {
+      throw new Error('Brevo API request timed out')
+    }
+    throw err
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+async function sendPasswordResetOtpEmailViaSmtp({ to, otp }) {
   const transport = getTransporter()
   if (!transport) {
     throw new Error('Brevo SMTP is not configured')
@@ -81,7 +144,17 @@ export async function sendPasswordResetOtpEmail({ to, otp }) {
     from: `"Samarth SurveyOS" <${env.brevoFromEmail.trim()}>`,
     to,
     subject: 'Password Reset OTP - Samarth SurveyOS',
-    text: `Your password reset OTP is ${otp}. It is valid for 10 minutes. Do not share this OTP with anyone.`,
+    text: otpEmailText(otp),
     html: buildOtpEmailHtml(otp),
   })
+}
+
+/**
+ * @param {{ to: string, otp: string }} params
+ */
+export async function sendPasswordResetOtpEmail({ to, otp }) {
+  if (isBrevoApiConfigured()) {
+    return sendPasswordResetOtpEmailViaApi({ to, otp })
+  }
+  return sendPasswordResetOtpEmailViaSmtp({ to, otp })
 }
