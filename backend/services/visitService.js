@@ -78,7 +78,15 @@ export async function listVisits(req) {
     ...siteIdFilter,
     ...(visitYearRange ? { visitDate: visitYearRange } : {}),
   }
-  const visits = await SiteVisit.find(match).sort({ visitDate: -1 }).limit(200).populate('clientId', 'name').populate('siteId', 'name').lean()
+  const visits = await SiteVisit.find(match)
+    .select(
+      'visitCode visitDate machineLabel workDescription amount paymentStatus paidAmount paymentMode notes photoUrls billingLines billingOtherCharges clientId siteId',
+    )
+    .sort({ visitDate: -1 })
+    .limit(200)
+    .populate('clientId', 'name')
+    .populate('siteId', 'name')
+    .lean()
   return visits.map((v) => ({
     id: v.visitCode || v._id.toString(),
     _id: v._id.toString(),

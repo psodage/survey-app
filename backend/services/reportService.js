@@ -24,7 +24,13 @@ export async function listReportRows(req, filters) {
   }
   if (filters.machineType) match.machineLabel = new RegExp(escapeRegex(filters.machineType), 'i')
 
-  const visits = await SiteVisit.find(match).sort({ visitDate: -1 }).limit(500).populate('clientId', 'name').populate('siteId', 'name').lean()
+  const visits = await SiteVisit.find(match)
+    .select('visitDate machineLabel paymentStatus clientId siteId')
+    .sort({ visitDate: -1 })
+    .limit(500)
+    .populate('clientId', 'name')
+    .populate('siteId', 'name')
+    .lean()
 
   let rows = visits.map((v, i) => ({
     id: `RPT-${4000 + i}`,

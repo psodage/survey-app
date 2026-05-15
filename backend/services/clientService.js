@@ -46,7 +46,11 @@ export async function listClients(req) {
     ...(await peerAwareAdminScopeMatch(req)),
     ...adminQ,
   }
-  const clients = await Client.find(match).sort({ updatedAt: -1 }).lean()
+  const clients = await Client.find(match)
+    .select('name phone updatedAt')
+    .sort({ updatedAt: -1 })
+    .limit(500)
+    .lean()
   const out = []
   for (const c of clients) {
     const sites = await Site.countDocuments({ clientId: c._id })

@@ -40,7 +40,10 @@ export async function getDashboard(req) {
     work: v.workDescription ?? '',
   }))
 
-  const allVisits = await SiteVisit.find(visitMatch).select('amount paymentStatus paidAmount clientId').lean()
+  const allVisits = await SiteVisit.find(visitMatch)
+    .select('amount paymentStatus paidAmount clientId')
+    .limit(5000)
+    .lean()
   const byClient = new Map()
   for (const v of allVisits) {
     const id = v.clientId?.toString()
@@ -52,14 +55,23 @@ export async function getDashboard(req) {
     row.received += effectivePaidAmount(v)
   }
 
-  const clients = await Client.find({ ...base }).select('name').lean()
-  const pendingAmountByClient = []
-  for (const c of clients) {
-    const agg = byClient.get(c._id.toString()) ?? { revenue: 0, received: 0 }
+  const pendingEntries = []
+  for (const [id, agg] of byClient) {
     const pending = Math.max(0, agg.revenue - agg.received)
-    if (pending > 0) pendingAmountByClient.push([c.name, formatInr(pending)])
+    if (pending > 0) pendingEntries.push({ id, pending })
   }
-  pendingAmountByClient.sort((a, b) => parseFloat(b[1].replace(/[^\d]/g, '')) - parseFloat(a[1].replace(/[^\d]/g, '')))
+  pendingEntries.sort((a, b) => b.pending - a.pending)
+  const topPendingIds = pendingEntries.slice(0, 50).map((e) => e.id)
+  const clients =
+    topPendingIds.length > 0
+      ? await Client.find({ ...base, _id: { $in: topPendingIds } })
+          .select('name')
+          .lean()
+      : []
+  const nameById = new Map(clients.map((c) => [c._id.toString(), c.name]))
+  const pendingAmountByClient = pendingEntries
+    .filter((e) => nameById.has(e.id))
+    .map((e) => [nameById.get(e.id), formatInr(e.pending)])
 
   let totalRevenue = 0
   let received = 0

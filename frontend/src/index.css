@@ -48,6 +48,11 @@ html {
 /**
  * Home-indicator / gesture inset under fixed bottom UI (iOS constant + env).
  */
+body.api-loading-active {
+  overflow: hidden;
+  touch-action: none;
+}
+
 .mobile-nav-safe-spacer {
   flex-shrink: 0;
   width: 100%;

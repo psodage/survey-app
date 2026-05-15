@@ -1,7 +1,12 @@
-import axios from 'axios'
+import axios, { type AxiosError, type AxiosResponse, type InternalAxiosRequestConfig } from 'axios'
+import { beginTrackedRequest, endTrackedRequest } from './loadingBridge'
+import { withDedup } from './dedup'
 
 const TOKEN_KEY = 'survey_access_token'
 const INSTRUMENT_KEY = 'survey_instrument_id'
+
+const RETRY_DELAY_MS = 3000
+const MAX_RETRIES = 1
 
 export const tokenStorage = {
   getToken: () => localStorage.getItem(TOKEN_KEY),
@@ -20,44 +25,99 @@ export const tokenStorage = {
   },
 }
 
-const apiBase =
-  import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || ''
+const apiBase = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || ''
 
 const http = axios.create({
   baseURL: apiBase.replace(/\/$/, ''),
   headers: { 'Content-Type': 'application/json' },
 })
 
+const coreRequest = http.request.bind(http)
+
+function sleep(ms: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, ms))
+}
+
+function trackLoadingStart(config: InternalAxiosRequestConfig) {
+  if (config.skipGlobalLoading || config._dedupJoined) return
+  if (!config._loadingSlotId) {
+    config._loadingSlotId = beginTrackedRequest(config)
+  }
+}
+
+function trackLoadingEnd(config?: InternalAxiosRequestConfig) {
+  if (!config?.skipGlobalLoading && config?._loadingSlotId) {
+    endTrackedRequest(config._loadingSlotId)
+    config._loadingSlotId = undefined
+  }
+}
+
+function isRetryableError(err: AxiosError): boolean {
+  if (err.code === 'ERR_NETWORK' || err.code === 'ECONNABORTED' || !err.response) return true
+  const status = err.response.status
+  return status === 502 || status === 503 || status === 504
+}
+
+function handleAuthError(err: AxiosError) {
+  const status = err.response?.status
+  const url = String(err.config?.url ?? '')
+  if (status === 400) {
+    const msg = String((err.response?.data as { error?: string } | undefined)?.error ?? '')
+    if (/invalid instrument id/i.test(msg)) {
+      tokenStorage.setInstrumentId(null)
+    }
+  }
+  const publicAuthPaths = ['/auth/login', '/auth/forgot-password', '/auth/verify-reset-otp', '/auth/reset-password']
+  if (status === 401 && !publicAuthPaths.some((p) => url.includes(p))) {
+    tokenStorage.clear()
+    window.dispatchEvent(new CustomEvent('survey:unauthorized'))
+  }
+}
+
 http.interceptors.request.use((config) => {
   const t = tokenStorage.getToken()
   if (t) config.headers.Authorization = `Bearer ${t}`
   const i = tokenStorage.getInstrumentId()
   if (i) config.headers['x-instrument-id'] = i
-  // Let the browser set multipart boundary (default axios/json would break multer uploads).
   if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
     delete config.headers['Content-Type']
   }
+  trackLoadingStart(config)
   return config
 })
 
 http.interceptors.response.use(
-  (res) => res,
-  (err) => {
-    const status = err.response?.status
-    const url = String(err.config?.url ?? '')
-    if (status === 400) {
-      const msg = String((err.response?.data as { error?: string } | undefined)?.error ?? '')
-      if (/invalid instrument id/i.test(msg)) {
-        tokenStorage.setInstrumentId(null)
+  (res) => {
+    trackLoadingEnd(res.config)
+    return res
+  },
+  async (err: AxiosError) => {
+    const config = err.config as InternalAxiosRequestConfig | undefined
+
+    if (config && !config.skipRetry && isRetryableError(err)) {
+      const retries = config._retryCount ?? 0
+      if (retries < MAX_RETRIES) {
+        config._retryCount = retries + 1
+        await sleep(RETRY_DELAY_MS)
+        try {
+          return await coreRequest(config)
+        } catch (retryErr) {
+          handleAuthError(retryErr as AxiosError)
+          return Promise.reject(retryErr)
+        }
       }
     }
-    const publicAuthPaths = ['/auth/login', '/auth/forgot-password', '/auth/verify-reset-otp', '/auth/reset-password']
-    if (status === 401 && !publicAuthPaths.some((p) => url.includes(p))) {
-      tokenStorage.clear()
-      window.dispatchEvent(new CustomEvent('survey:unauthorized'))
-    }
+
+    trackLoadingEnd(config)
+    handleAuthError(err)
     return Promise.reject(err)
   },
 )
+
+http.request = function request<T = unknown, R = AxiosResponse<T>>(
+  config: InternalAxiosRequestConfig,
+): Promise<R> {
+  return withDedup(config, () => coreRequest<T, R>(config))
+}
 
 export default http

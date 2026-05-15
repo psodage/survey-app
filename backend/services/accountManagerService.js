@@ -32,27 +32,6 @@ function formatInr(n) {
   return `₹${Math.round(n).toLocaleString('en-IN')}`
 }
 
-async function clientRowForManager(adminId, companyId, client) {
-  const visits = await SiteVisit.find({ clientId: client._id }).select('amount paymentStatus paidAmount').lean()
-  let revenue = 0
-  let received = 0
-  for (const v of visits) {
-    const a = decAmount(v.amount)
-    revenue += a
-    received += effectivePaidAmount(v)
-  }
-  const pending = Math.max(0, revenue - received)
-  return {
-    name: client.name,
-    phone: client.phone ?? '',
-    totalRevenue: formatInr(revenue),
-    received: formatInr(received),
-    pending: formatInr(pending),
-    debit: formatInr(0),
-    credit: formatInr(received),
-  }
-}
-
 export async function listAccountManagers(req) {
   const q = optionalAdminIdQuery(req)
   const match = { companyId: req.user.companyId, isActive: true, ...q }
@@ -85,10 +64,39 @@ export async function listAccountRowsForManager(req, managerDoc) {
   const clients = await Client.find({
     companyId: req.user.companyId,
     adminId: managerDoc.adminId,
-  }).lean()
-  const rows = []
-  for (const c of clients) {
-    rows.push(await clientRowForManager(managerDoc.adminId, req.user.companyId, c))
+  })
+    .select('name phone')
+    .sort({ name: 1 })
+    .limit(500)
+    .lean()
+  if (clients.length === 0) return []
+
+  const clientIds = clients.map((c) => c._id)
+  const visits = await SiteVisit.find({ clientId: { $in: clientIds } })
+    .select('clientId amount paymentStatus paidAmount')
+    .lean()
+  const byClient = new Map()
+  for (const v of visits) {
+    const id = v.clientId?.toString()
+    if (!id) continue
+    if (!byClient.has(id)) byClient.set(id, { revenue: 0, received: 0 })
+    const row = byClient.get(id)
+    const a = decAmount(v.amount)
+    row.revenue += a
+    row.received += effectivePaidAmount(v)
   }
-  return rows
+
+  return clients.map((c) => {
+    const agg = byClient.get(c._id.toString()) ?? { revenue: 0, received: 0 }
+    const pending = Math.max(0, agg.revenue - agg.received)
+    return {
+      name: c.name,
+      phone: c.phone ?? '',
+      totalRevenue: formatInr(agg.revenue),
+      received: formatInr(agg.received),
+      pending: formatInr(pending),
+      debit: formatInr(0),
+      credit: formatInr(agg.received),
+    }
+  })
 }

@@ -5,7 +5,9 @@ import { Toaster } from 'sonner'
 import { registerSW } from 'virtual:pwa-register'
 import './index.css'
 import App from './App.tsx'
+import ServerWakeUp from './components/ServerWakeUp'
 import { AuthProvider } from './context/AuthContext'
+import { LoadingProvider } from './context/LoadingContext'
 import { SelectedYearProvider } from './context/SelectedYearContext'
 
 registerSW({ immediate: true })
@@ -13,12 +15,16 @@ registerSW({ immediate: true })
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
-      <AuthProvider>
-        <SelectedYearProvider>
-          <App />
-          <Toaster richColors position="top-center" />
-        </SelectedYearProvider>
-      </AuthProvider>
+      <ServerWakeUp>
+        <LoadingProvider>
+          <AuthProvider>
+            <SelectedYearProvider>
+              <App />
+              <Toaster richColors position="top-center" />
+            </SelectedYearProvider>
+          </AuthProvider>
+        </LoadingProvider>
+      </ServerWakeUp>
     </BrowserRouter>
   </StrictMode>,
 )

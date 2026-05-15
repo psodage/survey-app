@@ -57,7 +57,11 @@ export async function listSitesForClient(req, clientId) {
   if (!client) throw new ApiError(404, 'Client not found')
 
   const visitYearRange = visitDateRangeForYear(req.query?.year)
-  const sites = await Site.find({ clientId, companyId: req.user.companyId }).sort({ updatedAt: -1 }).lean()
+  const sites = await Site.find({ clientId, companyId: req.user.companyId })
+    .select('name locationLabel address status lastVisitAt updatedAt')
+    .sort({ updatedAt: -1 })
+    .limit(200)
+    .lean()
   const out = []
   for (const s of sites) {
     const pending = await sitePending(s._id, visitYearRange)
@@ -112,9 +116,11 @@ export async function listAllSites(req) {
     ...(await peerAwareAdminScopeMatch(req)),
   }
   const sites = await Site.find(match)
+    .select('name locationLabel address status lastVisitAt updatedAt clientId instrumentId')
     .populate('clientId', 'name')
     .populate('instrumentId', 'name category')
     .sort({ updatedAt: -1 })
+    .limit(500)
     .lean()
   const out = []
   for (const s of sites) {

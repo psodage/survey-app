@@ -38,7 +38,7 @@ import {
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 8 * 1024 * 1024, files: 12 },
+  limits: { fileSize: 5 * 1024 * 1024, files: 12 },
 })
 
 const router = Router()
@@ -49,6 +49,7 @@ router.get('/health', (_req, res) => {
     dbState === 1 ? 'connected' : dbState === 2 ? 'connecting' : dbState === 3 ? 'disconnecting' : 'disconnected'
   res.json({
     ok: true,
+    message: 'Server is active',
     service: 'samarth-surveyos-api',
     time: new Date().toISOString(),
     db,
