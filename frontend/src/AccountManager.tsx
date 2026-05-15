@@ -763,7 +763,7 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
             >
               <button
                 type="button"
-                onClick={() => handleSummaryCardClick('debits')}
+               
                 disabled={isLedgerLoading}
                 className="w-full cursor-pointer rounded-xl bg-transparent p-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f39b03]/70 disabled:cursor-default"
                 aria-label="Open debit transactions"
@@ -780,7 +780,7 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
               </button>
               <button
                 type="button"
-                onClick={() => handleSummaryCardClick('credits')}
+                
                 disabled={isLedgerLoading}
                 className="w-full cursor-pointer rounded-xl bg-transparent p-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f39b03]/70 disabled:cursor-default"
                 aria-label="Open credit transactions"
@@ -797,7 +797,7 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
               </button>
               <button
                 type="button"
-                onClick={() => handleSummaryCardClick('net')}
+                
                 disabled={isLedgerLoading}
                 className="w-full cursor-pointer rounded-xl bg-transparent p-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f39b03]/70 disabled:cursor-default"
                 aria-label="Open net balance details"
@@ -814,7 +814,7 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
               </button>
               <button
                 type="button"
-                onClick={() => handleSummaryCardClick('pending')}
+          
                 disabled={isLedgerLoading}
                 className="w-full cursor-pointer rounded-xl bg-transparent p-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f39b03]/70 disabled:cursor-default"
                 aria-label="Open pending clients"
