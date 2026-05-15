@@ -8,6 +8,7 @@ import {
   RESET_EMAIL_KEY,
   RESET_STEP_KEY,
   RESET_STEP_SET_PASSWORD,
+  authResetHttpConfig,
   clearAuthResetFlow,
 } from './authResetFlow'
 import { AuthShell } from './components/AuthShell'
@@ -50,11 +51,15 @@ export default function ResetPassword() {
     }
     setIsSubmitting(true)
     try {
-      await http.post('/api/auth/reset-password', {
-        email: e,
-        newPassword: password,
-        confirmPassword: confirm,
-      })
+      await http.post(
+        '/api/auth/reset-password',
+        {
+          email: e,
+          newPassword: password,
+          confirmPassword: confirm,
+        },
+        authResetHttpConfig,
+      )
       clearAuthResetFlow()
       toast.success('Password updated. Sign in with your new password.')
       navigate('/login', { replace: true })

@@ -3,6 +3,7 @@ import helmet from 'helmet'
 import cors from 'cors'
 import mongoose from 'mongoose'
 import { env } from './config/env.js'
+import { isBrevoConfigured } from './services/mailService.js'
 import { connectMongo, registerMongoShutdownHandlers } from './config/db.js'
 import { configureCloudinary } from './config/cloudinary.js'
 import './models/index.js'
@@ -24,6 +25,12 @@ if (
 
 configureCloudinary()
 registerMongoShutdownHandlers()
+
+if (!isBrevoConfigured()) {
+  console.warn(
+    '[startup] BREVO_SMTP_* / BREVO_FROM_EMAIL are not set — password reset emails will not be sent.',
+  )
+}
 
 const app = express()
 app.set('trust proxy', 1)

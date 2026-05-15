@@ -12,9 +12,11 @@ import { isBrevoConfigured, sendPasswordResetOtpEmail } from './mailService.js'
 
 const OTP_TTL_MS = 10 * 60 * 1000
 const RESEND_COOLDOWN_MS = 60 * 1000
-const FORGOT_PASSWORD_RESPONSE = {
-  ok: true,
-  message: 'If an account is registered for this email, you will receive a password reset code shortly.',
+const FORGOT_PASSWORD_MESSAGE =
+  'If an account is registered for this email, you will receive a password reset code shortly.'
+
+function forgotPasswordResponse(extra = {}) {
+  return { ok: true, message: FORGOT_PASSWORD_MESSAGE, sent: false, ...extra }
 }
 
 function generateSixDigitOtp() {
@@ -246,34 +248,43 @@ export async function assignInstruments(user, adminId, instrumentIds) {
 
 export async function forgotPassword({ email }) {
   const normalized = email.trim().toLowerCase()
-  const matches = await User.find({ email: normalized })
-  if (matches.length !== 1) {
-    return FORGOT_PASSWORD_RESPONSE
+  const matches = await User.find({ email: normalized, isActive: true })
+  if (matches.length === 0) {
+    return forgotPasswordResponse()
+  }
+  if (matches.length > 1) {
+    throw new ApiError(400, 'Multiple accounts share this email. Contact support.')
   }
   const user = matches[0]
-  if (!user.isActive) {
-    return FORGOT_PASSWORD_RESPONSE
-  }
   if (user.resetOtpSentAt && Date.now() - new Date(user.resetOtpSentAt).getTime() < RESEND_COOLDOWN_MS) {
-    return FORGOT_PASSWORD_RESPONSE
+    return forgotPasswordResponse({
+      sent: true,
+      message: 'A code was already sent. Check your inbox, or wait a minute before requesting another.',
+    })
   }
   if (!isBrevoConfigured()) {
     console.error('[forgot-password] Brevo SMTP env is not fully configured; OTP email was not sent.')
-    return FORGOT_PASSWORD_RESPONSE
+    throw new ApiError(
+      503,
+      'Password reset email is not available right now. Please contact your administrator.',
+    )
   }
   const otp = generateSixDigitOtp()
   try {
     await sendPasswordResetOtpEmail({ to: normalized, otp })
   } catch (err) {
     console.error('[forgot-password] Failed to send email:', err)
-    return FORGOT_PASSWORD_RESPONSE
+    throw new ApiError(503, 'Could not send the reset code. Please try again in a moment.')
   }
   user.resetOtp = otp
   user.resetOtpExpiry = new Date(Date.now() + OTP_TTL_MS)
   user.resetOtpVerified = false
   user.resetOtpSentAt = new Date()
   await user.save()
-  return FORGOT_PASSWORD_RESPONSE
+  return forgotPasswordResponse({
+    sent: true,
+    message: 'We sent a 6-digit code to your email. It expires in 10 minutes.',
+  })
 }
 
 export async function verifyResetOtp({ email, otp }) {

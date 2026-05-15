@@ -3,6 +3,9 @@ import { env } from '../config/env.js'
 
 let transporter = null
 
+/** Fail fast instead of hanging ~2 minutes on bad SMTP/network. */
+const SMTP_TIMEOUT_MS = 15_000
+
 export function isBrevoConfigured() {
   return Boolean(
     env.brevoSmtpHost?.trim() &&
@@ -22,6 +25,9 @@ function getTransporter() {
       port,
       secure: useSsl,
       requireTLS: !useSsl,
+      connectionTimeout: SMTP_TIMEOUT_MS,
+      greetingTimeout: SMTP_TIMEOUT_MS,
+      socketTimeout: SMTP_TIMEOUT_MS,
       auth: {
         user: env.brevoSmtpUser.trim(),
         pass: env.brevoSmtpPass.trim(),

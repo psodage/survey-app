@@ -8,6 +8,7 @@ import {
   RESET_EMAIL_KEY,
   RESET_STEP_AWAIT_OTP,
   RESET_STEP_KEY,
+  authResetHttpConfig,
   clearAuthResetFlow,
 } from './authResetFlow'
 import { AuthShell } from './components/AuthShell'
@@ -51,9 +52,20 @@ export default function ForgotPassword() {
     }
     setIsSubmitting(true)
     try {
-      const res = await http.post('/api/auth/forgot-password', { email: trimmed })
-      const message = res.data?.message ?? 'If an account is registered for this email, you will receive a code shortly.'
+      const res = await http.post(
+        '/api/auth/forgot-password',
+        { email: trimmed },
+        authResetHttpConfig,
+      )
       const lower = trimmed.toLowerCase()
+      const sent = res.data?.sent === true
+      const message =
+        res.data?.message ??
+        'If an account is registered for this email, you will receive a code shortly.'
+      if (!sent) {
+        toast.message(message)
+        return
+      }
       sessionStorage.setItem(RESET_EMAIL_KEY, lower)
       sessionStorage.setItem(RESET_STEP_KEY, RESET_STEP_AWAIT_OTP)
       toast.success(message)

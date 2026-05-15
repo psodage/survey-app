@@ -9,6 +9,7 @@ import {
   RESET_STEP_AWAIT_OTP,
   RESET_STEP_KEY,
   RESET_STEP_SET_PASSWORD,
+  authResetHttpConfig,
   clearAuthResetFlow,
 } from './authResetFlow'
 import { AuthShell } from './components/AuthShell'
@@ -21,6 +22,7 @@ export default function VerifyOtp() {
   const [email, setEmail] = useState('')
   const [otp, setOtp] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isResending, setIsResending] = useState(false)
 
   useEffect(() => {
     const fromState = location.state?.email
@@ -47,7 +49,11 @@ export default function VerifyOtp() {
     }
     setIsSubmitting(true)
     try {
-      await http.post('/api/auth/verify-reset-otp', { email: email.trim().toLowerCase(), otp: otp.trim() })
+      await http.post(
+        '/api/auth/verify-reset-otp',
+        { email: email.trim().toLowerCase(), otp: otp.trim() },
+        authResetHttpConfig,
+      )
       sessionStorage.setItem(RESET_STEP_KEY, RESET_STEP_SET_PASSWORD)
       toast.success('Code verified. Set your new password.')
       navigate('/reset-password', { replace: true, state: { email: email.trim().toLowerCase() } })
@@ -60,6 +66,31 @@ export default function VerifyOtp() {
       }
     } finally {
       setIsSubmitting(false)
+    }
+  }
+
+  async function onResend() {
+    const trimmed = email.trim().toLowerCase()
+    if (!trimmed) return
+    setIsResending(true)
+    try {
+      const res = await http.post('/api/auth/forgot-password', { email: trimmed }, authResetHttpConfig)
+      if (res.data?.sent === true) {
+        toast.success(res.data?.message ?? 'A new code was sent to your email.')
+      } else {
+        toast.message(
+          res.data?.message ??
+            'If an account is registered for this email, you will receive a code shortly.',
+        )
+      }
+    } catch (err) {
+      if (axios.isAxiosError(err)) {
+        toast.error(err.response?.data?.error ?? 'Could not resend the code.')
+      } else {
+        toast.error('Could not resend the code.')
+      }
+    } finally {
+      setIsResending(false)
     }
   }
 
@@ -109,9 +140,14 @@ export default function VerifyOtp() {
           {isSubmitting ? 'Verifying…' : 'Verify & continue'}
         </button>
         <p className="text-center text-[14px] text-white/70">
-          <Link to="/forgot-password" className="font-medium text-[#f39b03] transition hover:text-[#f7b13a]">
-            Resend from forgot password
-          </Link>
+          <button
+            type="button"
+            disabled={isResending}
+            onClick={onResend}
+            className="font-medium text-[#f39b03] transition hover:text-[#f7b13a] disabled:opacity-60"
+          >
+            {isResending ? 'Sending…' : 'Resend code'}
+          </button>
           <span className="mx-2 text-white/35">·</span>
           <Link to="/login" className="inline-flex items-center justify-center gap-2 font-medium text-[#f39b03] transition hover:text-[#f7b13a]">
             <ArrowLeft className="h-4 w-4" />
