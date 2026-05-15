@@ -13,6 +13,10 @@ type AppSelectProps = {
   options: AppSelectOption[]
   placeholder?: string
   className?: string
+  /** Additional classes for the trigger button (e.g. tighter `pr-*` in narrow headers). */
+  triggerButtonClassName?: string
+  /** Tailwind horizontal offset for the chevron (default `right-3`, same as Visit Date icon). */
+  chevronPositionClass?: string
   /** Show search when options length exceeds this (default 8). */
   searchableThreshold?: number
   disabled?: boolean
@@ -26,6 +30,8 @@ export function AppSelect({
   options,
   placeholder = 'Select…',
   className = '',
+  triggerButtonClassName = '',
+  chevronPositionClass = 'right-3',
   searchableThreshold = 8,
   disabled = false,
   'aria-label': ariaLabel,
@@ -144,19 +150,30 @@ export function AppSelect({
         }}
         onKeyDown={onKeyDown}
         className={[
-          'flex h-full w-full min-w-0 appearance-none items-center justify-between gap-2 rounded-[inherit] border-0 bg-transparent text-left outline-none',
+          // Text only; chevron is a sibling pinned to the root (same pattern as Visit Date + calendar icon).
+          'relative z-10 flex h-full w-full min-w-0 appearance-none items-center rounded-[inherit] border-0 bg-transparent pr-10 text-left outline-none',
+          triggerButtonClassName,
           disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
         ].join(' ')}
       >
-        <span className={selected ? 'min-w-0 flex-1 truncate' : 'min-w-0 flex-1 truncate text-neutral-400'}>
+        <span
+          className={[
+            'block min-w-0 flex-1 truncate text-start',
+            selected ? '' : 'text-neutral-400',
+          ].join(' ')}
+        >
           {selected?.label ?? placeholder}
         </span>
-        <ChevronDown
-          size={16}
-          className={['shrink-0 text-neutral-500 transition-transform duration-200', open ? 'rotate-180' : ''].join(' ')}
-          aria-hidden
-        />
       </button>
+      <ChevronDown
+        size={16}
+        className={[
+          'pointer-events-none absolute top-1/2 z-[1] shrink-0 -translate-y-1/2 text-neutral-500 transition-transform duration-200',
+          chevronPositionClass,
+          open ? 'rotate-180' : '',
+        ].join(' ')}
+        aria-hidden
+      />
 
       <div
         role="listbox"
