@@ -350,7 +350,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
   const pageTitle = isVisitMode ? 'Site Visit Details' : 'Site Details'
   const backPath = isVisitMode ? '/site-visits' : '/clients-sites'
   const activeNavLabel = isVisitMode ? 'Site Visits' : 'Clients & Sites'
-  const statusLabel = isVisitMode ? '' : status
+  const statusLabel = isVisitMode ? 'Visit Record' : status
   const mobileBottomNav = [
     { label: 'Dashboard', path: '/dashboard', icon: LayoutGrid },
     { label: 'Accounts', path: '/account-manager', icon: Briefcase },
