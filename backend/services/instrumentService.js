@@ -61,7 +61,7 @@ export async function listCoworkersOnInstrument(req) {
 
   const instrumentId = parseObjectId(raw, 'instrument id')
   const inst = await Instrument.findOne({ _id: instrumentId, companyId: req.user.companyId }).select('_id').lean()
-  if (!inst) throw new ApiError(404, 'Instrument not found')
+  if (!inst) return []
 
   if (req.user.role !== 'super_admin') {
     const allowed = await getAllowedInstrumentObjectIds({

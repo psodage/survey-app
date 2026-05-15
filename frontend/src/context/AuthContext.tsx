@@ -41,6 +41,18 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
+/** Prefer stored selection only when it is still in the user's instrument list. */
+function resolveActiveInstrumentId(
+  stored: string | null,
+  server: string | null,
+  instruments: InstrumentSummary[],
+): string | null {
+  const allowed = new Set(instruments.map((i) => i.id))
+  if (stored && allowed.has(stored)) return stored
+  if (server && allowed.has(server)) return server
+  return instruments[0]?.id ?? null
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(() => tokenStorage.getToken())
   const [user, setUser] = useState<AuthUser | null>(null)
@@ -114,13 +126,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch {
         mgrs = []
       }
+      const instruments = res.data.instruments ?? []
       applySession({
         user: res.data.user,
         company: res.data.company,
         companyAdmins: res.data.companyAdmins,
-        instruments: res.data.instruments ?? [],
+        instruments,
         managers: mgrs,
-        activeInstrumentId: tokenStorage.getInstrumentId() || res.data.activeInstrumentId || null,
+        activeInstrumentId: resolveActiveInstrumentId(
+          tokenStorage.getInstrumentId(),
+          res.data.activeInstrumentId ?? null,
+          instruments,
+        ),
       })
       setToken(t)
     } catch {
@@ -174,13 +191,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } catch {
           mgrs = []
         }
+        const instruments = res.data.instruments ?? []
         applySession({
           user: res.data.user,
           company: res.data.company,
           companyAdmins: res.data.companyAdmins,
-          instruments: res.data.instruments ?? [],
+          instruments,
           managers: mgrs,
-          activeInstrumentId: res.data.activeInstrumentId ?? null,
+          activeInstrumentId: resolveActiveInstrumentId(
+            tokenStorage.getInstrumentId(),
+            res.data.activeInstrumentId ?? null,
+            instruments,
+          ),
         })
       } catch (err) {
         if (axios.isAxiosError(err)) {
