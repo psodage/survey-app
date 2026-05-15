@@ -43,6 +43,7 @@ import http from './api/http'
 import { useAuth } from './context/AuthContext'
 import { signOut } from './signOut'
 import { ConfirmAlert } from './ConfirmAlert'
+import { AppSelect } from './components/AppSelect'
 import { TablePagination } from './components/TablePagination'
 import {
   exportAllClientsExcel,
@@ -953,33 +954,32 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                   />
                 </div>
                 <div className="flex w-full flex-wrap items-center justify-between gap-2 md:w-auto md:justify-start">
-                  <select
+                  <AppSelect
                     value={showAllSites ? siteStatusFilter : clientPendingFilter}
-                    onChange={(event) => {
+                    onChange={(v) => {
                       if (showAllSites) {
-                        setSiteStatusFilter(event.target.value as 'all' | SiteRow['status'])
+                        setSiteStatusFilter(v as 'all' | SiteRow['status'])
                       } else {
-                        setClientPendingFilter(event.target.value as 'all' | 'withPending' | 'cleared')
+                        setClientPendingFilter(v as 'all' | 'withPending' | 'cleared')
                       }
                     }}
-                    className={toolbarSecondaryButtonClass}
+                    className={[toolbarSecondaryButtonClass, 'min-w-[9rem]'].join(' ')}
                     aria-label={showAllSites ? 'Filter sites' : 'Filter clients'}
-                  >
-                    {showAllSites ? (
-                      <>
-                        <option value="all">All Statuses</option>
-                        <option value="Active">Active</option>
-                        <option value="On Hold">On Hold</option>
-                        <option value="Completed">Completed</option>
-                      </>
-                    ) : (
-                      <>
-                        <option value="all">All Clients</option>
-                        <option value="withPending">With Pending</option>
-                        <option value="cleared">Cleared</option>
-                      </>
-                    )}
-                  </select>
+                    options={
+                      showAllSites
+                        ? [
+                            { value: 'all', label: 'All Statuses' },
+                            { value: 'Active', label: 'Active' },
+                            { value: 'On Hold', label: 'On Hold' },
+                            { value: 'Completed', label: 'Completed' },
+                          ]
+                        : [
+                            { value: 'all', label: 'All Clients' },
+                            { value: 'withPending', label: 'With Pending' },
+                            { value: 'cleared', label: 'Cleared' },
+                          ]
+                    }
+                  />
                   {!showAllSites ? (
                     <div className="flex shrink-0 items-center gap-2">
                       <button
@@ -1015,17 +1015,18 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                   />
                 </div>
                 <div className="flex w-full flex-wrap items-center justify-between gap-2 md:w-auto md:justify-start">
-                  <select
+                  <AppSelect
                     value={siteStatusFilter}
-                    onChange={(event) => setSiteStatusFilter(event.target.value as 'all' | SiteRow['status'])}
-                    className={toolbarSecondaryButtonClass}
+                    onChange={(v) => setSiteStatusFilter(v as 'all' | SiteRow['status'])}
+                    className={[toolbarSecondaryButtonClass, 'min-w-[9rem]'].join(' ')}
                     aria-label="Filter sites by status"
-                  >
-                    <option value="all">All Statuses</option>
-                    <option value="Active">Active</option>
-                    <option value="On Hold">On Hold</option>
-                    <option value="Completed">Completed</option>
-                  </select>
+                    options={[
+                      { value: 'all', label: 'All Statuses' },
+                      { value: 'Active', label: 'Active' },
+                      { value: 'On Hold', label: 'On Hold' },
+                      { value: 'Completed', label: 'Completed' },
+                    ]}
+                  />
                   <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
                     <button
                       type="button"

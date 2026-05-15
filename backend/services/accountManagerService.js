@@ -4,7 +4,12 @@ import SiteVisit from '../models/SiteVisit.js'
 import Transaction from '../models/Transaction.js'
 import { ApiError } from '../utils/ApiError.js'
 import { instrumentCoworkerAdminIdStrings } from '../utils/instrumentPeers.js'
-import { optionalAdminIdQuery, peerAwareAdminScopeMatch } from '../utils/scope.js'
+import {
+  instrumentScopeMatch,
+  optionalAdminIdQuery,
+  peerAwareAdminScopeMatch,
+  resolveInstrumentScope,
+} from '../utils/scope.js'
 import { decAmount, effectivePaidAmount } from '../utils/visitPaymentMath.js'
 import { visitDateRangeForYear } from '../utils/yearQuery.js'
 
@@ -100,12 +105,38 @@ export async function getLedgerSummaryForManager(req, managerDoc, yearRaw) {
     pendingTotal = Math.max(0, revenue - received)
   }
 
+  const globalPendingTotal = await getGlobalPendingTotal(req, yearRaw)
+
   return {
     totalDebit,
     totalCredit,
     netBalance: totalCredit - totalDebit,
     pendingTotal,
+    globalPendingTotal,
   }
+}
+
+/**
+ * Company-wide pending from all site visits (scoped by instrument / peer access),
+ * shared across account managers. Debit/credit/balance remain per manager.
+ */
+export async function getGlobalPendingTotal(req, yearRaw) {
+  const { allowedInstrumentIds } = await resolveInstrumentScope(req)
+  const visitYearRange = visitDateRangeForYear(yearRaw)
+  const visitMatch = {
+    companyId: req.user.companyId,
+    ...instrumentScopeMatch(allowedInstrumentIds),
+    ...(await peerAwareAdminScopeMatch(req)),
+    ...(visitYearRange ? { visitDate: visitYearRange } : {}),
+  }
+  const visits = await SiteVisit.find(visitMatch).select('amount paymentStatus paidAmount').lean()
+  let revenue = 0
+  let received = 0
+  for (const v of visits) {
+    revenue += decAmount(v.amount)
+    received += effectivePaidAmount(v)
+  }
+  return Math.max(0, revenue - received)
 }
 
 export async function listAccountRowsForManager(req, managerDoc, yearRaw) {

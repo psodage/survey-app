@@ -23,6 +23,7 @@ import { AccountManagerSidebarBlock } from './AccountManagerSidebarBlock'
 import { CollaborationBrandMark } from './CollaborationBrandMark'
 import { LayoutFooter } from './LayoutFooter'
 import { CardShell, StatCard } from './dashboardCards'
+import { AppSelect } from './components/AppSelect'
 import { layoutBrandLogo } from './brandLogo'
 import { HeaderYearSelect } from './components/HeaderYearSelect'
 import { PageRefreshButton } from './components/PageRefreshButton'
@@ -480,61 +481,74 @@ export default function Reports({ onNavigate }: ReportsProps) {
                   </div>
                   <div className="lg:col-span-2">
                     <Field label="Report Type">
-                      <select value={reportType} onChange={(e) => setReportType(e.target.value)} className={selectClass}>
-                        <option>Site-wise</option>
-                        <option>Client-wise</option>
-                        <option>Date-wise</option>
-                        <option>Payment-wise</option>
-                      </select>
+                      <AppSelect
+                        value={reportType}
+                        onChange={setReportType}
+                        className={selectClass}
+                        options={[
+                          { value: 'Site-wise', label: 'Site-wise' },
+                          { value: 'Client-wise', label: 'Client-wise' },
+                          { value: 'Date-wise', label: 'Date-wise' },
+                          { value: 'Payment-wise', label: 'Payment-wise' },
+                        ]}
+                      />
                     </Field>
                   </div>
                   <div className="lg:col-span-2">
                     <Field label="Client">
-                      <select
+                      <AppSelect
                         value={clientFilter || 'all'}
-                        onChange={(e) => setClientFilter(e.target.value === 'all' ? '' : e.target.value)}
+                        onChange={(v) => setClientFilter(v === 'all' ? '' : v)}
                         className={selectClass}
-                      >
-                        <option value="all">All clients</option>
-                        <option value="Amit Developers">Amit Developers</option>
-                        <option value="Shree Krishna Infra">Shree Krishna Infra</option>
-                        <option value="Vishwakarma Properties">Vishwakarma Properties</option>
-                      </select>
+                        options={[
+                          { value: 'all', label: 'All clients' },
+                          { value: 'Amit Developers', label: 'Amit Developers' },
+                          { value: 'Shree Krishna Infra', label: 'Shree Krishna Infra' },
+                          { value: 'Vishwakarma Properties', label: 'Vishwakarma Properties' },
+                        ]}
+                      />
                     </Field>
                   </div>
                   <div className="lg:col-span-3">
                     <Field label="Site">
-                      <select
+                      <AppSelect
                         value={siteFilter || 'all'}
-                        onChange={(e) => setSiteFilter(e.target.value === 'all' ? '' : e.target.value)}
+                        onChange={(v) => setSiteFilter(v === 'all' ? '' : v)}
                         className={selectClass}
-                      >
-                        <option value="all">All sites</option>
-                        <option value="Sai Residency">Sai Residency</option>
-                        <option value="Green Valley Phase 2">Green Valley Phase 2</option>
-                        <option value="Multiple Sites">Multiple Sites</option>
-                      </select>
+                        options={[
+                          { value: 'all', label: 'All sites' },
+                          { value: 'Sai Residency', label: 'Sai Residency' },
+                          { value: 'Green Valley Phase 2', label: 'Green Valley Phase 2' },
+                          { value: 'Multiple Sites', label: 'Multiple Sites' },
+                        ]}
+                      />
                     </Field>
                   </div>
                   <div className="lg:col-span-2">
                     <Field label="Machine">
-                      <select value={machineType} onChange={(e) => setMachineType(e.target.value)} className={selectClass}>
-                        <option>Total Station</option>
-                        <option>DGPS</option>
-                      </select>
+                      <AppSelect
+                        value={machineType}
+                        onChange={setMachineType}
+                        className={selectClass}
+                        options={[
+                          { value: 'Total Station', label: 'Total Station' },
+                          { value: 'DGPS', label: 'DGPS' },
+                        ]}
+                      />
                     </Field>
                   </div>
                   <div className="lg:col-span-2">
                     <Field label="Status">
-                      <select
+                      <AppSelect
                         value={statusFilter}
-                        onChange={(e) => setStatusFilter(e.target.value as 'all' | ReportRow['status'])}
+                        onChange={(v) => setStatusFilter(v as 'all' | ReportRow['status'])}
                         className={selectClass}
-                      >
-                        <option value="all">All Statuses</option>
-                        <option value="Completed">Completed</option>
-                        <option value="Pending">Pending</option>
-                      </select>
+                        options={[
+                          { value: 'all', label: 'All Statuses' },
+                          { value: 'Completed', label: 'Completed' },
+                          { value: 'Pending', label: 'Pending' },
+                        ]}
+                      />
                     </Field>
                   </div>
                   <div className="lg:col-span-2">

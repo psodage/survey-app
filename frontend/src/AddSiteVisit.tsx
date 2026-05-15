@@ -36,6 +36,8 @@ import {
   toolbarSecondaryButtonClass,
 } from './dashboardCards'
 import { ConfirmAlert } from './ConfirmAlert'
+import { AppSelect } from './components/AppSelect'
+import { isAxiosError } from 'axios'
 import { layoutBrandLogo } from './brandLogo'
 import { HeaderYearSelect } from './components/HeaderYearSelect'
 import { PageRefreshButton } from './components/PageRefreshButton'
@@ -303,6 +305,10 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
       }
       toast.success('Visit deleted')
       setPendingDeleteVisit(null)
+      setShowAddForm(false)
+      if (mode === 'add') {
+        onNavigate('/site-visits')
+      }
       await loadData()
     } catch {
       toast.error('Could not delete visit')
@@ -653,18 +659,19 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                     <div className="flex flex-wrap items-center gap-2">
                       <label className="grid gap-1">
                         <span className="sr-only">Pay status</span>
-                        <select
+                        <AppSelect
                           value={visitPaymentStatusFilter}
-                          onChange={(e) => setVisitPaymentStatusFilter(e.target.value)}
+                          onChange={setVisitPaymentStatusFilter}
                           className={visitToolbarSelectClass}
                           aria-label="Filter by payment status"
-                        >
-                          <option value="all">All pay status</option>
-                          <option value="Paid">Paid</option>
-                          <option value="Pending">Pending</option>
-                          <option value="Partial">Partial</option>
-                          <option value="Waived">Waived</option>
-                        </select>
+                          options={[
+                            { value: 'all', label: 'All pay status' },
+                            { value: 'Paid', label: 'Paid' },
+                            { value: 'Pending', label: 'Pending' },
+                            { value: 'Partial', label: 'Partial' },
+                            { value: 'Waived', label: 'Waived' },
+                          ]}
+                        />
                       </label>
                     </div>
                   </div>
@@ -919,11 +926,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                     const amountNum = amountRupees
                     setIsSubmittingVisit(true)
                     try {
-                      const res = await http.post<{
-                        ok: boolean
-                        visit?: { id: string; _id: string; amount: string; paymentStatus: string }
-                        error?: string
-                      }>('/api/visits', {
+                      const visitPayload = {
                         siteId: match.id,
                         workDescription: workDetails,
                         machineLabel: machine,
@@ -946,18 +949,30 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                         paymentMode: '—',
                         paymentStatus: 'pending',
                         notes,
-                      })
+                      }
+
+                      type VisitCreateRes = {
+                        ok: boolean
+                        visit?: { id: string; _id: string; amount: string; paymentStatus: string }
+                        error?: string
+                      }
+
+                      let res
+                      if (photos.length) {
+                        const fd = new FormData()
+                        fd.append('payload', JSON.stringify(visitPayload))
+                        for (const p of photos) fd.append('photos', p.file)
+                        res = await http.post<VisitCreateRes>('/api/visits/with-photos', fd)
+                      } else {
+                        res = await http.post<VisitCreateRes>('/api/visits', visitPayload)
+                      }
+
                       if (res.status !== 201 || !res.data?.ok || !res.data.visit) {
                         toast.error(res.data?.error ?? 'Could not save visit')
                         return
                       }
                       const v = res.data.visit
                       const visitMongoId = v._id
-                      if (photos.length) {
-                        const fd = new FormData()
-                        for (const p of photos) fd.append('photos', p.file)
-                        await http.post(`/api/visits/${visitMongoId}/photos`, fd)
-                      }
                       toast.success('Visit saved')
                       await loadData()
                       const params = new URLSearchParams({
@@ -978,8 +993,11 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                       if (match.id) params.set('siteId', match.id)
                       setShowAddForm(false)
                       onNavigate(`/site-details?${params.toString()}`)
-                    } catch {
-                      toast.error('Could not save visit')
+                    } catch (err) {
+                      const apiMsg = isAxiosError(err)
+                        ? (err.response?.data as { error?: string } | undefined)?.error
+                        : undefined
+                      toast.error(apiMsg ?? 'Could not save visit. Photos were not saved.')
                     } finally {
                       setIsSubmittingVisit(false)
                     }
@@ -993,51 +1011,26 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                   <div className="grid grid-cols-1 gap-5 md:grid-cols-2 md:gap-6">
                     <label className="grid gap-2">
                       <span className="text-xs font-bold text-neutral-700">Client</span>
-                      <div className="relative">
-                        <select
-                          value={client}
-                          onChange={(e) => {
-                            const next = e.target.value
-                            setClient(next)
-                            const sites = sitesByClient[next] ?? []
-                            setSite(sites[0] ?? '')
-                          }}
-                          className="h-11 w-full cursor-pointer appearance-none rounded-xl border border-neutral-200 bg-white px-3 pr-10 text-sm font-semibold text-neutral-900 outline-none transition hover:border-neutral-300 focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
-                        >
-                          {clientOptions.map((c) => (
-                            <option key={c} value={c}>
-                              {c}
-                            </option>
-                          ))}
-                        </select>
-                        <ChevronDown
-                          size={16}
-                          className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-neutral-500"
-                          aria-hidden
-                        />
-                      </div>
+                      <AppSelect
+                        value={client}
+                        onChange={(next) => {
+                          setClient(next)
+                          const sites = sitesByClient[next] ?? []
+                          setSite(sites[0] ?? '')
+                        }}
+                        className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 pr-10 text-sm font-semibold text-neutral-900 outline-none transition hover:border-neutral-300 focus-within:border-[#f39b03]/80 focus-within:ring-2 focus-within:ring-[#f39b03]/20"
+                        options={clientOptions.map((c) => ({ value: c, label: c }))}
+                      />
                     </label>
 
                     <label className="grid gap-2">
                       <span className="text-xs font-bold text-neutral-700">Site</span>
-                      <div className="relative">
-                        <select
-                          value={site}
-                          onChange={(e) => setSite(e.target.value)}
-                          className="h-11 w-full cursor-pointer appearance-none rounded-xl border border-neutral-200 bg-white px-3 pr-10 text-sm font-semibold text-neutral-900 outline-none transition hover:border-neutral-300 focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
-                        >
-                          {siteChoices.map((s) => (
-                            <option key={s} value={s}>
-                              {s}
-                            </option>
-                          ))}
-                        </select>
-                        <ChevronDown
-                          size={16}
-                          className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-neutral-500"
-                          aria-hidden
-                        />
-                      </div>
+                      <AppSelect
+                        value={site}
+                        onChange={setSite}
+                        className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 pr-10 text-sm font-semibold text-neutral-900 outline-none transition hover:border-neutral-300 focus-within:border-[#f39b03]/80 focus-within:ring-2 focus-within:ring-[#f39b03]/20"
+                        options={siteChoices.map((s) => ({ value: s, label: s }))}
+                      />
                     </label>
 
                     <label className="grid gap-2">

@@ -22,6 +22,7 @@ import { LayoutFooter } from './LayoutFooter'
 import { CardShell } from './dashboardCards'
 import { exportInvoicePdf } from './exportInvoicePdf'
 import { layoutBrandLogo } from './brandLogo'
+import { AppSelect } from './components/AppSelect'
 import { HeaderYearSelect } from './components/HeaderYearSelect'
 import { PageRefreshButton } from './components/PageRefreshButton'
 import { signOut } from './signOut'
@@ -356,17 +357,18 @@ export default function Invoice({ onNavigate }: InvoiceProps) {
                   </div>
                   <div>
                     <FieldLabel label="Work Type" />
-                    <select
+                    <AppSelect
                       value={formValues.workType}
-                      onChange={(e) => updateFormValue('workType', e.target.value)}
-                      className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-semibold text-neutral-700 outline-none focus:border-[#f39b03]"
-                    >
-                      <option>Plane Table</option>
-                      <option>P.T. &amp; Contour</option>
-                      <option>Stake Out</option>
-                      <option>Line Out</option>
-                      <option>Excavation Points</option>
-                    </select>
+                      onChange={(v) => updateFormValue('workType', v)}
+                      className="h-11 w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-semibold text-neutral-700 outline-none focus-within:border-[#f39b03] focus-within:ring-2 focus-within:ring-[#f39b03]/20"
+                      options={[
+                        { value: 'Plane Table', label: 'Plane Table' },
+                        { value: 'P.T. & Contour', label: 'P.T. & Contour' },
+                        { value: 'Stake Out', label: 'Stake Out' },
+                        { value: 'Line Out', label: 'Line Out' },
+                        { value: 'Excavation Points', label: 'Excavation Points' },
+                      ]}
+                    />
                   </div>
                   <div>
                     <FieldLabel label="Total Points" />

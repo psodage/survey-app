@@ -1,7 +1,8 @@
-import { Calendar, ChevronDown } from 'lucide-react'
+import { Calendar } from 'lucide-react'
 import { useMemo } from 'react'
 import { useSelectedYear } from '../context/SelectedYearContext'
 import { recordYearOptions } from '../recordYearConfig'
+import { AppSelect } from './AppSelect'
 
 type HeaderYearSelectProps = {
   /** Dark bar (mobile app header on md-) */
@@ -25,11 +26,11 @@ export function HeaderYearSelect({ variant = 'onLight', compact = false }: Heade
 
   const iconSize = compact ? 13 : 16
 
-  const selectClass = [
-    'w-full min-w-[3.25rem] cursor-pointer appearance-none rounded-md py-0.5 pl-1.5 pr-8 text-left text-[12px] font-extrabold tabular-nums outline-none',
+  const innerSelectClass = [
+    'w-full min-w-[3.25rem] rounded-md py-0.5 pl-1.5 pr-8 text-left text-[12px] font-extrabold tabular-nums outline-none',
     isDark
-      ? 'border border-white/15 bg-neutral-950 text-white [color-scheme:dark]'
-      : 'border border-neutral-200 bg-neutral-50 text-neutral-950 [color-scheme:light]',
+      ? 'border border-white/15 bg-neutral-950 text-white'
+      : 'border border-neutral-200 bg-neutral-50 text-neutral-950',
   ].join(' ')
 
   return (
@@ -37,22 +38,13 @@ export function HeaderYearSelect({ variant = 'onLight', compact = false }: Heade
       <Calendar size={iconSize} className="shrink-0 text-[#f39b03]" aria-hidden />
       <span className="sr-only">Record year</span>
       <div className="relative min-w-[3.25rem] flex-1">
-        <select
-          className={selectClass}
+        <AppSelect
           value={selectedYear}
+          onChange={setSelectedYear}
+          className={innerSelectClass}
           aria-label="Record year"
-          onChange={(e) => setSelectedYear(e.target.value)}
-        >
-          {years.map((y) => (
-            <option key={y} value={y} className={isDark ? 'bg-neutral-900 text-white' : 'bg-white text-neutral-900'}>
-              {y}
-            </option>
-          ))}
-        </select>
-        <ChevronDown
-          size={14}
-          className={`pointer-events-none absolute right-1 top-1/2 -translate-y-1/2 ${isDark ? 'text-white/80' : 'text-neutral-600'}`}
-          aria-hidden
+          searchableThreshold={99}
+          options={years.map((y) => ({ value: y, label: y }))}
         />
       </div>
     </label>

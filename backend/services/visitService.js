@@ -108,7 +108,8 @@ export async function listVisits(req) {
   }))
 }
 
-export async function createVisit(req, body) {
+/** @param {{ url: string, publicId: string, mimeType?: string }[]} preUploadedPhotos */
+export async function createVisit(req, body, { preUploadedPhotos } = {}) {
   const { allowedInstrumentIds } = await resolveInstrumentScope(req)
   const site = await Site.findOne({
     _id: body.siteId,
@@ -217,9 +218,31 @@ export async function createVisit(req, body) {
     paymentMode: body.paymentMode?.trim(),
     paymentStatus,
     notes: body.notes?.trim(),
-    photoUrls: [],
+    photoUrls: preUploadedPhotos?.map((p) => p.url) ?? [],
     photoFileIds: [],
   })
+
+  if (preUploadedPhotos?.length) {
+    const fileIds = []
+    try {
+      for (const up of preUploadedPhotos) {
+        const reg = await uploadService.registerSurveyFile(req, {
+          url: up.url,
+          publicId: up.publicId,
+          mimeType: up.mimeType ?? 'image/jpeg',
+          sizeBytes: up.bytes,
+          linked: { entityType: 'site_visit', entityId: visit._id },
+        })
+        fileIds.push(new mongoose.Types.ObjectId(reg.id))
+      }
+      visit.photoFileIds = fileIds
+      await visit.save()
+    } catch (linkErr) {
+      await uploadService.purgeCloudinaryForPhotoUrls(visit.photoUrls)
+      await SiteVisit.deleteOne({ _id: visit._id })
+      throw linkErr
+    }
+  }
 
   site.lastVisitAt = visitDate
   await site.save()
@@ -237,7 +260,7 @@ export async function createVisit(req, body) {
     paymentMode: visit.paymentMode ?? '',
     paymentStatus: paymentLabel(visit.paymentStatus),
     notes: visit.notes ?? '',
-    photoUrls: [],
+    photoUrls: visit.photoUrls ?? [],
     billingLines: serializeBillingLines(visit.billingLines),
     billingOtherCharges: Number.isFinite(Number(visit.billingOtherCharges)) ? Number(visit.billingOtherCharges) : 0,
   }
@@ -274,13 +297,43 @@ export async function getVisitById(req, visitId) {
   }
 }
 
+/**
+ * Upload visit photos to Cloudinary first, then create the visit (no partial DB row on upload failure).
+ */
+export async function createVisitWithPhotos(req, body, files) {
+  const staged = []
+  try {
+    for (const file of files ?? []) {
+      const up = await uploadService.uploadBufferToCloudinary({
+        buffer: file.buffer,
+        mimeType: file.mimetype,
+        folder: 'survey-app/visits',
+      })
+      staged.push({
+        url: up.url,
+        publicId: up.publicId,
+        mimeType: file.mimetype,
+        bytes: up.bytes,
+      })
+    }
+    return await createVisit(req, body, { preUploadedPhotos: staged })
+  } catch (err) {
+    if (staged.length) {
+      await uploadService.deleteCloudinaryAssets(
+        staged.map((s) => ({ publicId: s.publicId, mimeType: s.mimeType })),
+      )
+    }
+    throw err
+  }
+}
+
 export async function appendVisitPhotos(req, visitId, { urls, fileIds }) {
   const { allowedInstrumentIds } = await resolveInstrumentScope(req)
   const visit = await SiteVisit.findOne({
     _id: visitId,
     companyId: req.user.companyId,
     ...instrumentScopeMatch(allowedInstrumentIds),
-    ...adminIdFilter(req),
+    ...(await peerAwareAdminScopeMatch(req)),
   })
   if (!visit) throw new ApiError(404, 'Visit not found')
   if (urls?.length) {

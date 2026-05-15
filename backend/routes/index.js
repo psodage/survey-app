@@ -20,6 +20,7 @@ import * as calculatorService from '../services/calculatorService.js'
 import * as instrumentService from '../services/instrumentService.js'
 import * as uploadService from '../services/uploadService.js'
 import { parseObjectId } from '../utils/instrumentAccess.js'
+import { ApiError } from '../utils/ApiError.js'
 import {
   loginSchema,
   forgotPasswordSchema,
@@ -148,6 +149,23 @@ router.post('/visits', validateBody(createVisitSchema), catchAsync(async (req, r
   res.status(201).json({ ok: true, visit: data })
 }))
 
+router.post(
+  '/visits/with-photos',
+  upload.array('photos', 12),
+  catchAsync(async (req, res) => {
+    let body
+    try {
+      const raw = req.body?.payload
+      body = createVisitSchema.parse(typeof raw === 'string' ? JSON.parse(raw) : req.body)
+    } catch {
+      throw new ApiError(400, 'Invalid visit payload')
+    }
+    const files = req.files ?? []
+    const data = await visitService.createVisitWithPhotos(req, body, files)
+    res.status(201).json({ ok: true, visit: data })
+  }),
+)
+
 router.get('/visits/:id', catchAsync(async (req, res) => {
   const id = parseObjectId(req.params.id, 'visit id')
   const data = await visitService.getVisitById(req, id)
@@ -166,26 +184,37 @@ router.post(
   catchAsync(async (req, res) => {
     const visitId = parseObjectId(req.params.id, 'visit id')
     const files = req.files ?? []
-    const urls = []
-    const fileIds = []
-    for (const file of files) {
-      const up = await uploadService.uploadBufferToCloudinary({
-        buffer: file.buffer,
-        mimeType: file.mimetype,
-        folder: 'survey-app/visits',
+    const staged = []
+    try {
+      for (const file of files) {
+        const up = await uploadService.uploadBufferToCloudinary({
+          buffer: file.buffer,
+          mimeType: file.mimetype,
+          folder: 'survey-app/visits',
+        })
+        const reg = await uploadService.registerSurveyFile(req, {
+          url: up.url,
+          publicId: up.publicId,
+          mimeType: file.mimetype,
+          sizeBytes: up.bytes ?? file.size,
+          linked: { entityType: 'site_visit', entityId: visitId },
+        })
+        staged.push({ url: up.url, fileId: reg.id })
+      }
+      await visitService.appendVisitPhotos(req, visitId, {
+        urls: staged.map((s) => s.url),
+        fileIds: staged.map((s) => s.fileId),
       })
-      const reg = await uploadService.registerSurveyFile(req, {
-        url: up.url,
-        publicId: up.publicId,
-        mimeType: file.mimetype,
-        sizeBytes: up.bytes ?? file.size,
-        linked: { entityType: 'site_visit', entityId: visitId },
-      })
-      urls.push(up.url)
-      fileIds.push(reg.id)
+      res.json({ ok: true, urls: staged.map((s) => s.url), fileIds: staged.map((s) => s.fileId) })
+    } catch (uploadErr) {
+      if (staged.length) {
+        const fileObjectIds = staged.map((s) => new mongoose.Types.ObjectId(s.fileId))
+        await uploadService.purgeCloudinaryForSurveyFileIds(req.user.companyId, fileObjectIds)
+        await uploadService.purgeCloudinaryForPhotoUrls(staged.map((s) => s.url))
+        throw uploadErr instanceof ApiError ? uploadErr : new ApiError(502, 'Photo upload failed')
+      }
+      throw uploadErr
     }
-    await visitService.appendVisitPhotos(req, visitId, { urls, fileIds })
-    res.json({ ok: true, urls, fileIds })
   }),
 )
 
@@ -248,6 +277,7 @@ router.get('/account-managers/:slug/accounts', catchAsync(async (req, res) => {
       totalCredit: summary.totalCredit,
       netBalance: summary.netBalance,
       pendingTotal: summary.pendingTotal,
+      globalPendingTotal: summary.globalPendingTotal,
     },
     manager: {
       slug: am.slug,

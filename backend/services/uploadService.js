@@ -144,6 +144,9 @@ export async function uploadBufferToCloudinary({ buffer, mimeType, folder }) {
     )
     Readable.from(buffer).pipe(stream)
   })
+  if (!uploadResult?.secure_url || !uploadResult?.public_id) {
+    throw new ApiError(502, 'Cloudinary upload did not return a valid asset')
+  }
   return {
     url: uploadResult.secure_url,
     publicId: uploadResult.public_id,

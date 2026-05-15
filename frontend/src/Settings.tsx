@@ -29,6 +29,7 @@ import { layoutBrandLogo } from './brandLogo'
 import { CollaborationBrandMark } from './CollaborationBrandMark'
 import { LayoutFooter } from './LayoutFooter'
 import { CardShell } from './dashboardCards'
+import { AppSelect } from './components/AppSelect'
 import { HeaderYearSelect } from './components/HeaderYearSelect'
 import { PageRefreshButton } from './components/PageRefreshButton'
 import { useRefresh } from './context/RefreshContext'
@@ -1148,15 +1149,16 @@ export default function Settings({ onNavigate }: SettingsProps) {
                         />
                       </Field>
                       <Field label="Position on invoice PDF">
-                        <select
+                        <AppSelect
                           value={bdInvoiceSlot}
-                          onChange={(e) => setBdInvoiceSlot(e.target.value)}
-                          className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
-                        >
-                          <option value="">Not shown as a column (omit from dual block)</option>
-                          <option value="1">Left column</option>
-                          <option value="2">Right column</option>
-                        </select>
+                          onChange={setBdInvoiceSlot}
+                          className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition focus-within:border-[#f39b03]/80 focus-within:ring-2 focus-within:ring-[#f39b03]/20"
+                          options={[
+                            { value: '', label: 'Not shown as a column (omit from dual block)' },
+                            { value: '1', label: 'Left column' },
+                            { value: '2', label: 'Right column' },
+                          ]}
+                        />
                       </Field>
                     </div>
                     <div className="mt-4 grid grid-cols-1 gap-3 sm:max-w-md">

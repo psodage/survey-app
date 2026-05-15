@@ -13,6 +13,7 @@ import {
   MapPin,
   Menu,
   Plus,
+  Trash2,
   UsersRound,
   User2,
   X,
@@ -33,8 +34,12 @@ import {
   toolbarSearchInputClass,
   toolbarSecondaryButtonClass,
 } from './dashboardCards'
+import { ConfirmAlert } from './ConfirmAlert'
 import { exportCombinedSiteInvoicePdf, exportInvoicePdf, type InvoicePdfBillingLine } from './exportInvoicePdf'
+import { exportSiteReportPdf } from './exportSiteReportPdf'
 import { exportVisitRecordPdf } from './exportVisitRecordPdf'
+import { AppSelect } from './components/AppSelect'
+import { toast } from 'sonner'
 import { layoutBrandLogo } from './brandLogo'
 import { HeaderYearSelect } from './components/HeaderYearSelect'
 import { PageRefreshButton } from './components/PageRefreshButton'
@@ -95,6 +100,8 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
   const [visitPaymentFilter, setVisitPaymentFilter] = useState('all')
   const [visitPaymentStatusFilter, setVisitPaymentStatusFilter] = useState('all')
   const [exportBusy, setExportBusy] = useState(false)
+  const [pendingDeleteVisit, setPendingDeleteVisit] = useState<SiteVisitRecord | null>(null)
+  const [deleteVisitBusy, setDeleteVisitBusy] = useState(false)
   const { pathname: routerPathname, search } = useRouterLocation()
   const urlParams = useMemo(() => new URLSearchParams(search), [search])
   const mode = urlParams.get('mode') ?? 'site'
@@ -325,24 +332,97 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
     setVisitPaymentStatusFilter('all')
   }
 
-  const handleExportFilteredSiteInvoice = () => {
+  const handleExportSiteReport = () => {
     if (filteredVisitRecords.length === 0 || exportBusy) return
-    const visits = filteredVisitRecords.map((r) => ({
-      visitId: r.id,
-      date: r.date,
-      machine: r.machine,
-      amount: pendingAmountNum(r),
-    }))
+    const filterNote = hasActiveVisitFilters
+      ? `Filtered export · ${filteredVisitRecords.length} of ${relatedVisitRecords.length} visits`
+      : undefined
     setExportBusy(true)
-    void runExport('invoice', () =>
-      exportCombinedSiteInvoicePdf({
+    void runExport('site report', () =>
+      exportSiteReportPdf({
         client,
-        site: name,
+        siteName: name,
         location: location !== 'Unknown Location' ? location : undefined,
-        invoiceDate: new Date().toLocaleDateString('en-GB'),
-        visits,
+        status,
+        lastVisit,
+        year: selectedYear,
+        filterNote,
+        visits: filteredVisitRecords.map((r) => ({
+          id: r.id,
+          date: r.date,
+          machine: r.machine,
+          paymentMode: r.paymentMode,
+          paymentStatus: r.paymentStatus,
+          amount: r.amount,
+          pendingAmount: r.pendingAmount,
+          work: r.work,
+        })),
       }),
     ).finally(() => setExportBusy(false))
+  }
+
+  const reloadSiteVisits = () => {
+    if (!token || isVisitMode) return
+    setVisitsFetchState('loading')
+    void (async () => {
+      try {
+        const params: { year: string; siteId?: string } = { year: selectedYear }
+        if (siteId) params.siteId = siteId
+        const res = await http.get<{
+          ok: boolean
+          visits: SiteVisitRecord[]
+        }>('/api/visits', { params })
+        if (!res.data?.ok) {
+          setRelatedVisitRecords([])
+          setVisitsFetchState('error')
+          return
+        }
+        let rows = res.data.visits ?? []
+        if (!siteId && client !== 'Unknown Client' && name !== 'Unknown Site') {
+          rows = rows.filter((v) => v.client === client && v.site === name)
+        }
+        setRelatedVisitRecords(rows)
+        setVisitsFetchState('ok')
+      } catch {
+        setRelatedVisitRecords([])
+        setVisitsFetchState('error')
+      }
+    })()
+  }
+
+  const handleConfirmDeleteVisit = async () => {
+    if (!pendingDeleteVisit) return
+    const mid = pendingDeleteVisit.visitMongoId
+    if (!mid) {
+      toast.error('Missing visit id')
+      setPendingDeleteVisit(null)
+      return
+    }
+    setDeleteVisitBusy(true)
+    try {
+      const res = await http.delete<{ ok?: boolean }>(`/api/visits/${mid}`)
+      if (!res.data?.ok) {
+        toast.error('Could not delete visit')
+        return
+      }
+      toast.success('Visit deleted')
+      setPendingDeleteVisit(null)
+      if (isVisitMode && visitMongoId === mid) {
+        const params = new URLSearchParams({ client, name })
+        if (siteId) params.set('siteId', siteId)
+        if (location !== 'Unknown Location') params.set('location', location)
+        if (lastVisit !== '-') params.set('lastVisit', lastVisit)
+        if (status) params.set('status', status)
+        if (pending) params.set('pending', pending)
+        onNavigate(`/site-details?${params.toString()}`)
+        return
+      }
+      reloadSiteVisits()
+    } catch {
+      toast.error('Could not delete visit')
+    } finally {
+      setDeleteVisitBusy(false)
+    }
   }
   const getVisitDetailsPath = (record: SiteVisitRecord) => {
     const next = new URLSearchParams({
@@ -833,19 +913,16 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                   </div>
                   <div className="flex w-full flex-wrap items-center gap-2.5 md:w-auto md:justify-end">
                    
-                    <select
+                    <AppSelect
                       value={visitPaymentStatusFilter}
-                      onChange={(e) => setVisitPaymentStatusFilter(e.target.value)}
+                      onChange={setVisitPaymentStatusFilter}
                       className={toolbarSelectClass}
                       aria-label="Filter by payment status"
-                    >
-                      <option value="all">All pay status</option>
-                      {visitPaymentStatusOptions.map((s) => (
-                        <option key={s} value={s}>
-                          {s}
-                        </option>
-                      ))}
-                    </select>
+                      options={[
+                        { value: 'all', label: 'All pay status' },
+                        ...visitPaymentStatusOptions.map((s) => ({ value: s, label: s })),
+                      ]}
+                    />
                     {hasActiveVisitFilters ? (
                       <button type="button" className={toolbarSecondaryButtonClass} onClick={clearVisitFilters}>
                         Clear
@@ -855,9 +932,9 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                       type="button"
                       className={toolbarSecondaryButtonClass}
                       disabled={filteredVisitRecords.length === 0 || exportBusy}
-                      onClick={handleExportFilteredSiteInvoice}
+                      onClick={handleExportSiteReport}
                     >
-                      {exportBusy ? 'Exporting…' : 'Export'}
+                      {exportBusy ? 'Exporting…' : 'Export report'}
                     </button>
                     <button type="button" onClick={() => onNavigate(addSiteVisitPath)} className={toolbarPrimaryButtonClass}>
                       <Plus className={toolbarPlusIconClass} />
@@ -905,6 +982,31 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                     >
                       <Download size={15} />
                       Visit record (PDF)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (visitMongoId) {
+                          setPendingDeleteVisit({
+                            id: visitId,
+                            visitMongoId,
+                            client,
+                            site: name,
+                            date: visitDate,
+                            machine,
+                            amount,
+                            paymentMode,
+                            paymentStatus,
+                            notes,
+                            work,
+                          })
+                        }
+                      }}
+                      disabled={!visitMongoId || deleteVisitBusy}
+                      className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 text-xs font-extrabold text-rose-700 transition hover:bg-rose-100 sm:text-sm disabled:opacity-50"
+                    >
+                      <Trash2 size={15} />
+                      Delete visit
                     </button>
                     <button
                       type="button"
@@ -1057,6 +1159,19 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                                   <Calculator size={12} className="text-[#f39b03]" />
                                   Invoice
                                 </button>
+                                {record.visitMongoId ? (
+                                  <button
+                                    type="button"
+                                    onClick={(event) => {
+                                      event.stopPropagation()
+                                      setPendingDeleteVisit(record)
+                                    }}
+                                    className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-2.5 text-[10px] font-extrabold text-rose-700 transition hover:bg-rose-100"
+                                  >
+                                    <Trash2 size={12} />
+                                    Delete
+                                  </button>
+                                ) : null}
                               </div>
                             </li>
                           ))}
@@ -1076,6 +1191,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                               <th className="px-4 py-3">Notes</th>
                               <th className="px-4 py-3 text-center">Visit PDF</th>
                               <th className="px-4 py-3 text-center">Invoice</th>
+                              <th className="px-4 py-3 text-center">Delete</th>
                             </tr>
                           </thead>
                           <tbody className="text-sm font-semibold text-neutral-800">
@@ -1135,6 +1251,23 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                                     Individual
                                   </button>
                                 </td>
+                                <td className="px-4 py-3 text-center">
+                                  {record.visitMongoId ? (
+                                    <button
+                                      type="button"
+                                      onClick={(event) => {
+                                        event.stopPropagation()
+                                        setPendingDeleteVisit(record)
+                                      }}
+                                      className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-2.5 text-[11px] font-extrabold text-rose-700 transition hover:bg-rose-100"
+                                    >
+                                      <Trash2 size={12} />
+                                      Delete
+                                    </button>
+                                  ) : (
+                                    '—'
+                                  )}
+                                </td>
                               </tr>
                             ))}
                           </tbody>
@@ -1182,6 +1315,26 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
         </div>
         <div aria-hidden className="mobile-nav-safe-spacer" />
       </nav>
+
+      <ConfirmAlert
+        open={Boolean(pendingDeleteVisit)}
+        variant="danger"
+        title="Delete this site visit?"
+        description="This removes the visit record, linked transactions, and photos from Cloudinary. This cannot be undone."
+        detail={
+          pendingDeleteVisit
+            ? `${pendingDeleteVisit.id} · ${pendingDeleteVisit.date} · ${pendingDeleteVisit.client} / ${pendingDeleteVisit.site}`
+            : undefined
+        }
+        confirmLabel="Delete visit"
+        confirmBusy={deleteVisitBusy}
+        onCancel={() => {
+          if (!deleteVisitBusy) setPendingDeleteVisit(null)
+        }}
+        onConfirm={() => {
+          void handleConfirmDeleteVisit()
+        }}
+      />
 
       <LayoutFooter />
     </div>

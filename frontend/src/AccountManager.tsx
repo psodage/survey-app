@@ -24,6 +24,7 @@ import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from '
 import { Navigate, useLocation, useParams, useSearchParams, type NavigateFunction } from 'react-router-dom'
 import { AccountManagerSidebarBlock } from './AccountManagerSidebarBlock'
 import { ConfirmAlert } from './ConfirmAlert'
+import { AppSelect } from './components/AppSelect'
 import { CollaborationBrandMark } from './CollaborationBrandMark'
 import { LayoutFooter } from './LayoutFooter'
 import { type AccountRow, type LedgerTransaction } from './accountManagersData'
@@ -106,6 +107,7 @@ type LedgerSummary = {
   totalCredit: number
   netBalance: number
   pendingTotal: number
+  globalPendingTotal?: number
 }
 
 export default function AccountManager({ onNavigate }: AccountManagerProps) {
@@ -155,7 +157,8 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
     return Object.keys(clientSiteOptions).sort((a, b) => a.localeCompare(b))
   }, [accountRows, clientSiteOptions])
   const totalPendingFromRows = accountRows.reduce((sum, row) => sum + parseCurrency(row.pending), 0)
-  const totalPending = ledgerSummary?.pendingTotal ?? totalPendingFromRows
+  const totalPending =
+    ledgerSummary?.globalPendingTotal ?? ledgerSummary?.pendingTotal ?? totalPendingFromRows
   const [isAddOpen, setIsAddOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [transactionFilter, setTransactionFilter] = useState<'all' | TransactionType>('all')
@@ -854,29 +857,31 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   {viewMode === 'pending' ? (
-                    <select
+                    <AppSelect
                       value={pendingFilter}
-                      onChange={(event) => setPendingFilter(event.target.value as 'all' | 'withPending' | 'cleared')}
+                      onChange={(v) => setPendingFilter(v as 'all' | 'withPending' | 'cleared')}
                       disabled={isLedgerLoading}
-                      className={toolbarSecondaryButtonClass}
+                      className={[toolbarSecondaryButtonClass, 'min-w-[9.5rem]'].join(' ')}
                       aria-label="Filter pending rows"
-                    >
-                      <option value="all">All Clients</option>
-                      <option value="withPending">With Pending</option>
-                      <option value="cleared">Cleared</option>
-                    </select>
+                      options={[
+                        { value: 'all', label: 'All Clients' },
+                        { value: 'withPending', label: 'With Pending' },
+                        { value: 'cleared', label: 'Cleared' },
+                      ]}
+                    />
                   ) : (
-                    <select
+                    <AppSelect
                       value={transactionFilter}
-                      onChange={(event) => setTransactionFilter(event.target.value as 'all' | TransactionType)}
+                      onChange={(v) => setTransactionFilter(v as 'all' | TransactionType)}
                       disabled={isLedgerLoading}
-                      className={toolbarSecondaryButtonClass}
+                      className={[toolbarSecondaryButtonClass, 'min-w-[8.5rem]'].join(' ')}
                       aria-label="Filter transactions by type"
-                    >
-                      <option value="all">All Types</option>
-                      <option value="debit">Debit</option>
-                      <option value="credit">Credit</option>
-                    </select>
+                      options={[
+                        { value: 'all', label: 'All Types' },
+                        { value: 'debit', label: 'Debit' },
+                        { value: 'credit', label: 'Credit' },
+                      ]}
+                    />
                   )}
                   {viewMode !== 'pending' ? (
                     <>
@@ -1060,10 +1065,9 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                     <div className="grid grid-cols-2 gap-2 md:gap-3">
                       <label className="grid gap-1">
                         <span className="text-xs font-bold text-neutral-700">Type</span>
-                        <select
+                        <AppSelect
                           value={draftTx.type}
-                          onChange={(event) => {
-                            const nextType = event.target.value as TransactionType
+                          onChange={(nextType) => {
                             setDraftTx((prev) => {
                               if (nextType === 'debit') {
                                 return { ...prev, type: 'debit', client: undefined, site: undefined, reason: prev.reason ?? '' }
@@ -1073,11 +1077,12 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                               return { ...prev, type: 'credit', reason: '', client: defaultClient, site: defaultSite }
                             })
                           }}
-                          className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
-                        >
-                          <option value="debit">Debit</option>
-                          <option value="credit">Credit</option>
-                        </select>
+                          className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none focus-within:border-[#f39b03]/80 focus-within:ring-2 focus-within:ring-[#f39b03]/20"
+                          options={[
+                            { value: 'debit', label: 'Debit' },
+                            { value: 'credit', label: 'Credit' },
+                          ]}
+                        />
                       </label>
 
                       <label className="grid gap-1">
@@ -1119,39 +1124,35 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                       <div className="grid grid-cols-2 gap-2 md:gap-3">
                         <label className="grid gap-1">
                           <span className="text-xs font-bold text-neutral-700">Client (Credit)</span>
-                          <select
+                          <AppSelect
                             value={draftTx.client ?? clientOptions[0] ?? ''}
-                            onChange={(event) => {
-                              const nextClient = event.target.value
+                            onChange={(nextClient) => {
                               const sites = clientSiteOptions[nextClient] ?? []
                               setDraftTx((prev) => ({ ...prev, client: nextClient, site: sites[0] ?? '' }))
                             }}
                             disabled={clientOptions.length === 0}
-                            className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-500"
-                          >
-                            {clientOptions.length === 0 ? <option value="">No clients available</option> : null}
-                            {clientOptions.map((client) => (
-                              <option key={client} value={client}>
-                                {client}
-                              </option>
-                            ))}
-                          </select>
+                            placeholder="No clients available"
+                            className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none focus-within:border-[#f39b03]/80 focus-within:ring-2 focus-within:ring-[#f39b03]/20 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-500"
+                            options={
+                              clientOptions.length === 0
+                                ? [{ value: '', label: 'No clients available', disabled: true }]
+                                : clientOptions.map((c) => ({ value: c, label: c }))
+                            }
+                          />
                         </label>
 
                         <label className="grid gap-1">
                           <span className="text-xs font-bold text-neutral-700">Site</span>
-                          <select
+                          <AppSelect
                             value={draftTx.site ?? ''}
-                            onChange={(event) => setDraftTx((prev) => ({ ...prev, site: event.target.value }))}
+                            onChange={(site) => setDraftTx((prev) => ({ ...prev, site }))}
                             disabled={clientOptions.length === 0}
-                            className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-500"
-                          >
-                            {(clientSiteOptions[draftTx.client ?? clientOptions[0] ?? ''] ?? []).map((site) => (
-                              <option key={site} value={site}>
-                                {site}
-                              </option>
-                            ))}
-                          </select>
+                            className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none focus-within:border-[#f39b03]/80 focus-within:ring-2 focus-within:ring-[#f39b03]/20 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-500"
+                            options={(clientSiteOptions[draftTx.client ?? clientOptions[0] ?? ''] ?? []).map((s) => ({
+                              value: s,
+                              label: s,
+                            }))}
+                          />
                         </label>
                       </div>
                     )}

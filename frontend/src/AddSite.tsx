@@ -21,6 +21,7 @@ import { CollaborationBrandMark } from './CollaborationBrandMark'
 import { LayoutFooter } from './LayoutFooter'
 import { CardPanel, toolbarSearchInputClass, toolbarSecondaryButtonClass } from './dashboardCards'
 import { layoutBrandLogo } from './brandLogo'
+import { AppSelect } from './components/AppSelect'
 import { HeaderYearSelect } from './components/HeaderYearSelect'
 import { PageRefreshButton } from './components/PageRefreshButton'
 import { useRefresh } from './context/RefreshContext'
@@ -245,34 +246,30 @@ export default function AddSite({ onNavigate }: AddSiteProps) {
                   placeholder="Search client..."
                   className={toolbarSearchInputClass}
                 />
-                <select
+                <AppSelect
                   value={clientGroupFilter}
-                  onChange={(event) => setClientGroupFilter(event.target.value as 'all' | 'a-m' | 'n-z')}
-                  className={toolbarSecondaryButtonClass}
+                  onChange={(v) => setClientGroupFilter(v as 'all' | 'a-m' | 'n-z')}
+                  className={[toolbarSecondaryButtonClass, 'min-w-[8rem]'].join(' ')}
                   aria-label="Filter clients by alphabet range"
-                >
-                  <option value="all">All Clients</option>
-                  <option value="a-m">A to M</option>
-                  <option value="n-z">N to Z</option>
-                </select>
+                  options={[
+                    { value: 'all', label: 'All Clients' },
+                    { value: 'a-m', label: 'A to M' },
+                    { value: 'n-z', label: 'N to Z' },
+                  ]}
+                />
                 <div className="md:col-span-2">
                   <label className="grid gap-1">
                     <span className="text-xs font-bold text-neutral-700">Selected Client</span>
-                    <select
+                    <AppSelect
                       value={selectedClient}
-                      onChange={(event) => setSelectedClient(event.target.value)}
-                      className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
-                    >
-                      {filteredClientOptions.length > 0 ? (
-                        filteredClientOptions.map((clientName) => (
-                          <option key={clientName} value={clientName}>
-                            {clientName}
-                          </option>
-                        ))
-                      ) : (
-                        <option value={selectedClient}>No matching clients</option>
-                      )}
-                    </select>
+                      onChange={setSelectedClient}
+                      className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition focus-within:border-[#f39b03]/80 focus-within:ring-2 focus-within:ring-[#f39b03]/20"
+                      options={
+                        filteredClientOptions.length > 0
+                          ? filteredClientOptions.map((clientName) => ({ value: clientName, label: clientName }))
+                          : [{ value: selectedClient, label: 'No matching clients', disabled: true }]
+                      }
+                    />
                   </label>
                 </div>
               </div>
