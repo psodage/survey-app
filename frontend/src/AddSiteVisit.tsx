@@ -1018,7 +1018,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                           const sites = sitesByClient[next] ?? []
                           setSite(sites[0] ?? '')
                         }}
-                        className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 pr-10 text-sm font-semibold text-neutral-900 outline-none transition hover:border-neutral-300 focus-within:border-[#f39b03]/80 focus-within:ring-2 focus-within:ring-[#f39b03]/20"
+                        className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition hover:border-neutral-300 focus-within:border-[#f39b03]/80 focus-within:ring-2 focus-within:ring-[#f39b03]/20"
                         options={clientOptions.map((c) => ({ value: c, label: c }))}
                       />
                     </label>
@@ -1028,7 +1028,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                       <AppSelect
                         value={site}
                         onChange={setSite}
-                        className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 pr-10 text-sm font-semibold text-neutral-900 outline-none transition hover:border-neutral-300 focus-within:border-[#f39b03]/80 focus-within:ring-2 focus-within:ring-[#f39b03]/20"
+                        className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition hover:border-neutral-300 focus-within:border-[#f39b03]/80 focus-within:ring-2 focus-within:ring-[#f39b03]/20"
                         options={siteChoices.map((s) => ({ value: s, label: s }))}
                       />
                     </label>

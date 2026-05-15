@@ -144,11 +144,11 @@ export function AppSelect({
         }}
         onKeyDown={onKeyDown}
         className={[
-          'relative flex h-full w-full min-w-0 items-center justify-between gap-2 rounded-[inherit] border-0 bg-transparent px-[inherit] py-[inherit] text-left font-[inherit] text-[inherit] outline-none',
+          'flex h-full w-full min-w-0 appearance-none items-center justify-between gap-2 rounded-[inherit] border-0 bg-transparent text-left outline-none',
           disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
         ].join(' ')}
       >
-        <span className={selected ? 'truncate' : 'truncate text-neutral-400'}>
+        <span className={selected ? 'min-w-0 flex-1 truncate' : 'min-w-0 flex-1 truncate text-neutral-400'}>
           {selected?.label ?? placeholder}
         </span>
         <ChevronDown
