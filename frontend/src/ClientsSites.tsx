@@ -46,7 +46,7 @@ import { ConfirmAlert } from './ConfirmAlert'
 import { TablePagination } from './components/TablePagination'
 import {
   exportAllClientsExcel,
-  exportAllClientsPdf,
+  exportAllClientsExport,
   exportClientExcel,
   exportClientPdf,
 } from './utils/exportClientsReport'
@@ -988,16 +988,9 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                         disabled={exportBusy || filteredRows.length === 0}
                         onClick={handleExportAllClientsPdf}
                       >
-                        {exportBusy ? 'Exporting…' : 'PDF'}
+                        {exportBusy ? 'Exporting…' : 'Export'}
                       </button>
-                      <button
-                        type="button"
-                        className={toolbarSecondaryButtonClass}
-                        disabled={exportBusy || filteredRows.length === 0}
-                        onClick={handleExportAllClientsExcel}
-                      >
-                        Excel
-                      </button>
+                    
                       <button
                         type="button"
                         onClick={handleOpenAddClientModal}
@@ -1038,18 +1031,11 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                       type="button"
                       className={toolbarSecondaryButtonClass}
                       disabled={exportBusy}
-                      onClick={handleExportClientPdf}
+                      onClick={handleExportClientExport}
                     >
-                      {exportBusy ? 'Exporting…' : 'PDF'}
+                      {exportBusy ? 'Exporting…' : 'Export'}
                     </button>
-                    <button
-                      type="button"
-                      className={toolbarSecondaryButtonClass}
-                      disabled={exportBusy}
-                      onClick={handleExportClientExcel}
-                    >
-                      Excel
-                    </button>
+                    
                     <button type="button" onClick={handleOpenAddSiteModal} className={toolbarPrimaryButtonClass}>
                       <Plus className={toolbarPlusIconClass} />
                       Add New Site

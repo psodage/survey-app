@@ -26,19 +26,12 @@ import VerifyOtp from './VerifyOtp.jsx'
 import ResetPassword from './ResetPassword.jsx'
 import { useAuth } from './context/AuthContext'
 
-function AuthLoading() {
-  return <div className="min-h-[100svh] bg-neutral-100 md:bg-neutral-100" aria-busy="true" />
-}
-
 const PUBLIC_PATHS = new Set(['/login', '/forgot-password', '/verify-reset-otp', '/reset-password'])
 
 /** Require a session for app routes; allow login + full password-reset flow without a session. */
 function AuthBoundary() {
-  const { token, isLoading } = useAuth()
+  const { token } = useAuth()
   const location = useLocation()
-  if (isLoading) {
-    return <AuthLoading />
-  }
   if (!token && !PUBLIC_PATHS.has(location.pathname)) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />
   }
@@ -49,18 +42,12 @@ function AuthBoundary() {
 }
 
 function HomeRedirect() {
-  const { token, isLoading } = useAuth()
-  if (isLoading) {
-    return <AuthLoading />
-  }
+  const { token } = useAuth()
   return <Navigate to={token ? '/dashboard' : '/login'} replace />
 }
 
 function CatchAllRedirect() {
-  const { token, isLoading } = useAuth()
-  if (isLoading) {
-    return <AuthLoading />
-  }
+  const { token } = useAuth()
   return <Navigate to={token ? '/dashboard' : '/login'} replace />
 }
 
