@@ -1,5 +1,4 @@
 import {
-  Bell,
   Briefcase,
   Building2,
   CircleUserRound,
@@ -25,6 +24,8 @@ import { CollaborationBrandMark } from './CollaborationBrandMark'
 import { LayoutFooter } from './LayoutFooter'
 import { CardPanel } from './dashboardCards'
 import { HeaderYearSelect } from './components/HeaderYearSelect'
+import { PageRefreshButton } from './components/PageRefreshButton'
+import { useRefresh } from './context/RefreshContext'
 import { signOut } from './signOut'
 
 type NavItem = {
@@ -66,6 +67,7 @@ type InstrumentPeerAm = {
 
 export default function AccountManagerSelect({ onNavigate }: AccountManagerSelectProps) {
   const { managers, token, activeInstrumentId, user } = useAuth()
+  const { refreshTick } = useRefresh()
   const [instrumentAdmins, setInstrumentAdmins] = useState<InstrumentPeerAm[]>([])
 
   useEffect(() => {
@@ -89,7 +91,7 @@ export default function AccountManagerSelect({ onNavigate }: AccountManagerSelec
     return () => {
       cancelled = true
     }
-  }, [token, activeInstrumentId])
+  }, [token, activeInstrumentId, refreshTick])
 
   const pickList = useMemo((): PickRow[] => {
     const fromInstrument = instrumentAdmins
@@ -310,14 +312,7 @@ export default function AccountManagerSelect({ onNavigate }: AccountManagerSelec
                 <div className="flex min-w-0 justify-center px-1">
                   <CollaborationBrandMark variant="mobileHeader" />
                 </div>
-                <button
-                  type="button"
-                  className="relative grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white/5 text-white ring-1 ring-white/10 transition hover:bg-white/10"
-                  aria-label="Notifications"
-                >
-                  <Bell size={18} strokeWidth={2} className="text-white" />
-                  <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-white ring-2 ring-black" />
-                </button>
+                <PageRefreshButton variant="onDark" />
               </div>
               <div className="flex items-center justify-between gap-3 border-t border-white/10 px-4 py-3">
                 <h1 className="min-w-0 truncate text-left text-base font-extrabold leading-tight tracking-tight text-white">
@@ -342,6 +337,7 @@ export default function AccountManagerSelect({ onNavigate }: AccountManagerSelec
                 </div>
               </div>
               <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+                <PageRefreshButton variant="onLight" />
                 <HeaderYearSelect variant="onLight" />
                 <div className="hidden items-center gap-3 rounded-xl bg-neutral-100 px-3 py-2 ring-1 ring-black/5 sm:flex sm:px-4 sm:py-2.5">
                   <div className="grid h-9 w-9 place-items-center rounded-xl bg-[#f39b03]/15 text-[#f39b03]">

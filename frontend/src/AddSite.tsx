@@ -1,6 +1,5 @@
 import {
   ArrowLeft,
-  Bell,
   Briefcase,
   Building2,
   CircleUserRound,
@@ -23,6 +22,8 @@ import { LayoutFooter } from './LayoutFooter'
 import { CardPanel, toolbarSearchInputClass, toolbarSecondaryButtonClass } from './dashboardCards'
 import { layoutBrandLogo } from './brandLogo'
 import { HeaderYearSelect } from './components/HeaderYearSelect'
+import { PageRefreshButton } from './components/PageRefreshButton'
+import { useRefresh } from './context/RefreshContext'
 import { toast } from 'sonner'
 import http from './api/http'
 import { useAuth } from './context/AuthContext'
@@ -36,6 +37,7 @@ type AddSiteProps = {
 export default function AddSite({ onNavigate }: AddSiteProps) {
   const { token } = useAuth()
   const { selectedYear } = useSelectedYear()
+  const { refreshTick } = useRefresh()
   const location = useLocation()
   const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search])
   const clientFromQuery = searchParams.get('client')
@@ -73,7 +75,7 @@ export default function AddSite({ onNavigate }: AddSiteProps) {
         toast.error('Could not load clients')
       }
     })()
-  }, [token, clientFromQuery, selectedYear])
+  }, [token, clientFromQuery, selectedYear, refreshTick])
 
   const filteredClientOptions = useMemo(() => {
     const normalizedQuery = clientSearchQuery.trim().toLowerCase()
@@ -185,10 +187,7 @@ export default function AddSite({ onNavigate }: AddSiteProps) {
                 <div className="flex min-w-0 justify-center px-1">
                   <CollaborationBrandMark variant="mobileHeader" />
                 </div>
-                <button type="button" className="relative grid h-9 w-9 place-items-center rounded-xl bg-white/5 text-white ring-1 ring-white/10" aria-label="Notifications">
-                  <Bell size={18} strokeWidth={2} className="text-white" />
-                  <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-white ring-2 ring-black" />
-                </button>
+                <PageRefreshButton variant="onDark" />
               </div>
               <div className="flex items-center justify-between gap-3 border-t border-white/10 px-4 py-3">
                 <h1 className="min-w-0 truncate text-left text-base font-extrabold leading-tight tracking-tight text-white">
@@ -210,6 +209,7 @@ export default function AddSite({ onNavigate }: AddSiteProps) {
                 <div className="truncate text-lg font-extrabold tracking-tight text-neutral-950 sm:text-xl">Add New Site</div>
               </div>
               <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+                <PageRefreshButton variant="onLight" />
                 <HeaderYearSelect variant="onLight" />
                 <div className="hidden items-center gap-3 rounded-xl bg-neutral-100 px-4 py-2.5 ring-1 ring-black/5 sm:flex">
                   <div className="grid h-9 w-9 place-items-center rounded-xl bg-[#f39b03]/15 text-[#f39b03]"><CircleUserRound size={18} /></div>

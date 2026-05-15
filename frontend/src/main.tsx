@@ -8,6 +8,7 @@ import App from './App.tsx'
 import ServerWakeUp from './components/ServerWakeUp'
 import { AuthProvider } from './context/AuthContext'
 import { LoadingProvider } from './context/LoadingContext'
+import { RefreshProvider } from './context/RefreshContext'
 import { SelectedYearProvider } from './context/SelectedYearContext'
 
 registerSW({ immediate: true })
@@ -19,8 +20,10 @@ createRoot(document.getElementById('root')!).render(
         <LoadingProvider>
           <AuthProvider>
             <SelectedYearProvider>
-              <App />
-              <Toaster richColors position="top-center" />
+              <RefreshProvider>
+                <App />
+                <Toaster richColors position="top-center" />
+              </RefreshProvider>
             </SelectedYearProvider>
           </AuthProvider>
         </LoadingProvider>

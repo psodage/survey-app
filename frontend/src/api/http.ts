@@ -5,8 +5,9 @@ import { withDedup } from './dedup'
 const TOKEN_KEY = 'survey_access_token'
 const INSTRUMENT_KEY = 'survey_instrument_id'
 
-const RETRY_DELAY_MS = 3000
-const MAX_RETRIES = 1
+const RETRY_BASE_MS = 3000
+/** Extra attempts for Render cold start / transient 502 (browser shows as CORS when gateway has no headers). */
+const MAX_RETRIES = 2
 
 export const tokenStorage = {
   getToken: () => localStorage.getItem(TOKEN_KEY),
@@ -109,7 +110,7 @@ http.interceptors.response.use(
       const retries = config._retryCount ?? 0
       if (retries < MAX_RETRIES) {
         config._retryCount = retries + 1
-        await sleep(RETRY_DELAY_MS)
+        await sleep(RETRY_BASE_MS * (retries + 1))
         try {
           return await coreRequest(config)
         } catch (retryErr) {

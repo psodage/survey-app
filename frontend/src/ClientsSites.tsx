@@ -1,5 +1,4 @@
 import {
-  Bell,
   ArrowRight,
   ArrowLeft,
   CircleUserRound,
@@ -35,6 +34,8 @@ import {
 import { AccountManagerSidebarBlock } from './AccountManagerSidebarBlock'
 import { AddSiteForm } from './AddSiteForm'
 import { HeaderYearSelect } from './components/HeaderYearSelect'
+import { PageRefreshButton } from './components/PageRefreshButton'
+import { useRefresh } from './context/RefreshContext'
 import { CollaborationBrandMark } from './CollaborationBrandMark'
 import { LayoutFooter } from './LayoutFooter'
 import { useSelectedYear } from './context/SelectedYearContext'
@@ -106,6 +107,7 @@ type ClientsSitesProps = {
 export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
   const { token, user } = useAuth()
   const { selectedYear } = useSelectedYear()
+  const { refreshTick } = useRefresh()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [clients, setClients] = useState<ClientRow[]>([])
@@ -188,7 +190,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
     } catch {
       toast.error('Could not load clients or sites.')
     }
-  }, [token, selectedYear])
+  }, [token, selectedYear, refreshTick])
 
   useEffect(() => {
     void refreshClientsAndSites()
@@ -827,14 +829,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
               
                   </button>
                 ) : (
-                  <button
-                    type="button"
-                    className="relative grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white/5 text-white ring-1 ring-white/10 transition hover:bg-white/10"
-                    aria-label="Notifications"
-                  >
-                    <Bell size={18} strokeWidth={2} className="text-white" />
-                    <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-white ring-2 ring-black" />
-                  </button>
+                  <PageRefreshButton variant="onDark" />
                 )}
               </div>
               <div className="flex items-center justify-between gap-3 border-t border-white/10 px-4 py-3">
@@ -843,7 +838,10 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                     {selectedClient ? 'Client Details' : 'Clients & Sites'}
                   </h1>
                 </div>
-                <HeaderYearSelect variant="onDark" compact />
+                <div className="flex shrink-0 items-center gap-2">
+                  {selectedClient ? <PageRefreshButton variant="onDark" /> : null}
+                  <HeaderYearSelect variant="onDark" compact />
+                </div>
               </div>
             </div>
             <div className="relative hidden w-full items-center justify-between gap-4 border-b border-neutral-200 bg-white px-4 py-2.5 shadow-[0_6px_20px_rgba(16,24,40,0.05)] sm:px-6 md:flex md:px-6 md:py-4 lg:px-8">
@@ -872,6 +870,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
               </div>
 
               <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+                <PageRefreshButton variant="onLight" />
                 <HeaderYearSelect variant="onLight" />
                 <div className="hidden items-center gap-3 rounded-xl bg-neutral-100 px-3 py-2 ring-1 ring-black/5 sm:flex sm:px-4 sm:py-2.5">
                   <div className="grid h-9 w-9 place-items-center rounded-xl bg-[#f39b03]/15 text-[#f39b03]">

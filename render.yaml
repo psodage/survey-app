@@ -16,3 +16,7 @@ services:
         value: --max-old-space-size=384
       - key: WEB_CONCURRENCY
         value: "1"
+      # Set in Render dashboard to your Vercel URL (comma-separated if multiple):
+      # FRONTEND_ORIGIN=https://survey-app-chi-wheat.vercel.app,http://localhost:5173
+      - key: FRONTEND_ORIGIN
+        sync: false

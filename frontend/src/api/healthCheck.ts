@@ -1,4 +1,6 @@
 const HEALTH_RETRY_MS = 3000
+/** Consecutive successful pings before treating Render cold start as done. */
+const STABLE_HEALTH_PINGS = 2
 
 export function getApiOrigin(): string {
   const base = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || ''
@@ -7,7 +9,8 @@ export function getApiOrigin(): string {
 
 export function getHealthCheckUrl(): string {
   const origin = getApiOrigin()
-  return origin ? `${origin}/health` : '/health'
+  // Production: /api/health confirms the API router and Mongo are up (not just the process).
+  return origin ? `${origin}/api/health` : '/health'
 }
 
 export async function pingBackendHealth(signal?: AbortSignal): Promise<boolean> {
@@ -28,14 +31,20 @@ export async function pingBackendHealth(signal?: AbortSignal): Promise<boolean> 
 export function waitForBackendHealth(onReady: () => void): () => void {
   let cancelled = false
   let timer: ReturnType<typeof setTimeout> | undefined
+  let stableCount = 0
 
   const attempt = async () => {
     if (cancelled) return
     const ok = await pingBackendHealth()
     if (cancelled) return
     if (ok) {
-      onReady()
-      return
+      stableCount += 1
+      if (stableCount >= STABLE_HEALTH_PINGS) {
+        onReady()
+        return
+      }
+    } else {
+      stableCount = 0
     }
     timer = setTimeout(attempt, HEALTH_RETRY_MS)
   }

@@ -37,6 +37,8 @@ import { exportCombinedSiteInvoicePdf, exportInvoicePdf, type InvoicePdfBillingL
 import { exportVisitRecordPdf } from './exportVisitRecordPdf'
 import { layoutBrandLogo } from './brandLogo'
 import { HeaderYearSelect } from './components/HeaderYearSelect'
+import { PageRefreshButton } from './components/PageRefreshButton'
+import { useRefresh } from './context/RefreshContext'
 import { signOut } from './signOut'
 import http from './api/http'
 import { useAuth } from './context/AuthContext'
@@ -85,6 +87,7 @@ const toolbarSelectClass =
 export function SiteDetails({ onNavigate }: SiteDetailsProps) {
   const { token } = useAuth()
   const { selectedYear } = useSelectedYear()
+  const { refreshTick } = useRefresh()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [visitsSearchQuery, setVisitsSearchQuery] = useState('')
   const [visitMachineFilter, setVisitMachineFilter] = useState('all')
@@ -159,7 +162,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
     return () => {
       cancelled = true
     }
-  }, [isVisitMode, visitMongoId, token])
+  }, [isVisitMode, visitMongoId, token, refreshTick])
 
   useEffect(() => {
     if (isVisitMode) return
@@ -232,7 +235,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
     return () => {
       cancelled = true
     }
-  }, [isVisitMode, token, selectedYear, siteId, client, name])
+  }, [isVisitMode, token, selectedYear, siteId, client, name, refreshTick])
 
   const parseVisitAmount = (amount: string) => Number(amount.replace(/[^\d.]/g, '')) || 0
 
@@ -690,6 +693,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                   {pageTitle}
                 </h1>
                 <div className="flex shrink-0 items-center gap-2">
+                  <PageRefreshButton variant="onDark" />
                   <HeaderYearSelect variant="onDark" compact />
                   <span className="inline-flex items-center rounded-xl border border-white/20 bg-neutral-900 px-2.5 py-2 text-[11px] font-semibold leading-tight text-white">
                     {statusLabel}
@@ -722,6 +726,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
               </div>
 
               <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+                <PageRefreshButton variant="onLight" />
                 <HeaderYearSelect variant="onLight" />
 
                 <div className="hidden items-center gap-3 rounded-xl bg-neutral-100 px-3 py-2 ring-1 ring-black/5 sm:flex sm:px-4 sm:py-2.5">
