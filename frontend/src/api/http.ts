@@ -80,7 +80,8 @@ function handleAuthError(err: AxiosError) {
     }
   }
   const publicAuthPaths = ['/auth/login', '/auth/forgot-password', '/auth/verify-reset-otp', '/auth/reset-password']
-  if (status === 401 && !publicAuthPaths.some((p) => url.includes(p))) {
+  const preserveSessionOn401Paths = [...publicAuthPaths, '/auth/change-password']
+  if (status === 401 && !preserveSessionOn401Paths.some((p) => url.includes(p))) {
     tokenStorage.clear()
     window.dispatchEvent(new CustomEvent('survey:unauthorized'))
   }

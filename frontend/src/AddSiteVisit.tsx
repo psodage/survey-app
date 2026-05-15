@@ -46,6 +46,9 @@ import http from './api/http'
 import { useAuth } from './context/AuthContext'
 import { useSelectedYear } from './context/SelectedYearContext'
 import { signOut } from './signOut'
+import { downloadCsv } from './utils/downloadFile'
+import { runExport } from './utils/runExport'
+import { validateSiteVisitForm } from './utils/validateSiteVisit'
 
 type NavItem = {
   label: string
@@ -114,7 +117,7 @@ function escapeCsvCell(value: string) {
   return t
 }
 
-function downloadVisitRecordsCsv(rows: VisitRecord[], filename: string) {
+function buildVisitRecordsCsv(rows: VisitRecord[]) {
   const headers = ['Visit ID', 'Client', 'Site', 'Date', 'Machine', 'Pay status', 'Amount', 'Payment mode', 'Work', 'Notes']
   const lines = [headers.map(escapeCsvCell).join(',')]
   for (const r of rows) {
@@ -133,14 +136,7 @@ function downloadVisitRecordsCsv(rows: VisitRecord[], filename: string) {
       ].join(','),
     )
   }
-  const body = `\uFEFF${lines.join('\n')}`
-  const blob = new Blob([body], { type: 'text/csv;charset=utf-8;' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  a.click()
-  URL.revokeObjectURL(url)
+  return lines.join('\n')
 }
 
 type BillingLineDraft = { id: string; particular: string; quantity: string; rate: string; amount: string }
@@ -168,6 +164,8 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
   const [visitMachineFilter, setVisitMachineFilter] = useState('all')
   const [pendingDeleteVisit, setPendingDeleteVisit] = useState<VisitRecord | null>(null)
   const [deleteVisitBusy, setDeleteVisitBusy] = useState(false)
+  const [isSubmittingVisit, setIsSubmittingVisit] = useState(false)
+  const [exportBusy, setExportBusy] = useState(false)
   const [showAddForm, setShowAddForm] = useState(false)
   const [client, setClient] = useState('')
   const [site, setSite] = useState('')
@@ -602,7 +600,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
             </div>
           </header>
 
-          <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-white p-4 pb-[calc(3.65rem+max(12px,env(safe-area-inset-bottom,0px)))] sm:px-6 sm:pt-6 sm:pb-[calc(3.65rem+max(12px,env(safe-area-inset-bottom,0px)))] md:p-6 md:pb-24 lg:p-8 lg:pb-28">
+          <div className="mobile-main-scroll-pad min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-white p-4 sm:px-6 sm:pt-6 md:p-6 lg:p-8">
             <div className="mx-auto w-full max-w-[1200px] space-y-6 md:space-y-8">
               {!showAddForm ? (
                 <section className="grid grid-cols-2 gap-1.5 md:gap-4 xl:grid-cols-4">
@@ -712,17 +710,22 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                     ) : null}
                     <button
                       type="button"
-                      disabled={filteredVisitRecords.length === 0}
+                      disabled={filteredVisitRecords.length === 0 || exportBusy}
                       onClick={() => {
-                        if (filteredVisitRecords.length === 0) return
+                        if (filteredVisitRecords.length === 0 || exportBusy) return
                         const safeYear = selectedYear.replace(/[^\d-]/g, '') || 'visits'
-                        downloadVisitRecordsCsv(filteredVisitRecords, `site-visits-${safeYear}.csv`)
-                        toast.success('Exported CSV')
+                        setExportBusy(true)
+                        void runExport('spreadsheet', () =>
+                          downloadCsv(
+                            buildVisitRecordsCsv(filteredVisitRecords),
+                            `site-visits-${safeYear}.csv`,
+                          ),
+                        ).finally(() => setExportBusy(false))
                       }}
                       className={toolbarSecondaryButtonClass}
                     >
                       <Download className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
-                      Export
+                      {exportBusy ? 'Exporting…' : 'Export'}
                     </button>
                     <button
                       type="button"
@@ -750,7 +753,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                   }
                 >
                   <div className="md:hidden">
-                    <ul className="flex flex-col gap-1.5 px-3 pb-1.5 pt-1.5">
+                    <ul className="flex flex-col gap-1.5 px-3 pb-4 pt-1.5">
                       {filteredVisitRecords.map((record) => (
                         <li key={`${visitRowKey(record)}-mobile`}>
                           <div
@@ -920,12 +923,28 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                   className="space-y-6"
                   onSubmit={async (e) => {
                     e.preventDefault()
+                    if (isSubmittingVisit) return
+
+                    const validationError = validateSiteVisitForm({
+                      client,
+                      site,
+                      machine,
+                      billingLines,
+                      billingOtherCharges,
+                      amountRupees,
+                    })
+                    if (validationError) {
+                      toast.error(validationError)
+                      return
+                    }
+
                     const match = apiSites.find((s) => s.clientName === client && s.name === site)
                     if (!match) {
                       toast.error('Choose a valid client and site.')
                       return
                     }
                     const amountNum = amountRupees
+                    setIsSubmittingVisit(true)
                     try {
                       const res = await http.post<{
                         ok: boolean
@@ -988,6 +1007,8 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                       onNavigate(`/site-details?${params.toString()}`)
                     } catch {
                       toast.error('Could not save visit')
+                    } finally {
+                      setIsSubmittingVisit(false)
                     }
                   }}
                 >
@@ -1333,9 +1354,10 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                   <button
                     type="submit"
                     form={formId}
-                    className="inline-flex h-11 items-center justify-center rounded-xl bg-[#f39b03] px-8 text-sm font-extrabold text-white transition hover:bg-[#e18e03]"
+                    disabled={isSubmittingVisit}
+                    className="inline-flex h-11 items-center justify-center rounded-xl bg-[#f39b03] px-8 text-sm font-extrabold text-white transition hover:bg-[#e18e03] disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    Save Visit
+                    {isSubmittingVisit ? 'Saving…' : 'Save Visit'}
                   </button>
                 </div>
                 </form>

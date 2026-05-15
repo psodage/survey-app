@@ -42,6 +42,7 @@ import { useRefresh } from './context/RefreshContext'
 import { signOut } from './signOut'
 import http from './api/http'
 import { useAuth } from './context/AuthContext'
+import { runExport } from './utils/runExport'
 
 type NavItem = {
   label: string
@@ -92,6 +93,8 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
   const [visitsSearchQuery, setVisitsSearchQuery] = useState('')
   const [visitMachineFilter, setVisitMachineFilter] = useState('all')
   const [visitPaymentFilter, setVisitPaymentFilter] = useState('all')
+  const [visitPaymentStatusFilter, setVisitPaymentStatusFilter] = useState('all')
+  const [exportBusy, setExportBusy] = useState(false)
   const { pathname: routerPathname, search } = useRouterLocation()
   const urlParams = useMemo(() => new URLSearchParams(search), [search])
   const mode = urlParams.get('mode') ?? 'site'
@@ -281,6 +284,9 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
     if (visitPaymentFilter !== 'all') {
       list = list.filter((r) => r.paymentMode === visitPaymentFilter)
     }
+    if (visitPaymentStatusFilter !== 'all') {
+      list = list.filter((r) => r.paymentStatus === visitPaymentStatusFilter)
+    }
     const q = visitsSearchQuery.trim().toLowerCase()
     if (!q) return list
     return list.filter((r) => {
@@ -299,35 +305,44 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
         .toLowerCase()
       return hay.includes(q)
     })
-  }, [relatedVisitRecords, visitsSearchQuery, visitMachineFilter, visitPaymentFilter])
+  }, [relatedVisitRecords, visitsSearchQuery, visitMachineFilter, visitPaymentFilter, visitPaymentStatusFilter])
+
+  const visitPaymentStatusOptions = useMemo(
+    () => [...new Set(relatedVisitRecords.map((r) => r.paymentStatus).filter(Boolean))].sort(),
+    [relatedVisitRecords],
+  )
 
   const hasActiveVisitFilters =
-    visitsSearchQuery.trim() !== '' || visitMachineFilter !== 'all' || visitPaymentFilter !== 'all'
+    visitsSearchQuery.trim() !== '' ||
+    visitMachineFilter !== 'all' ||
+    visitPaymentFilter !== 'all' ||
+    visitPaymentStatusFilter !== 'all'
 
   const clearVisitFilters = () => {
     setVisitsSearchQuery('')
     setVisitMachineFilter('all')
     setVisitPaymentFilter('all')
+    setVisitPaymentStatusFilter('all')
   }
 
   const handleExportFilteredSiteInvoice = () => {
-    if (filteredVisitRecords.length === 0) return
+    if (filteredVisitRecords.length === 0 || exportBusy) return
     const visits = filteredVisitRecords.map((r) => ({
       visitId: r.id,
       date: r.date,
       machine: r.machine,
       amount: pendingAmountNum(r),
-      notes: r.notes,
-      work: r.work,
-      billingLines: r.billingLines,
     }))
-    void exportCombinedSiteInvoicePdf({
-      client,
-      site: name,
-      location: location !== 'Unknown Location' ? location : undefined,
-      invoiceDate: new Date().toLocaleDateString('en-GB'),
-      visits,
-    })
+    setExportBusy(true)
+    void runExport('invoice', () =>
+      exportCombinedSiteInvoicePdf({
+        client,
+        site: name,
+        location: location !== 'Unknown Location' ? location : undefined,
+        invoiceDate: new Date().toLocaleDateString('en-GB'),
+        visits,
+      }),
+    ).finally(() => setExportBusy(false))
   }
   const getVisitDetailsPath = (record: SiteVisitRecord) => {
     const next = new URLSearchParams({
@@ -394,9 +409,12 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
   const siteAddressLine = [name, location !== 'Unknown Location' ? location : ''].filter(Boolean).join(', ')
 
   const handleIndividualVisitInvoice = (record: SiteVisitRecord) => {
+    if (exportBusy) return
     const pendingNum = pendingAmountNum(record)
     const hasBilling = Boolean(record.billingLines?.length)
-    void exportInvoicePdf({
+    setExportBusy(true)
+    void runExport('invoice', () =>
+      exportInvoicePdf({
       client,
       site: `${siteAddressLine} (Visit ${record.id})`,
       workType: record.machine,
@@ -415,26 +433,28 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
             billingOtherCharges: record.billingOtherCharges ?? 0,
           }
         : {}),
-    })
+      }),
+    ).finally(() => setExportBusy(false))
   }
 
   const handleCommonSiteInvoice = () => {
+    if (exportBusy || relatedVisitRecords.length === 0) return
     const visits = relatedVisitRecords.map((r) => ({
       visitId: r.id,
       date: r.date,
       machine: r.machine,
       amount: pendingAmountNum(r),
-      notes: r.notes,
-      work: r.work,
-      billingLines: r.billingLines,
     }))
-    void exportCombinedSiteInvoicePdf({
-      client,
-      site: name,
-      location: location !== 'Unknown Location' ? location : undefined,
-      invoiceDate: new Date().toLocaleDateString('en-GB'),
-      visits,
-    })
+    setExportBusy(true)
+    void runExport('combined invoice', () =>
+      exportCombinedSiteInvoicePdf({
+        client,
+        site: name,
+        location: location !== 'Unknown Location' ? location : undefined,
+        invoiceDate: new Date().toLocaleDateString('en-GB'),
+        visits,
+      }),
+    ).finally(() => setExportBusy(false))
   }
 
   const handleExportVisitPdf = (record: {
@@ -448,26 +468,30 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
     work?: string
     photoUrls?: string[]
   }) => {
+    if (exportBusy) return
     const photos = record.photoUrls?.length ? record.photoUrls : visitPhotoUrls
-    void exportVisitRecordPdf({
-      visitId: record.visitId,
-      client,
-      siteName: name,
-      location,
-      date: record.date,
-      machine: record.machine,
-      paymentMode: record.paymentMode,
-      paymentStatus: record.paymentStatus,
-      amount: record.amount,
-      notes: record.notes,
-      work: record.work,
-      contactPerson: contactPerson || 'Site Coordinator',
-      phone: '-',
-      dwgRefBy: 'Samarth Land Surveyors',
-      dwgNo: record.visitId.replace('SV-', ''),
-      engineerName: engineerName || 'Er. Shubham Bhoi',
-      photoUrls: photos,
-    })
+    setExportBusy(true)
+    void runExport('visit PDF', () =>
+      exportVisitRecordPdf({
+        visitId: record.visitId,
+        client,
+        siteName: name,
+        location,
+        date: record.date,
+        machine: record.machine,
+        paymentMode: record.paymentMode,
+        paymentStatus: record.paymentStatus,
+        amount: record.amount,
+        notes: record.notes,
+        work: record.work,
+        contactPerson: contactPerson || 'Site Coordinator',
+        phone: '-',
+        dwgRefBy: 'Samarth Land Surveyors',
+        dwgNo: record.visitId.replace('SV-', ''),
+        engineerName: engineerName || 'Er. Shubham Bhoi',
+        photoUrls: photos,
+      }),
+    ).finally(() => setExportBusy(false))
   }
 
   const detailCards: { title: string; value: string; icon: LucideIcon; tone: string; cardTint: string }[] = isVisitMode
@@ -742,7 +766,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
             </div>
           </header>
 
-          <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-white p-4 pb-[calc(3.65rem+max(12px,env(safe-area-inset-bottom,0px)))] sm:px-6 sm:pt-6 sm:pb-[calc(3.65rem+max(12px,env(safe-area-inset-bottom,0px)))] md:p-6 md:pb-24 lg:p-8 lg:pb-28">
+          <div className="mobile-main-scroll-pad min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-white p-4 sm:px-6 sm:pt-6 md:p-6 lg:p-8">
             <div className="mx-auto w-full max-w-6xl space-y-4 md:space-y-6 xl:max-w-7xl">
               <section className={`bg-neutral-900/[0.04] p-4 md:bg-white md:p-6 ${surfaceCardClass}`}>
                 <div className="text-[11px] font-semibold text-neutral-500 md:text-sm">Site Name</div>
@@ -796,8 +820,8 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
               </section>
 
               {!isVisitMode ? (
-                <CardPanel className="flex flex-col gap-2.5 p-2.5 md:flex-row md:items-center md:justify-between md:gap-4 md:p-4">
-                  <div className="w-full md:max-w-[780px]">
+                <CardPanel className="flex flex-col gap-3 p-3 md:flex-row md:items-center md:justify-between md:gap-4 md:p-4">
+                  <div className="w-full min-w-0 md:max-w-[420px]">
                     <input
                       type="text"
                       value={visitsSearchQuery}
@@ -807,11 +831,46 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                       aria-label="Search visit records"
                     />
                   </div>
-                  <div className="flex w-full flex-wrap items-center gap-2 md:w-auto md:justify-end">
-                    
-                    <button type="button" className={toolbarSecondaryButtonClass}>
-                      Filters
-                    </button>
+                  <div className="flex w-full flex-wrap items-center gap-2.5 md:w-auto md:justify-end">
+                    <select
+                      value={visitMachineFilter}
+                      onChange={(e) => setVisitMachineFilter(e.target.value)}
+                      className={toolbarSelectClass}
+                      aria-label="Filter by machine"
+                    >
+                      <option value="all">All machines</option>
+                      {visitMachineOptions.map((m) => (
+                        <option key={m} value={m}>
+                          {m}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      value={visitPaymentFilter}
+                      onChange={(e) => setVisitPaymentFilter(e.target.value)}
+                      className={toolbarSelectClass}
+                      aria-label="Filter by payment mode"
+                    >
+                      <option value="all">All payment modes</option>
+                      {visitPaymentOptions.map((m) => (
+                        <option key={m} value={m}>
+                          {m}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      value={visitPaymentStatusFilter}
+                      onChange={(e) => setVisitPaymentStatusFilter(e.target.value)}
+                      className={toolbarSelectClass}
+                      aria-label="Filter by payment status"
+                    >
+                      <option value="all">All pay status</option>
+                      {visitPaymentStatusOptions.map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
+                    </select>
                     {hasActiveVisitFilters ? (
                       <button type="button" className={toolbarSecondaryButtonClass} onClick={clearVisitFilters}>
                         Clear
@@ -820,10 +879,10 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                     <button
                       type="button"
                       className={toolbarSecondaryButtonClass}
-                      disabled={filteredVisitRecords.length === 0}
+                      disabled={filteredVisitRecords.length === 0 || exportBusy}
                       onClick={handleExportFilteredSiteInvoice}
                     >
-                      Export
+                      {exportBusy ? 'Exporting…' : 'Export'}
                     </button>
                     <button type="button" onClick={() => onNavigate(addSiteVisitPath)} className={toolbarPrimaryButtonClass}>
                       <Plus className={toolbarPlusIconClass} />
@@ -874,33 +933,38 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                     </button>
                     <button
                       type="button"
+                      disabled={exportBusy}
                       onClick={() => {
+                        if (exportBusy) return
                         const pendingForVisit =
                           visitPendingForInvoice != null && visitPendingForInvoice.trim() !== ''
                             ? parseVisitAmount(visitPendingForInvoice)
                             : parseVisitAmount(amount)
-                        void exportInvoicePdf({
-                          client,
-                          site: `${siteAddressLine} (Visit ${visitId})`,
-                          workType: machine,
-                          totalPoints: 1,
-                          ratePerPoint: pendingForVisit > 0 ? pendingForVisit : 0,
-                          baseCharge: 0,
-                          extraCharges: 0,
-                          discount: 0,
-                          invoiceDate: new Date().toLocaleDateString('en-GB'),
-                          visitId: visitId !== '-' ? visitId : undefined,
-                          paymentStatus: paymentStatus !== '-' ? paymentStatus : undefined,
-                          pendingAmount: pendingForVisit,
-                          ...(visitBillingForInvoice.billingLines.length
-                            ? {
-                                billingLines: visitBillingForInvoice.billingLines,
-                                billingOtherCharges: visitBillingForInvoice.billingOtherCharges,
-                              }
-                            : {}),
-                        })
+                        setExportBusy(true)
+                        void runExport('invoice', () =>
+                          exportInvoicePdf({
+                            client,
+                            site: `${siteAddressLine} (Visit ${visitId})`,
+                            workType: machine,
+                            totalPoints: 1,
+                            ratePerPoint: pendingForVisit > 0 ? pendingForVisit : 0,
+                            baseCharge: 0,
+                            extraCharges: 0,
+                            discount: 0,
+                            invoiceDate: new Date().toLocaleDateString('en-GB'),
+                            visitId: visitId !== '-' ? visitId : undefined,
+                            paymentStatus: paymentStatus !== '-' ? paymentStatus : undefined,
+                            pendingAmount: pendingForVisit,
+                            ...(visitBillingForInvoice.billingLines.length
+                              ? {
+                                  billingLines: visitBillingForInvoice.billingLines,
+                                  billingOtherCharges: visitBillingForInvoice.billingOtherCharges,
+                                }
+                              : {}),
+                          }),
+                        ).finally(() => setExportBusy(false))
                       }}
-                      className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-white px-4 text-xs font-extrabold text-neutral-800 ring-1 ring-black/5 transition hover:bg-neutral-50 sm:text-sm"
+                      className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-white px-4 text-xs font-extrabold text-neutral-800 ring-1 ring-black/5 transition hover:bg-neutral-50 sm:text-sm disabled:opacity-50"
                     >
                       <Calculator size={15} className="text-[#f39b03]" />
                       Individual invoice
@@ -961,7 +1025,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                   ) : (
                     <>
                       <div className="md:hidden">
-                        <ul className="flex flex-col gap-1.5 p-2 sm:p-3">
+                        <ul className="flex flex-col gap-1.5 p-2 pb-4 sm:p-3 sm:pb-5">
                           {filteredVisitRecords.map((record) => (
                             <li
                               key={`${record.visitMongoId ?? record.id}-mobile`}

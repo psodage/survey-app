@@ -60,3 +60,20 @@ body.api-loading-active {
   height: max(12px, constant(safe-area-inset-bottom));
   height: max(12px, env(safe-area-inset-bottom, 0px));
 }
+
+/** Scrollable main content above fixed mobile bottom nav (Clients, Site Details, Visits, etc.) */
+.mobile-main-scroll-pad {
+  padding-bottom: calc(4.5rem + max(16px, env(safe-area-inset-bottom, 0px)));
+}
+
+@media (min-width: 768px) {
+  .mobile-main-scroll-pad {
+    padding-bottom: 6rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .mobile-main-scroll-pad {
+    padding-bottom: 7rem;
+  }
+}

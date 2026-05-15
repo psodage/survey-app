@@ -221,7 +221,7 @@ export async function changePassword(userId, { currentPassword, newPassword }) {
   const user = await User.findById(userId).select('+passwordHash')
   if (!user) throw new ApiError(404, 'User not found')
   const ok = await bcrypt.compare(currentPassword, user.passwordHash)
-  if (!ok) throw new ApiError(401, 'Current password is incorrect')
+  if (!ok) throw new ApiError(400, 'Current password is incorrect')
   user.passwordHash = await bcrypt.hash(newPassword, 12)
   await user.save()
   return { ok: true }

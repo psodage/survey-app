@@ -20,8 +20,6 @@ import {
 } from 'lucide-react'
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useLocation } from 'react-router-dom'
-import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
 import {
   CardPanel,
   CardShell,
@@ -45,6 +43,16 @@ import http from './api/http'
 import { useAuth } from './context/AuthContext'
 import { signOut } from './signOut'
 import { ConfirmAlert } from './ConfirmAlert'
+import { TablePagination } from './components/TablePagination'
+import {
+  exportAllClientsExcel,
+  exportAllClientsPdf,
+  exportClientExcel,
+  exportClientPdf,
+} from './utils/exportClientsReport'
+import { runExport } from './utils/runExport'
+
+const CLIENT_PAGE_SIZE = 10
 
 type NavItem = {
   label: string
@@ -127,6 +135,8 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
     null,
   )
   const [deleteSiteBusy, setDeleteSiteBusy] = useState(false)
+  const [clientPage, setClientPage] = useState(1)
+  const [exportBusy, setExportBusy] = useState(false)
   const prevSelectedClientNameRef = useRef<string | null>(null)
   const location = useLocation()
 
@@ -370,6 +380,18 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
     return baseRows
   }, [clientPendingFilter, query, summary, clients])
 
+  const clientPageCount = Math.max(1, Math.ceil(filteredRows.length / CLIENT_PAGE_SIZE))
+  const safeClientPage = Math.min(clientPage, clientPageCount)
+
+  const paginatedClients = useMemo(() => {
+    const start = (safeClientPage - 1) * CLIENT_PAGE_SIZE
+    return filteredRows.slice(start, start + CLIENT_PAGE_SIZE)
+  }, [filteredRows, safeClientPage])
+
+  useEffect(() => {
+    setClientPage(1)
+  }, [query, clientPendingFilter, summary, selectedClientName])
+
   const userRoleLabel =
     user?.role === 'super_admin' ? 'Super Admin' : user?.role === 'admin' ? 'Admin' : ''
 
@@ -461,51 +483,20 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
     return `/site-details?${params.toString()}`
   }
 
-  const exportClientReport = (client: ClientRow, sites: SiteRow[]) => {
-    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-
-    doc.setFontSize(16)
-    doc.setTextColor(23, 23, 23)
-    doc.text(`Client Report: ${client.name}`, 14, 16)
-
-    doc.setFontSize(10)
-    doc.setTextColor(82, 82, 82)
-    doc.text(`Phone: ${client.phone}`, 14, 23)
-    doc.text(`Total Sites: ${client.sites}`, 14, 28)
-    doc.text(`Total Revenue: ${client.revenue}`, 78, 28)
-    doc.text(`Received: ${client.received}`, 14, 33)
-    doc.text(`Pending: ${client.pending}`, 78, 33)
-    doc.text(
-      `Generated: ${new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}`,
-      14,
-      38,
+  const handleExportClientPdf = () => {
+    if (!selectedClient || exportBusy) return
+    setExportBusy(true)
+    void runExport('client PDF', () => exportClientPdf(selectedClient, selectedSites)).finally(() =>
+      setExportBusy(false),
     )
-
-    const body =
-      sites.length === 0
-        ? [['—', '—', '—', 'No sites found', '—']]
-        : sites.map((site) => [site.name, site.location, site.lastVisit, site.status, site.pending])
-
-    autoTable(doc, {
-      startY: 44,
-      head: [['Site Name', 'Location', 'Last Visit', 'Status', 'Pending (Rs)']],
-      body,
-      headStyles: { fillColor: [243, 155, 3], textColor: 255, fontStyle: 'bold' },
-      styles: { fontSize: 9, cellPadding: 2 },
-      margin: { left: 14, right: 14 },
-      columnStyles: {
-        4: { halign: 'right' },
-      },
-    })
-
-    const safeName = client.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
-    const safeDate = new Date().toISOString().slice(0, 10)
-    doc.save(`client-report-${safeName || 'client'}-${safeDate}.pdf`)
   }
 
-  const handleExportClientReport = () => {
-    if (!selectedClient) return
-    exportClientReport(selectedClient, selectedSites)
+  const handleExportClientExcel = () => {
+    if (!selectedClient || exportBusy) return
+    setExportBusy(true)
+    void runExport('client spreadsheet', () => exportClientExcel(selectedClient, selectedSites)).finally(() =>
+      setExportBusy(false),
+    )
   }
 
   const handleOpenDeleteClient = () => {
@@ -587,43 +578,18 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
     }
   }
 
-  const handleExportAllClientsReport = () => {
-    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+  const handleExportAllClientsPdf = () => {
+    if (exportBusy) return
+    setExportBusy(true)
+    void runExport('clients PDF', () => exportAllClientsPdf(filteredRows)).finally(() => setExportBusy(false))
+  }
 
-    doc.setFontSize(16)
-    doc.setTextColor(23, 23, 23)
-    doc.text('All Clients Report', 14, 16)
-
-    doc.setFontSize(10)
-    doc.setTextColor(82, 82, 82)
-    doc.text(`Total Clients: ${filteredRows.length}`, 14, 23)
-    doc.text(
-      `Generated: ${new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}`,
-      14,
-      28,
+  const handleExportAllClientsExcel = () => {
+    if (exportBusy) return
+    setExportBusy(true)
+    void runExport('clients spreadsheet', () => exportAllClientsExcel(filteredRows)).finally(() =>
+      setExportBusy(false),
     )
-
-    const body =
-      filteredRows.length === 0
-        ? [['—', '—', '—', '—', 'No clients found']]
-        : filteredRows.map((client) => [client.name, client.phone, String(client.sites), client.received, client.pending])
-
-    autoTable(doc, {
-      startY: 34,
-      head: [['Client Name', 'Phone', 'Total Sites', 'Received (Rs)', 'Pending (Rs)']],
-      body,
-      headStyles: { fillColor: [243, 155, 3], textColor: 255, fontStyle: 'bold' },
-      styles: { fontSize: 9, cellPadding: 2 },
-      margin: { left: 14, right: 14 },
-      columnStyles: {
-        2: { halign: 'right' },
-        3: { halign: 'right' },
-        4: { halign: 'right' },
-      },
-    })
-
-    const safeDate = new Date().toISOString().slice(0, 10)
-    doc.save(`all-clients-report-${safeDate}.pdf`)
   }
 
   return (
@@ -887,7 +853,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
             </div>
           </header>
 
-          <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-white px-4 pt-2 pb-[calc(3.65rem+max(12px,env(safe-area-inset-bottom,0px)))] sm:px-6 sm:pt-3 sm:pb-[calc(3.65rem+max(12px,env(safe-area-inset-bottom,0px)))] md:px-6 md:pt-4 md:pb-24 lg:px-8 lg:pt-4 lg:pb-28">
+          <div className="mobile-main-scroll-pad min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-white px-4 pt-2 sm:px-6 sm:pt-3 md:px-6 md:pt-4 lg:px-8 lg:pt-4">
             {selectedClient ? (
               <section className="rounded-xl border border-neutral-200 bg-white p-3 shadow-sm ring-1 ring-black/5 md:rounded-2xl md:p-4 md:shadow-[0_10px_30px_rgba(16,24,40,0.06)] md:ring-0">
                 <div className="text-sm font-semibold text-neutral-600">
@@ -1019,9 +985,18 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                       <button
                         type="button"
                         className={toolbarSecondaryButtonClass}
-                        onClick={handleExportAllClientsReport}
+                        disabled={exportBusy || filteredRows.length === 0}
+                        onClick={handleExportAllClientsPdf}
                       >
-                        Export
+                        {exportBusy ? 'Exporting…' : 'PDF'}
+                      </button>
+                      <button
+                        type="button"
+                        className={toolbarSecondaryButtonClass}
+                        disabled={exportBusy || filteredRows.length === 0}
+                        onClick={handleExportAllClientsExcel}
+                      >
+                        Excel
                       </button>
                       <button
                         type="button"
@@ -1036,7 +1011,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                 </div>
               </CardPanel>
             ) : (
-              <CardPanel className="my-3 flex flex-col gap-2.5 p-2.5 md:my-4 md:flex-row md:items-center md:justify-between md:gap-4 md:p-4">
+              <CardPanel className="my-3 flex flex-col gap-3 p-3 md:my-4 md:flex-row md:items-center md:justify-between md:gap-4 md:p-4">
                 <div className="w-full md:max-w-[740px]">
                   <input
                     value={sitesSearchQuery}
@@ -1059,10 +1034,22 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                     <option value="Completed">Completed</option>
                   </select>
                   <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-                    <button type="button" className={toolbarSecondaryButtonClass} onClick={handleExportClientReport}>
-                      Export
+                    <button
+                      type="button"
+                      className={toolbarSecondaryButtonClass}
+                      disabled={exportBusy}
+                      onClick={handleExportClientPdf}
+                    >
+                      {exportBusy ? 'Exporting…' : 'PDF'}
                     </button>
-                   
+                    <button
+                      type="button"
+                      className={toolbarSecondaryButtonClass}
+                      disabled={exportBusy}
+                      onClick={handleExportClientExcel}
+                    >
+                      Excel
+                    </button>
                     <button type="button" onClick={handleOpenAddSiteModal} className={toolbarPrimaryButtonClass}>
                       <Plus className={toolbarPlusIconClass} />
                       Add New Site
@@ -1087,7 +1074,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                 }
               >
                 <div className="md:hidden">
-                  <ul className="flex flex-col gap-1.5 px-3 pb-1.5 pt-1.5">
+                  <ul className="flex flex-col gap-1.5 px-3 pb-4 pt-1.5">
                     {filteredSitesForClient.map((site) => (
                       <li key={site.id ?? `${selectedClient.name}-${site.name}`}>
                         <div
@@ -1282,7 +1269,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                 }
               >
                 <div className="md:hidden">
-                  <ul className="flex flex-col gap-1.5 px-3 pb-1.5 pt-1.5">
+                  <ul className="flex flex-col gap-1.5 px-3 pb-4 pt-1.5">
                     {filteredAllSites.map((site) => (
                       <li key={site.id ?? `${site.clientName}-${site.name}`}>
                         <div
@@ -1474,8 +1461,11 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                 }
               >
                 <div className="md:hidden">
-                  <ul className="flex flex-col gap-1.5 px-3 pb-1.5 pt-1.5">
-                    {filteredRows.map((row) => (
+                  <ul className="flex flex-col gap-1.5 px-3 pb-4 pt-1.5">
+                    {paginatedClients.length === 0 ? (
+                      <li className="px-2 py-6 text-center text-sm font-semibold text-neutral-600">No clients found.</li>
+                    ) : null}
+                    {paginatedClients.map((row) => (
                       <li key={row.name}>
                         <div className="flex items-stretch gap-2 rounded-xl border border-neutral-200 bg-white p-1.5 shadow-sm ring-1 ring-black/5">
                           <button
@@ -1526,7 +1516,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                       </tr>
                     </thead>
                     <tbody className="text-sm font-semibold text-neutral-800">
-                      {filteredRows.map((row) => (
+                      {paginatedClients.map((row) => (
                         <tr
                           key={row.name}
                           className="border-t border-neutral-200 hover:bg-neutral-50/60"
@@ -1600,40 +1590,12 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                   </table>
                 </div>
 
-                <div className="hidden items-center justify-between gap-3 border-t border-neutral-200 px-6 py-4 md:flex">
-                  <div className="text-sm font-semibold text-neutral-600">
-                    Showing 1 to 6 of 16 clients
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      className="grid h-9 w-9 place-items-center rounded-xl bg-[#f39b03] text-sm font-extrabold text-white"
-                      aria-label="Page 1"
-                    >
-                      1
-                    </button>
-                    <button
-                      type="button"
-                      className="grid h-9 w-9 place-items-center rounded-xl border border-neutral-200 bg-white text-sm font-extrabold text-neutral-800 hover:bg-neutral-50"
-                      aria-label="Page 2"
-                    >
-                      2
-                    </button>
-                    <button
-                      type="button"
-                      className="grid h-9 w-9 place-items-center rounded-xl border border-neutral-200 bg-white text-sm font-extrabold text-neutral-800 hover:bg-neutral-50"
-                      aria-label="Page 3"
-                    >
-                      3
-                    </button>
-                    <button
-                      type="button"
-                      className="inline-flex h-9 items-center justify-center rounded-xl border border-neutral-200 bg-white px-4 text-sm font-extrabold text-neutral-800 hover:bg-neutral-50"
-                    >
-                      Next
-                    </button>
-                  </div>
-                </div>
+                <TablePagination
+                  page={safeClientPage}
+                  pageSize={CLIENT_PAGE_SIZE}
+                  totalItems={filteredRows.length}
+                  onPageChange={setClientPage}
+                />
               </CardShell>
             )}
           </div>

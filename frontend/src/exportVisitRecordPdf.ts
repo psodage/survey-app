@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf'
 import invoiceLogo from './assets/logo.jpeg'
+import { savePdf } from './utils/downloadFile'
 
 export type VisitRecordPdfData = {
   visitId: string
@@ -210,5 +211,5 @@ export async function exportVisitRecordPdf(data: VisitRecordPdfData) {
   await appendPhotoPages(doc, data.photoUrls ?? [], data.visitId)
 
   const safeDate = new Date().toISOString().slice(0, 10)
-  doc.save(`visit-record-${data.visitId}-${safeDate}.pdf`)
+  await savePdf(doc, `visit-record-${data.visitId}-${safeDate}.pdf`)
 }

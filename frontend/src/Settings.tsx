@@ -13,7 +13,6 @@ import {
   UsersRound,
   X,
 } from 'lucide-react'
-import axios from 'axios'
 import {
   Fragment,
   useCallback,
@@ -34,7 +33,9 @@ import { HeaderYearSelect } from './components/HeaderYearSelect'
 import { PageRefreshButton } from './components/PageRefreshButton'
 import { useRefresh } from './context/RefreshContext'
 import { useAuth } from './context/AuthContext'
+import { getApiErrorMessage } from './api/request'
 import { signOut } from './signOut'
+import { notify, validateImageUpload } from './utils/notify'
 
 type NavItem = {
   label: string
@@ -69,14 +70,6 @@ function formatBackupDate(iso: string | null | undefined): string {
   } catch {
     return '—'
   }
-}
-
-function apiErrorMessage(err: unknown): string {
-  if (axios.isAxiosError(err)) {
-    return (err.response?.data as { error?: string } | undefined)?.error ?? err.message ?? 'Request failed'
-  }
-  if (err instanceof Error) return err.message
-  return 'Something went wrong'
 }
 
 function ToggleRow({
@@ -329,7 +322,7 @@ export default function Settings({ onNavigate }: SettingsProps) {
       }
       setBankSigPreview(me?.bankSignatureUrl ?? null)
     } catch (err) {
-      window.alert(apiErrorMessage(err))
+      notify.apiError(err, 'Could not load settings.')
     } finally {
       setPageLoading(false)
     }
@@ -343,7 +336,14 @@ export default function Settings({ onNavigate }: SettingsProps) {
     const file = e.target.files?.[0]
     if (!file) return
     if (!isSuperAdmin) {
-      window.alert('Only a super admin can change the company logo.')
+      notify.error('Only a super admin can change the company logo.')
+      e.target.value = ''
+      return
+    }
+
+    const imageError = validateImageUpload(file)
+    if (imageError) {
+      notify.error(imageError)
       e.target.value = ''
       return
     }
@@ -353,6 +353,7 @@ export default function Settings({ onNavigate }: SettingsProps) {
     setLogoObjectUrl(nextUrl)
     setLogoPreviewUrl(nextUrl)
 
+    const toastId = notify.loading('Uploading logo…')
     try {
       const fd = new FormData()
       fd.append('file', file)
@@ -360,11 +361,13 @@ export default function Settings({ onNavigate }: SettingsProps) {
       URL.revokeObjectURL(nextUrl)
       setLogoObjectUrl(null)
       await loadSettings()
-      window.alert('Logo uploaded successfully.')
+      notify.dismiss(toastId)
+      notify.success('Logo uploaded successfully.')
     } catch (err) {
       URL.revokeObjectURL(nextUrl)
       setLogoObjectUrl(null)
-      window.alert(apiErrorMessage(err))
+      notify.dismiss(toastId)
+      notify.apiError(err, 'Logo upload failed.')
       setLogoPreviewUrl(remoteLogoUrl || layoutBrandLogo)
     } finally {
       e.target.value = ''
@@ -412,33 +415,37 @@ export default function Settings({ onNavigate }: SettingsProps) {
 
   const handleUpdatePassword = async () => {
     if (!currentPassword.trim()) {
-      window.alert('Please enter your current password.')
+      notify.error('Please enter your current password.')
       return
     }
     if (!changePassword || !confirmPassword) {
-      window.alert('Please fill in both new password fields.')
+      notify.error('Please fill in both new password fields.')
       return
     }
     if (changePassword !== confirmPassword) {
-      window.alert('New passwords do not match.')
+      notify.error('New passwords do not match.')
       return
     }
     if (changePassword.length < 8) {
-      window.alert('New password must be at least 8 characters.')
+      notify.error('New password must be at least 8 characters.')
       return
     }
     setPasswordBusy(true)
+    const toastId = notify.loading('Updating password…')
     try {
       await http.post('/api/auth/change-password', {
         currentPassword,
         newPassword: changePassword,
       })
-      window.alert('Password updated successfully.')
+      notify.dismiss(toastId)
+      notify.success('Password updated successfully.')
       setCurrentPassword('')
       setChangePassword('')
       setConfirmPassword('')
     } catch (err) {
-      window.alert(apiErrorMessage(err))
+      notify.dismiss(toastId)
+      const msg = getApiErrorMessage(err, 'Could not update password.')
+      notify.error(/current password is incorrect/i.test(msg) ? 'Current password is incorrect' : msg)
     } finally {
       setPasswordBusy(false)
     }
@@ -451,18 +458,27 @@ export default function Settings({ onNavigate }: SettingsProps) {
     const f = e.target.files?.[0]
     if (!f) return
     if (!isSuperAdmin) {
-      window.alert('Only a super admin can upload invoice assets.')
+      notify.error('Only a super admin can upload invoice assets.')
       e.target.value = ''
       return
     }
+    const imageError = validateImageUpload(f)
+    if (imageError) {
+      notify.error(imageError)
+      e.target.value = ''
+      return
+    }
+    const toastId = notify.loading('Uploading signature…')
     try {
       const fd = new FormData()
       fd.append('file', f)
       await http.post('/api/settings/company/invoice-signature', fd)
       await loadSettings()
-      window.alert('Signature uploaded.')
+      notify.dismiss(toastId)
+      notify.success('Signature uploaded.')
     } catch (err) {
-      window.alert(apiErrorMessage(err))
+      notify.dismiss(toastId)
+      notify.apiError(err, 'Signature upload failed.')
     } finally {
       e.target.value = ''
     }
@@ -473,14 +489,23 @@ export default function Settings({ onNavigate }: SettingsProps) {
   const handleBankSignatureChange = async (e: ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]
     if (!f) return
+    const imageError = validateImageUpload(f)
+    if (imageError) {
+      notify.error(imageError)
+      e.target.value = ''
+      return
+    }
+    const toastId = notify.loading('Uploading bank signature…')
     try {
       const fd = new FormData()
       fd.append('file', f)
       await http.post('/api/settings/me/bank-signature', fd)
       await loadSettings()
-      window.alert('Bank signature uploaded.')
+      notify.dismiss(toastId)
+      notify.success('Bank signature uploaded.')
     } catch (err) {
-      window.alert(apiErrorMessage(err))
+      notify.dismiss(toastId)
+      notify.apiError(err, 'Bank signature upload failed.')
     } finally {
       e.target.value = ''
     }
@@ -490,18 +515,27 @@ export default function Settings({ onNavigate }: SettingsProps) {
     const f = e.target.files?.[0]
     if (!f) return
     if (!isSuperAdmin) {
-      window.alert('Only a super admin can upload invoice assets.')
+      notify.error('Only a super admin can upload invoice assets.')
       e.target.value = ''
       return
     }
+    const imageError = validateImageUpload(f)
+    if (imageError) {
+      notify.error(imageError)
+      e.target.value = ''
+      return
+    }
+    const toastId = notify.loading('Uploading stamp…')
     try {
       const fd = new FormData()
       fd.append('file', f)
       await http.post('/api/settings/company/invoice-stamp', fd)
       await loadSettings()
-      window.alert('Stamp uploaded.')
+      notify.dismiss(toastId)
+      notify.success('Stamp uploaded.')
     } catch (err) {
-      window.alert(apiErrorMessage(err))
+      notify.dismiss(toastId)
+      notify.apiError(err, 'Stamp upload failed.')
     } finally {
       e.target.value = ''
     }
@@ -510,7 +544,7 @@ export default function Settings({ onNavigate }: SettingsProps) {
   const handlePreviewInvoice = () => {
     const w = window.open('', '_blank')
     if (!w) {
-      window.alert('Please allow pop-ups to preview the invoice.')
+      notify.error('Please allow pop-ups to preview the invoice.')
       return
     }
     const themeLabel =
@@ -571,6 +605,7 @@ export default function Settings({ onNavigate }: SettingsProps) {
 
   const handleSaveSettings = async () => {
     setSaveBusy(true)
+    const toastId = notify.loading('Saving settings…')
     try {
       await http.patch('/api/settings/me', {
         preferences: {
@@ -608,10 +643,12 @@ export default function Settings({ onNavigate }: SettingsProps) {
           },
         })
       }
-      window.alert('Settings saved successfully.')
+      notify.dismiss(toastId)
+      notify.success('Settings saved successfully.')
       await loadSettings()
     } catch (err) {
-      window.alert(apiErrorMessage(err))
+      notify.dismiss(toastId)
+      notify.apiError(err, 'Could not save settings.')
     } finally {
       setSaveBusy(false)
     }
@@ -622,9 +659,9 @@ export default function Settings({ onNavigate }: SettingsProps) {
     try {
       await http.post('/api/settings/company/backup')
       await loadSettings()
-      window.alert('Backup recorded.')
+      notify.success('Backup recorded.')
     } catch (err) {
-      window.alert(apiErrorMessage(err))
+      notify.apiError(err, 'Could not record backup.')
     }
   }
 
@@ -639,7 +676,7 @@ export default function Settings({ onNavigate }: SettingsProps) {
       a.click()
       URL.revokeObjectURL(url)
     } catch (err) {
-      window.alert(apiErrorMessage(err))
+      notify.apiError(err, 'Could not download backup.')
     }
   }
 
@@ -743,15 +780,12 @@ export default function Settings({ onNavigate }: SettingsProps) {
               </div>
               <div className="mt-4 space-y-2 border-t border-white/10 pt-4">
                 {user?.email ? (
-                  <a
-                    href={`mailto:${user.email}`}
-                    className="flex items-center gap-2 rounded-xl px-2 py-2 text-left text-xs font-semibold text-white/90 hover:bg-white/5"
-                  >
+                  <div className="flex items-center gap-2 rounded-xl px-2 py-2 text-left text-xs font-semibold text-white/90">
                     <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white/10 text-[#f39b03]">
                       <Mail size={15} />
                     </span>
                     <span className="min-w-0 truncate">{user.email}</span>
-                  </a>
+                  </div>
                 ) : (
                   <div className="flex items-center gap-2 rounded-xl px-2 py-2 text-left text-xs font-semibold text-white/50">
                     <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white/10 text-[#f39b03]">
@@ -761,15 +795,12 @@ export default function Settings({ onNavigate }: SettingsProps) {
                   </div>
                 )}
                 {user?.phone ? (
-                  <a
-                    href={`tel:${user.phone.replace(/\s/g, '')}`}
-                    className="flex items-center gap-2 rounded-xl px-2 py-2 text-left text-xs font-semibold text-white/90 hover:bg-white/5"
-                  >
+                  <div className="flex items-center gap-2 rounded-xl px-2 py-2 text-left text-xs font-semibold text-white/90">
                     <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white/10 text-[#f39b03]">
                       <Phone size={15} />
                     </span>
                     <span>{user.phone}</span>
-                  </a>
+                  </div>
                 ) : null}
               </div>
             </div>
@@ -1147,7 +1178,7 @@ export default function Settings({ onNavigate }: SettingsProps) {
                         <input
                           ref={bankSigInputRef}
                           type="file"
-                          accept="image/*"
+                          accept="image/png,image/jpeg,image/gif,image/webp"
                           className="sr-only"
                           onChange={handleBankSignatureChange}
                         />
@@ -1260,7 +1291,7 @@ export default function Settings({ onNavigate }: SettingsProps) {
                           <input
                             ref={signatureInputRef}
                             type="file"
-                            accept="image/*"
+                            accept="image/png,image/jpeg,image/gif,image/webp"
                             className="sr-only"
                             onChange={handleSignatureChange}
                           />
@@ -1292,7 +1323,7 @@ export default function Settings({ onNavigate }: SettingsProps) {
                           <input
                             ref={stampInputRef}
                             type="file"
-                            accept="image/*"
+                            accept="image/png,image/jpeg,image/gif,image/webp"
                             className="sr-only"
                             onChange={handleStampChange}
                           />
@@ -1316,7 +1347,7 @@ export default function Settings({ onNavigate }: SettingsProps) {
                 </CardShell>
               </div>
 
-              <div className="mt-4 flex flex-col-reverse gap-2.5 sm:flex-row sm:items-center sm:justify-between">
+              <div className="mt-4 flex flex-col-reverse gap-2.5 max-md:mb-4 max-md:px-1 max-md:pb-4 sm:flex-row sm:items-center sm:justify-between md:mb-0 md:px-0 md:pb-0">
                 <button
                   type="button"
                   onClick={handleCancel}

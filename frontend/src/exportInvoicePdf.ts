@@ -3,6 +3,7 @@ import autoTable from 'jspdf-autotable'
 import invoiceDefaultLogo from './assets/logo.jpeg'
 import { fetchInvoiceBankColumns } from './invoiceBankColumns'
 import { fetchInvoiceCompanyHeader, type InvoicePdfCompanyHeader } from './invoiceCompanyHeader'
+import { savePdf } from './utils/downloadFile'
 
 export type InvoicePdfBankColumns = {
   left: { lines: string[]; signatureUrl?: string | null }
@@ -541,7 +542,7 @@ export async function exportInvoicePdf(data: InvoicePdfData) {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '')
   const safeDate = new Date().toISOString().slice(0, 10)
-  doc.save(`invoice-${safeClient}-${safeDate}.pdf`)
+  await savePdf(doc, `invoice-${safeClient}-${safeDate}.pdf`)
 }
 
 export type CombinedVisitLine = {
@@ -552,15 +553,6 @@ export type CombinedVisitLine = {
   notes?: string
   work?: string
   billingLines?: InvoicePdfBillingLine[]
-}
-
-function combinedVisitParticularBlock(v: CombinedVisitLine): string {
-  const fromBilling = (v.billingLines ?? [])
-    .map((l) => (l.particular ?? '').trim())
-    .filter(Boolean)
-    .join('\n')
-  if (fromBilling) return fromBilling
-  return ((v.work ?? '').trim() || v.machine || '—').trim()
 }
 
 export async function exportCombinedSiteInvoicePdf(data: {
@@ -611,7 +603,7 @@ export async function exportCombinedSiteInvoicePdf(data: {
 
   const tableBody = visits.map((v, i) => [
     String(i + 1),
-    `${v.visitId} — ${v.date}\n${combinedVisitParticularBlock(v)}${v.notes ? `\n${v.notes}` : ''}`,
+    `Site Visit: ${v.visitId}\nDate: ${v.date}`,
     '1',
     formatInr(v.amount),
     formatInr(v.amount),
@@ -663,5 +655,5 @@ export async function exportCombinedSiteInvoicePdf(data: {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '')
   const safeDate = new Date().toISOString().slice(0, 10)
-  doc.save(`invoice-combined-${safeClient}-${safeDate}.pdf`)
+  await savePdf(doc, `invoice-combined-${safeClient}-${safeDate}.pdf`)
 }

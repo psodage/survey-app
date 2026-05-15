@@ -7,6 +7,14 @@ import Site from '../models/Site.js'
 import * as uploadService from './uploadService.js'
 import { ApiError } from '../utils/ApiError.js'
 
+const SIGNATURE_MAX_BYTES = 1024 * 1024
+
+function assertImageUpload(file, maxBytes = SIGNATURE_MAX_BYTES) {
+  if (!file?.buffer) throw new ApiError(400, 'File is required')
+  if (!file.mimetype?.startsWith('image/')) throw new ApiError(400, 'Only image files are allowed')
+  if (file.size > maxBytes) throw new ApiError(400, 'File must be 1 MB or smaller')
+}
+
 function bankLinesFromDetails(bd) {
   if (!bd?.accountName?.trim()) return null
   const ifsc = (bd.ifscCode ?? '').trim()
@@ -183,7 +191,7 @@ export async function getInvoiceBankColumns(req) {
 }
 
 export async function attachUserBankSignature(req, file) {
-  if (!file?.buffer) throw new ApiError(400, 'File is required')
+  assertImageUpload(file)
   const uid = new mongoose.Types.ObjectId(req.user.id)
   const folder = `survey-app/user/${uid.toString()}/bank-signature`
   const up = await uploadService.uploadBufferToCloudinary({
@@ -241,7 +249,7 @@ export async function attachCompanyLogo(req, file) {
 
 export async function attachInvoiceAsset(req, kind, file) {
   if (req.user.role !== 'super_admin') throw new ApiError(403, 'Only super admin can update invoice assets')
-  if (!file?.buffer) throw new ApiError(400, 'File is required')
+  assertImageUpload(file)
   if (kind !== 'signature' && kind !== 'stamp') throw new ApiError(400, 'Invalid asset kind')
   const companyId = req.user.companyId
   const entityType = kind === 'signature' ? 'invoice_signature' : 'invoice_stamp'
