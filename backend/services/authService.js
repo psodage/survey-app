@@ -273,7 +273,8 @@ export async function forgotPassword({ email }) {
   try {
     await sendPasswordResetOtpEmail({ to: normalized, otp })
   } catch (err) {
-    console.error('[forgot-password] Failed to send email:', err)
+    const detail = err?.message || String(err)
+    console.error('[forgot-password] Failed to send email:', detail)
     throw new ApiError(503, 'Could not send the reset code. Please try again in a moment.')
   }
   user.resetOtp = otp

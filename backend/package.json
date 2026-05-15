@@ -9,7 +9,8 @@
     "seed-admin-bank": "node seed/seedAdminBankDetails.js",
     "seed-company-invoice": "node seed/seedCompanyInvoiceBranding.js",
     "add-temp-user": "node seed/addTempUser.js",
-    "add-team-admins": "node seed/addTeamAdmins.js"
+    "add-team-admins": "node seed/addTeamAdmins.js",
+    "test:mail": "node scripts/test-brevo-mail.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

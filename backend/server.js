@@ -3,7 +3,12 @@ import helmet from 'helmet'
 import cors from 'cors'
 import mongoose from 'mongoose'
 import { env } from './config/env.js'
-import { getBrevoMailMode, isBrevoConfigured } from './services/mailService.js'
+import {
+  getBrevoConfigHint,
+  getBrevoFromEmail,
+  getBrevoMailMode,
+  isBrevoConfigured,
+} from './services/mailService.js'
 import { connectMongo, registerMongoShutdownHandlers } from './config/db.js'
 import { configureCloudinary } from './config/cloudinary.js'
 import './models/index.js'
@@ -27,11 +32,11 @@ configureCloudinary()
 registerMongoShutdownHandlers()
 
 if (!isBrevoConfigured()) {
-  console.warn(
-    '[startup] Set BREVO_API_KEY + BREVO_FROM_EMAIL (or BREVO_SMTP_*) — password reset emails are disabled.',
-  )
+  const hint = getBrevoConfigHint()
+  console.warn('[startup] Password reset email disabled.', hint || 'Set BREVO_API_KEY + BREVO_FROM_EMAIL.')
 } else {
-  console.info(`[startup] Password reset email via Brevo ${getBrevoMailMode()}`)
+  const hint = getBrevoConfigHint()
+  console.info(`[startup] Password reset email via Brevo ${getBrevoMailMode()}`, hint ? `(${hint})` : '')
 }
 
 const app = express()
@@ -59,6 +64,16 @@ app.use(express.urlencoded({ extended: true, limit: '5mb' }))
 
 app.get('/health', (_req, res) => {
   res.status(200).json({ ok: true, message: 'Server is active' })
+})
+
+app.get('/health/mail', (_req, res) => {
+  const configured = isBrevoConfigured()
+  res.status(configured ? 200 : 503).json({
+    ok: configured,
+    mode: getBrevoMailMode(),
+    fromEmailSet: Boolean(getBrevoFromEmail()),
+    hint: getBrevoConfigHint(),
+  })
 })
 
 app.use('/api', apiRouter)
