@@ -46,8 +46,9 @@ import http from './api/http'
 import { useAuth } from './context/AuthContext'
 import { useSelectedYear } from './context/SelectedYearContext'
 import { signOut } from './signOut'
-import { downloadCsv } from './utils/downloadFile'
+import { exportSiteVisitsPdf } from './exportSiteVisitsPdf'
 import { runExport } from './utils/runExport'
+import { computeVisitListStats } from './utils/visitListStats'
 import { validateSiteVisitForm } from './utils/validateSiteVisit'
 
 type NavItem = {
@@ -90,6 +91,7 @@ type VisitRecord = {
   machine: string
   work: string
   amount: string
+  pendingAmount?: string
   paymentMode: string
   paymentStatus: string
   notes: string
@@ -110,34 +112,6 @@ type AddSiteVisitProps = {
 
 const visitToolbarSelectClass =
   'h-10 min-w-[120px] flex-1 rounded-xl border border-neutral-200 bg-white px-2.5 text-xs font-bold text-neutral-700 outline-none transition focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20 sm:min-w-[140px] sm:px-3 sm:text-sm md:h-11 md:flex-initial'
-
-function escapeCsvCell(value: string) {
-  const t = String(value).replace(/"/g, '""')
-  if (/[",\n\r]/.test(t)) return `"${t}"`
-  return t
-}
-
-function buildVisitRecordsCsv(rows: VisitRecord[]) {
-  const headers = ['Visit ID', 'Client', 'Site', 'Date', 'Machine', 'Pay status', 'Amount', 'Payment mode', 'Work', 'Notes']
-  const lines = [headers.map(escapeCsvCell).join(',')]
-  for (const r of rows) {
-    lines.push(
-      [
-        escapeCsvCell(r.id),
-        escapeCsvCell(r.client),
-        escapeCsvCell(r.site),
-        escapeCsvCell(r.date),
-        escapeCsvCell(r.machine),
-        escapeCsvCell(r.paymentStatus),
-        escapeCsvCell(r.amount),
-        escapeCsvCell(r.paymentMode),
-        escapeCsvCell(r.work ?? ''),
-        escapeCsvCell(r.notes),
-      ].join(','),
-    )
-  }
-  return lines.join('\n')
-}
 
 type BillingLineDraft = { id: string; particular: string; quantity: string; rate: string; amount: string }
 
@@ -161,7 +135,6 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
   const [visitRecords, setVisitRecords] = useState<VisitRecord[]>([])
   const [visitListSearch, setVisitListSearch] = useState('')
   const [visitPaymentStatusFilter, setVisitPaymentStatusFilter] = useState('all')
-  const [visitMachineFilter, setVisitMachineFilter] = useState('all')
   const [pendingDeleteVisit, setPendingDeleteVisit] = useState<VisitRecord | null>(null)
   const [deleteVisitBusy, setDeleteVisitBusy] = useState(false)
   const [isSubmittingVisit, setIsSubmittingVisit] = useState(false)
@@ -266,38 +239,50 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
     return Math.round(lineSum + o)
   }, [billingLines, billingOtherCharges])
   const amountDisplay = useMemo(() => amountRupees.toLocaleString('en-IN'), [amountRupees])
-  const visitMachineOptions = useMemo(
-    () => [...new Set(visitRecords.map((r) => r.machine || '—'))].sort(),
-    [visitRecords],
-  )
-
   const filteredVisitRecords = useMemo(() => {
     let list = visitRecords
     if (visitPaymentStatusFilter !== 'all') {
       list = list.filter((r) => r.paymentStatus === visitPaymentStatusFilter)
     }
-    if (visitMachineFilter !== 'all') {
-      const m = visitMachineFilter === '—' ? '—' : visitMachineFilter
-      list = list.filter((r) => (r.machine || '—') === m)
-    }
     const q = visitListSearch.trim().toLowerCase()
     if (!q) return list
     return list.filter((r) => {
-      const hay = [r.id, r.client, r.site, r.date, r.machine, r.paymentMode, r.paymentStatus, r.notes, r.amount, r.work ?? '']
+      const hay = [
+        r.id,
+        r.client,
+        r.site,
+        r.date,
+        r.machine,
+        r.paymentMode,
+        r.paymentStatus,
+        r.notes,
+        r.amount,
+        r.pendingAmount ?? '',
+        r.work ?? '',
+      ]
         .join(' ')
         .toLowerCase()
       return hay.includes(q)
     })
-  }, [visitRecords, visitListSearch, visitPaymentStatusFilter, visitMachineFilter])
+  }, [visitRecords, visitListSearch, visitPaymentStatusFilter])
 
-  const hasActiveVisitListFilters =
-    visitListSearch.trim() !== '' || visitPaymentStatusFilter !== 'all' || visitMachineFilter !== 'all'
+  const hasActiveVisitListFilters = visitListSearch.trim() !== '' || visitPaymentStatusFilter !== 'all'
 
   const clearVisitListFilters = () => {
     setVisitListSearch('')
     setVisitPaymentStatusFilter('all')
-    setVisitMachineFilter('all')
   }
+
+  const visitListStats = useMemo(() => computeVisitListStats(filteredVisitRecords), [filteredVisitRecords])
+
+  const visitListFilterNote = useMemo(() => {
+    if (!hasActiveVisitListFilters) return undefined
+    const parts: string[] = []
+    if (visitListSearch.trim()) parts.push(`Search: "${visitListSearch.trim()}"`)
+    if (visitPaymentStatusFilter !== 'all') parts.push(`Status: ${visitPaymentStatusFilter}`)
+    parts.push(`${filteredVisitRecords.length} of ${visitRecords.length} visits`)
+    return parts.join(' · ')
+  }, [hasActiveVisitListFilters, visitListSearch, visitPaymentStatusFilter, filteredVisitRecords.length, visitRecords.length])
 
   const visitRowKey = (r: VisitRecord) => r.visitMongoId ?? r._id ?? r.id
 
@@ -325,11 +310,6 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
       setDeleteVisitBusy(false)
     }
   }
-
-  const totalAmount = useMemo(
-    () => filteredVisitRecords.reduce((sum, record) => sum + Number(record.amount.replace(/[^\d.-]/g, '')), 0),
-    [filteredVisitRecords],
-  )
 
   const mobileBottomNav = [
     { label: 'Dashboard', path: '/dashboard', icon: LayoutGrid },
@@ -601,7 +581,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
           </header>
 
           <div className="mobile-main-scroll-pad min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-white p-4 sm:px-6 sm:pt-6 md:p-6 lg:p-8">
-            <div className="mx-auto w-full max-w-[1200px] space-y-6 md:space-y-8">
+            <div className="mx-auto w-full max-w-[1200px] space-y-6 pb-6 md:space-y-8 md:pb-0">
               {!showAddForm ? (
                 <section className="grid grid-cols-2 gap-1.5 md:gap-4 xl:grid-cols-4">
                   <StatCard
@@ -616,30 +596,32 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                   />
                   <StatCard
                     title="Visit Revenue"
-                    value={`₹ ${totalAmount.toLocaleString('en-IN')}`}
-                    subtitle={selectedYear}
+                    value={`₹ ${visitListStats.totalRevenue.toLocaleString('en-IN')}`}
+                    subtitle={
+                      hasActiveVisitListFilters
+                        ? `Filtered · ${selectedYear}`
+                        : selectedYear
+                    }
                     icon={<Briefcase className="text-emerald-600" />}
                     toneClass="bg-emerald-100"
                     mobileCardTint="bg-emerald-50/90"
                   />
                   <StatCard
                     title="Received Amount"
-                    value={`₹ ${filteredVisitRecords
-                      .filter((r) => r.paymentStatus === 'Paid')
-                      .reduce((s, r) => s + Number(r.amount.replace(/[^\d.-]/g, '')), 0)
-                      .toLocaleString('en-IN')}`}
-                    subtitle={selectedYear}
+                    value={`₹ ${visitListStats.receivedAmount.toLocaleString('en-IN')}`}
+                    subtitle={
+                      hasActiveVisitListFilters
+                        ? `Filtered · ${selectedYear}`
+                        : selectedYear
+                    }
                     icon={<Calendar className="text-violet-600" />}
                     toneClass="bg-violet-100"
                     mobileCardTint="bg-violet-50/90"
                   />
                   <StatCard
                     title="Pending Visit Amount"
-                    value={`₹ ${filteredVisitRecords
-                      .filter((r) => r.paymentStatus === 'Pending' || r.paymentStatus === 'Partial')
-                      .reduce((s, r) => s + Number(r.amount.replace(/[^\d.-]/g, '')), 0)
-                      .toLocaleString('en-IN')}`}
-                    subtitle="Outstanding"
+                    value={`₹ ${visitListStats.pendingAmount.toLocaleString('en-IN')}`}
+                    subtitle={hasActiveVisitListFilters ? 'Filtered outstanding' : 'Outstanding'}
                     icon={<MapPin className="text-rose-600" />}
                     toneClass="bg-rose-100"
                     mobileCardTint="bg-rose-50/90"
@@ -684,22 +666,6 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                           <option value="Waived">Waived</option>
                         </select>
                       </label>
-                      <label className="grid gap-1">
-                        <span className="sr-only">Machine</span>
-                        <select
-                          value={visitMachineFilter}
-                          onChange={(e) => setVisitMachineFilter(e.target.value)}
-                          className={visitToolbarSelectClass}
-                          aria-label="Filter by machine"
-                        >
-                          <option value="all">All machines</option>
-                          {visitMachineOptions.map((m) => (
-                            <option key={m} value={m}>
-                              {m}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
                     </div>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
@@ -713,12 +679,19 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                       disabled={filteredVisitRecords.length === 0 || exportBusy}
                       onClick={() => {
                         if (filteredVisitRecords.length === 0 || exportBusy) return
-                        const safeYear = selectedYear.replace(/[^\d-]/g, '') || 'visits'
                         setExportBusy(true)
-                        void runExport('spreadsheet', () =>
-                          downloadCsv(
-                            buildVisitRecordsCsv(filteredVisitRecords),
-                            `site-visits-${safeYear}.csv`,
+                        void runExport('PDF', () =>
+                          exportSiteVisitsPdf(
+                            filteredVisitRecords.map((r) => ({
+                              id: r.id,
+                              client: r.client,
+                              site: r.site,
+                              date: r.date,
+                              amount: r.amount,
+                              paymentStatus: r.paymentStatus,
+                              machine: r.machine,
+                            })),
+                            { year: selectedYear, filterNote: visitListFilterNote },
                           ),
                         ).finally(() => setExportBusy(false))
                       }}
@@ -753,7 +726,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                   }
                 >
                   <div className="md:hidden">
-                    <ul className="flex flex-col gap-1.5 px-3 pb-4 pt-1.5">
+                    <ul className="flex flex-col gap-1.5 px-3 pb-8 pt-1.5">
                       {filteredVisitRecords.map((record) => (
                         <li key={`${visitRowKey(record)}-mobile`}>
                           <div

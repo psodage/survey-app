@@ -6,6 +6,7 @@ import Site from '../models/Site.js'
 import SiteVisit from '../models/SiteVisit.js'
 import { ApiError } from '../utils/ApiError.js'
 import { resolveInstrumentScope, optionalAdminIdQuery, instrumentScopeMatch, peerAwareAdminScopeMatch } from '../utils/scope.js'
+import { visitDateRangeForYear } from '../utils/yearQuery.js'
 import * as accountManagerService from './accountManagerService.js'
 import { applyCreditToSiteVisits, recomputeVisitCreditsForSite } from './visitCreditAllocation.js'
 
@@ -18,7 +19,6 @@ function toDec128(n) {
 }
 
 export async function listTransactions(req, accountManagerId) {
-  const { allowedInstrumentIds } = await resolveInstrumentScope(req)
   const am = await AccountManager.findOne({
     _id: accountManagerId,
     companyId: req.user.companyId,
@@ -26,10 +26,11 @@ export async function listTransactions(req, accountManagerId) {
   }).lean()
   if (!am) throw new ApiError(404, 'Account manager not found')
   await accountManagerService.assertAccountManagerReadAccess(req, am)
+  const yearRange = visitDateRangeForYear(req.query?.year)
   const rows = await Transaction.find({
     companyId: req.user.companyId,
     accountManagerId: am._id,
-    ...instrumentScopeMatch(allowedInstrumentIds),
+    ...(yearRange ? { occurredOn: yearRange } : {}),
   })
     .populate('clientId', 'name')
     .populate('siteId', 'name')

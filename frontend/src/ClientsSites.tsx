@@ -46,7 +46,7 @@ import { ConfirmAlert } from './ConfirmAlert'
 import { TablePagination } from './components/TablePagination'
 import {
   exportAllClientsExcel,
-  exportAllClientsExport,
+  exportAllClientsPdf,
   exportClientExcel,
   exportClientPdf,
 } from './utils/exportClientsReport'
@@ -1031,7 +1031,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                       type="button"
                       className={toolbarSecondaryButtonClass}
                       disabled={exportBusy}
-                      onClick={handleExportClientExport}
+                      onClick={handleExportClientPdf}
                     >
                       {exportBusy ? 'Exporting…' : 'Export'}
                     </button>

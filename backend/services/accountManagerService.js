@@ -1,11 +1,12 @@
 import AccountManager from '../models/AccountManager.js'
 import Client from '../models/Client.js'
 import SiteVisit from '../models/SiteVisit.js'
-import Site from '../models/Site.js'
+import Transaction from '../models/Transaction.js'
 import { ApiError } from '../utils/ApiError.js'
 import { instrumentCoworkerAdminIdStrings } from '../utils/instrumentPeers.js'
 import { optionalAdminIdQuery, peerAwareAdminScopeMatch } from '../utils/scope.js'
 import { decAmount, effectivePaidAmount } from '../utils/visitPaymentMath.js'
+import { visitDateRangeForYear } from '../utils/yearQuery.js'
 
 /**
  * Admins may read their own ledger or another admin's on the same active instrument (header).
@@ -60,7 +61,55 @@ export async function getAccountManagerBySlug(req, slug) {
   return am
 }
 
-export async function listAccountRowsForManager(req, managerDoc) {
+/**
+ * Financial summary for one account manager ledger (scoped by adminId / accountManagerId, not instrument).
+ */
+export async function getLedgerSummaryForManager(req, managerDoc, yearRaw) {
+  const visitYearRange = visitDateRangeForYear(yearRaw)
+  const txMatch = {
+    companyId: req.user.companyId,
+    accountManagerId: managerDoc._id,
+    ...(visitYearRange ? { occurredOn: visitYearRange } : {}),
+  }
+  const txs = await Transaction.find(txMatch).select('type amount').lean()
+  let totalDebit = 0
+  let totalCredit = 0
+  for (const t of txs) {
+    const a = decAmount(t.amount)
+    if (t.type === 'debit') totalDebit += a
+    else totalCredit += a
+  }
+
+  const clients = await Client.find({
+    companyId: req.user.companyId,
+    adminId: managerDoc.adminId,
+  })
+    .select('_id')
+    .lean()
+  let pendingTotal = 0
+  if (clients.length > 0) {
+    const clientIds = clients.map((c) => c._id)
+    const visitMatch = { clientId: { $in: clientIds }, ...(visitYearRange ? { visitDate: visitYearRange } : {}) }
+    const visits = await SiteVisit.find(visitMatch).select('amount paymentStatus paidAmount').lean()
+    let revenue = 0
+    let received = 0
+    for (const v of visits) {
+      revenue += decAmount(v.amount)
+      received += effectivePaidAmount(v)
+    }
+    pendingTotal = Math.max(0, revenue - received)
+  }
+
+  return {
+    totalDebit,
+    totalCredit,
+    netBalance: totalCredit - totalDebit,
+    pendingTotal,
+  }
+}
+
+export async function listAccountRowsForManager(req, managerDoc, yearRaw) {
+  const visitYearRange = visitDateRangeForYear(yearRaw)
   const clients = await Client.find({
     companyId: req.user.companyId,
     adminId: managerDoc.adminId,
@@ -72,7 +121,8 @@ export async function listAccountRowsForManager(req, managerDoc) {
   if (clients.length === 0) return []
 
   const clientIds = clients.map((c) => c._id)
-  const visits = await SiteVisit.find({ clientId: { $in: clientIds } })
+  const visitMatch = { clientId: { $in: clientIds }, ...(visitYearRange ? { visitDate: visitYearRange } : {}) }
+  const visits = await SiteVisit.find(visitMatch)
     .select('clientId amount paymentStatus paidAmount')
     .lean()
   const byClient = new Map()

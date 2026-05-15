@@ -101,10 +101,19 @@ type LedgerMeta = {
   adminId: string
 }
 
+type LedgerSummary = {
+  totalDebit: number
+  totalCredit: number
+  netBalance: number
+  pendingTotal: number
+}
+
 export default function AccountManager({ onNavigate }: AccountManagerProps) {
   const { user, company, managers } = useAuth()
   const [ledgerMeta, setLedgerMeta] = useState<LedgerMeta | null>(null)
+  const [ledgerSummary, setLedgerSummary] = useState<LedgerSummary | null>(null)
   const [ledgerLoadState, setLedgerLoadState] = useState<'loading' | 'ok' | 'error'>('loading')
+  const [isExporting, setIsExporting] = useState(false)
   const prevManagerSlugRef = useRef<string | undefined>(undefined)
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const { managerId: managerIdFromRoute } = useParams<{ managerId: string }>()
@@ -145,7 +154,8 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
     if (fromAccounts.length > 0) return fromAccounts
     return Object.keys(clientSiteOptions).sort((a, b) => a.localeCompare(b))
   }, [accountRows, clientSiteOptions])
-  const totalPending = accountRows.reduce((sum, row) => sum + parseCurrency(row.pending), 0)
+  const totalPendingFromRows = accountRows.reduce((sum, row) => sum + parseCurrency(row.pending), 0)
+  const totalPending = ledgerSummary?.pendingTotal ?? totalPendingFromRows
   const [isAddOpen, setIsAddOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [transactionFilter, setTransactionFilter] = useState<'all' | TransactionType>('all')
@@ -198,19 +208,23 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
     if (switchedManager) {
       setLedgerLoadState('loading')
       setLedgerMeta(null)
+      setLedgerSummary(null)
       setAccountRows([])
     }
     ;(async () => {
       try {
+        const yearParams = { year: selectedYear }
         const [tRes, aRes, sRes] = await Promise.all([
           http.get<{ ok: boolean; transactions: Array<{ id: string; type: string; amount: number; date: string; reason?: string; client?: string; site?: string }> }>(
             `/api/transactions/${managerIdFromRoute}`,
+            { params: yearParams },
           ),
           http.get<{
             ok: boolean
             accounts: AccountRow[]
             manager?: LedgerMeta
-          }>(`/api/account-managers/${managerIdFromRoute}/accounts`),
+            summary?: LedgerSummary
+          }>(`/api/account-managers/${managerIdFromRoute}/accounts`, { params: yearParams }),
           http.get<{ ok: boolean; sites: Array<{ clientName: string; name: string }> }>('/api/sites', {
             params: { year: selectedYear },
           }),
@@ -222,6 +236,8 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
         }
         if (aRes.data.manager) setLedgerMeta(aRes.data.manager)
         else setLedgerMeta(null)
+        if (aRes.data.summary) setLedgerSummary(aRes.data.summary)
+        else setLedgerSummary(null)
         if (tRes.data?.ok) {
           setTransactionsByManager((prev) => ({
             ...prev,
@@ -315,15 +331,17 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
       .sort((a, b) => b.date.localeCompare(a.date))
   }, [selectedYear, transactions])
 
-  const totalDebit = useMemo(
+  const totalDebitFromTx = useMemo(
     () => visibleTransactions.filter((t) => t.type === 'debit').reduce((sum, t) => sum + t.amount, 0),
     [visibleTransactions],
   )
-  const totalCredit = useMemo(
+  const totalCreditFromTx = useMemo(
     () => visibleTransactions.filter((t) => t.type === 'credit').reduce((sum, t) => sum + t.amount, 0),
     [visibleTransactions],
   )
-  const netBalance = totalCredit - totalDebit
+  const totalDebit = ledgerSummary?.totalDebit ?? totalDebitFromTx
+  const totalCredit = ledgerSummary?.totalCredit ?? totalCreditFromTx
+  const netBalance = ledgerSummary?.netBalance ?? totalCreditFromTx - totalDebitFromTx
 
   const tableTransactions = useMemo(() => {
     if (viewMode === 'debits') return visibleTransactions.filter((t) => t.type === 'debit')
@@ -376,16 +394,6 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
 
   useEffect(() => {
     setTxPage(1)
-  }, [filteredTableTransactions])
-
-  const exportTotals = useMemo(() => {
-    const debit = filteredTableTransactions.filter((t) => t.type === 'debit').reduce((sum, t) => sum + t.amount, 0)
-    const credit = filteredTableTransactions.filter((t) => t.type === 'credit').reduce((sum, t) => sum + t.amount, 0)
-    return {
-      totalDebit: debit,
-      totalCredit: credit,
-      netBalance: credit - debit,
-    }
   }, [filteredTableTransactions])
 
   if (!managerIdFromRoute) {
@@ -445,10 +453,15 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
         [managerIdFromRoute]: (prev[managerIdFromRoute] ?? []).filter((t) => t.id !== txId),
       }))
       try {
-        const aRes = await http.get<{ ok: boolean; accounts: AccountRow[] }>(
-          `/api/account-managers/${managerIdFromRoute}/accounts`,
-        )
-        if (aRes.data?.ok) setAccountRows(aRes.data.accounts)
+        const aRes = await http.get<{
+          ok: boolean
+          accounts: AccountRow[]
+          summary?: LedgerSummary
+        }>(`/api/account-managers/${managerIdFromRoute}/accounts`, { params: { year: selectedYear } })
+        if (aRes.data?.ok) {
+          setAccountRows(aRes.data.accounts)
+          if (aRes.data.summary) setLedgerSummary(aRes.data.summary)
+        }
       } catch {
         /* list updated; balances refresh on next navigation if this fails */
       }
@@ -759,7 +772,7 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
             >
               <button
                 type="button"
-               
+                onClick={() => handleSummaryCardClick('debits')}
                 disabled={isLedgerLoading}
                 className="w-full cursor-pointer rounded-xl bg-transparent p-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f39b03]/70 disabled:cursor-default"
                 aria-label="Open debit transactions"
@@ -776,7 +789,7 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
               </button>
               <button
                 type="button"
-                
+                onClick={() => handleSummaryCardClick('credits')}
                 disabled={isLedgerLoading}
                 className="w-full cursor-pointer rounded-xl bg-transparent p-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f39b03]/70 disabled:cursor-default"
                 aria-label="Open credit transactions"
@@ -793,7 +806,7 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
               </button>
               <button
                 type="button"
-                
+                onClick={() => handleSummaryCardClick('net')}
                 disabled={isLedgerLoading}
                 className="w-full cursor-pointer rounded-xl bg-transparent p-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f39b03]/70 disabled:cursor-default"
                 aria-label="Open net balance details"
@@ -810,7 +823,7 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
               </button>
               <button
                 type="button"
-          
+                onClick={() => handleSummaryCardClick('pending')}
                 disabled={isLedgerLoading}
                 className="w-full cursor-pointer rounded-xl bg-transparent p-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f39b03]/70 disabled:cursor-default"
                 aria-label="Open pending clients"
@@ -869,22 +882,46 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                     <>
                       <button
                         type="button"
-                        disabled={isLedgerLoading}
+                        disabled={isLedgerLoading || isExporting}
                         className={toolbarSecondaryButtonClass}
                         aria-label="Export filtered transactions as PDF"
                         title="Download PDF of transactions shown for the selected year"
                         onClick={async () => {
-                          const { exportFilteredTransactionsPdf } = await import('./exportTransactionsPdf')
-                          exportFilteredTransactionsPdf({
-                            year: selectedYear,
-                            transactions: tableTransactions,
-                            totalDebit: exportTotals.totalDebit,
-                            totalCredit: exportTotals.totalCredit,
-                            netBalance: exportTotals.netBalance,
-                          })
+                          if (isExporting) return
+                          setIsExporting(true)
+                          const toastId = toast.loading('Preparing PDF…')
+                          try {
+                            const { exportAccountManagerReportPdf } = await import('./exportTransactionsPdf')
+                            const exportRows = [...filteredTableTransactions].sort((a, b) =>
+                              b.date.localeCompare(a.date),
+                            )
+                            const debit = exportRows
+                              .filter((t) => t.type === 'debit')
+                              .reduce((sum, t) => sum + t.amount, 0)
+                            const credit = exportRows
+                              .filter((t) => t.type === 'credit')
+                              .reduce((sum, t) => sum + t.amount, 0)
+                            await exportAccountManagerReportPdf({
+                              accountManagerName: manager.name,
+                              companyName: company?.name,
+                              year: selectedYear,
+                              transactions: exportRows,
+                              totalDebit: debit,
+                              totalCredit: credit,
+                              netBalance: credit - debit,
+                              pendingAmount: totalPending,
+                            })
+                            toast.success('Report downloaded', { id: toastId })
+                          } catch {
+                            toast.error('Could not export PDF. Try again or use Share if prompted.', {
+                              id: toastId,
+                            })
+                          } finally {
+                            setIsExporting(false)
+                          }
                         }}
                       >
-                        Export
+                        {isExporting ? 'Exporting…' : 'Export'}
                       </button>
                       {canEditLedgerActions ? (
                         <button
@@ -942,10 +979,22 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                       const trimmedClient = (draftTx.client ?? '').trim()
                       const trimmedSite = (draftTx.site ?? '').trim()
 
-                      if (!draftTx.date) return
-                      if (!Number.isFinite(draftTx.amount) || draftTx.amount <= 0) return
-                      if (draftTx.type === 'debit' && trimmedReason.length === 0) return
-                      if (draftTx.type === 'credit' && (trimmedClient.length === 0 || trimmedSite.length === 0)) return
+                      if (!draftTx.date) {
+                        toast.error('Please select a date')
+                        return
+                      }
+                      if (!Number.isFinite(draftTx.amount) || draftTx.amount <= 0) {
+                        toast.error('Enter a valid amount greater than zero')
+                        return
+                      }
+                      if (draftTx.type === 'debit' && trimmedReason.length === 0) {
+                        toast.error('Debit transactions require a reason')
+                        return
+                      }
+                      if (draftTx.type === 'credit' && (trimmedClient.length === 0 || trimmedSite.length === 0)) {
+                        toast.error('Credit transactions require client and site')
+                        return
+                      }
 
                       try {
                         const res = await http.post<{
@@ -986,6 +1035,21 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                           ...prev,
                           [managerIdFromRoute]: [next, ...(prev[managerIdFromRoute] ?? [])],
                         }))
+                        try {
+                          const aRes = await http.get<{
+                            ok: boolean
+                            accounts: AccountRow[]
+                            summary?: LedgerSummary
+                          }>(`/api/account-managers/${managerIdFromRoute}/accounts`, {
+                            params: { year: selectedYear },
+                          })
+                          if (aRes.data?.ok) {
+                            setAccountRows(aRes.data.accounts)
+                            if (aRes.data.summary) setLedgerSummary(aRes.data.summary)
+                          }
+                        } catch {
+                          /* balances refresh on next load */
+                        }
                         toast.success('Transaction saved')
                         setIsAddOpen(false)
                       } catch {
@@ -1261,6 +1325,16 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                       ))}
                     </ul>
                   ) : viewMode === 'pending' ? (
+                    filteredPendingRows.length === 0 ? (
+                      <div className="px-4 py-10 text-center">
+                        <p className="text-sm font-extrabold text-neutral-800">No pending clients found</p>
+                        <p className="mt-1 text-xs font-semibold text-neutral-500">
+                          {normalizedSearchQuery || pendingFilter !== 'all'
+                            ? 'Try adjusting search or filters.'
+                            : `No outstanding client balances for ${selectedYear}.`}
+                        </p>
+                      </div>
+                    ) : (
                     <ul className="flex flex-col gap-1.5 px-3 pb-1.5 pt-1.5">
                       {filteredPendingRows.map((row) => (
                         <li key={row.name}>
@@ -1284,6 +1358,16 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                         </li>
                       ))}
                     </ul>
+                    )
+                  ) : filteredTableTransactions.length === 0 ? (
+                    <div className="px-4 py-10 text-center">
+                      <p className="text-sm font-extrabold text-neutral-800">No transactions found</p>
+                      <p className="mt-1 text-xs font-semibold text-neutral-500">
+                        {normalizedSearchQuery || transactionFilter !== 'all'
+                          ? 'Try adjusting search or filters.'
+                          : `No transactions recorded for ${selectedYear}.`}
+                      </p>
+                    </div>
                   ) : (
                     <ul className="flex flex-col gap-1.5 px-3 pb-1.5 pt-1.5">
                       {paginatedTableTransactions.map((tx) => (
@@ -1429,6 +1513,18 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                         </tr>
                       </thead>
                       <tbody className="text-sm font-semibold text-neutral-800">
+                        {filteredPendingRows.length === 0 ? (
+                          <tr>
+                            <td colSpan={6} className="px-6 py-12 text-center text-sm font-semibold text-neutral-600">
+                              <span className="font-extrabold text-neutral-800">No pending clients found</span>
+                              <span className="mt-1 block text-xs">
+                                {normalizedSearchQuery || pendingFilter !== 'all'
+                                  ? 'Try adjusting search or filters.'
+                                  : `No outstanding client balances for ${selectedYear}.`}
+                              </span>
+                            </td>
+                          </tr>
+                        ) : null}
                         {filteredPendingRows.map((row) => {
                           const debit = parseCurrency(row.debit)
                           const credit = parseCurrency(row.credit)
@@ -1458,6 +1554,18 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                         </tr>
                       </thead>
                       <tbody className="text-sm font-semibold text-neutral-800">
+                        {filteredTableTransactions.length === 0 ? (
+                          <tr>
+                            <td colSpan={6} className="px-6 py-12 text-center text-sm font-semibold text-neutral-600">
+                              <span className="font-extrabold text-neutral-800">No transactions found</span>
+                              <span className="mt-1 block text-xs">
+                                {normalizedSearchQuery || transactionFilter !== 'all'
+                                  ? 'Try adjusting search or filters.'
+                                  : `No transactions recorded for ${selectedYear}.`}
+                              </span>
+                            </td>
+                          </tr>
+                        ) : null}
                         {paginatedTableTransactions.map((tx) => (
                           <tr key={tx.id} className="border-t border-neutral-200 hover:bg-neutral-50/60">
                             <td className="px-6 py-4">

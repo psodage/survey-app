@@ -63,7 +63,7 @@ body.api-loading-active {
 
 /** Scrollable main content above fixed mobile bottom nav (Clients, Site Details, Visits, etc.) */
 .mobile-main-scroll-pad {
-  padding-bottom: calc(4.5rem + max(16px, env(safe-area-inset-bottom, 0px)));
+  padding-bottom: calc(6.25rem + max(24px, env(safe-area-inset-bottom, 0px)));
 }
 
 @media (min-width: 768px) {

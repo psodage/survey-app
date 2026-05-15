@@ -767,7 +767,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
           </header>
 
           <div className="mobile-main-scroll-pad min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-white p-4 sm:px-6 sm:pt-6 md:p-6 lg:p-8">
-            <div className="mx-auto w-full max-w-6xl space-y-4 md:space-y-6 xl:max-w-7xl">
+            <div className="mx-auto w-full max-w-6xl space-y-4 pb-8 md:space-y-6 md:pb-0 xl:max-w-7xl">
               <section className={`bg-neutral-900/[0.04] p-4 md:bg-white md:p-6 ${surfaceCardClass}`}>
                 <div className="text-[11px] font-semibold text-neutral-500 md:text-sm">Site Name</div>
                 <div className="mt-1 text-lg font-extrabold tracking-tight text-neutral-950 md:text-3xl">{name}</div>
@@ -911,7 +911,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                       <span className="text-neutral-500">Work Details:</span> {work}
                     </p>
                   </div>
-                  <div className="flex flex-col gap-2 border-t border-neutral-200 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3 sm:px-6 sm:py-4">
+                  <div className="flex flex-col gap-2 border-t border-neutral-200 px-4 py-3 pb-6 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3 sm:px-6 sm:py-4 md:pb-4">
                     <button
                       type="button"
                       onClick={() =>

@@ -9,6 +9,7 @@ import { ApiError } from '../utils/ApiError.js'
 import { resolveInstrumentScope, optionalAdminIdQuery, instrumentScopeMatch, peerAwareAdminScopeMatch } from '../utils/scope.js'
 import { visitDateRangeForYear } from '../utils/yearQuery.js'
 import { decAmount, effectivePaidAmount } from '../utils/visitPaymentMath.js'
+import * as uploadService from './uploadService.js'
 
 function formatInr(n) {
   return `₹${Math.round(n).toLocaleString('en-IN')}`
@@ -144,7 +145,7 @@ export async function listAllSites(req) {
 
 /**
  * Removes one site plus its visits, invoices tied to that site or those visits,
- * related transactions, and linked survey files (DB rows only).
+ * related transactions, and linked survey files (Cloudinary + DB).
  */
 export async function deleteSiteWithRelated(req, siteId) {
   const { allowedInstrumentIds } = await resolveInstrumentScope(req)
@@ -159,7 +160,7 @@ export async function deleteSiteWithRelated(req, siteId) {
   if (!site) throw new ApiError(404, 'Site not found')
 
   const visits = await SiteVisit.find({ siteId: site._id, companyId: req.user.companyId })
-    .select('_id photoFileIds invoiceId')
+    .select('_id photoFileIds photoUrls invoiceId')
     .lean()
   const visitIds = visits.map((v) => v._id)
   const visitInvoiceIds = [...new Set(visits.map((v) => v.invoiceId).filter(Boolean).map((id) => id.toString()))].map(
@@ -190,6 +191,11 @@ export async function deleteSiteWithRelated(req, siteId) {
 
   const txOr = [{ siteId: site._id }]
   if (visitIds.length) txOr.push({ siteVisitId: { $in: visitIds } })
+
+  if (fileObjectIds.length) {
+    await uploadService.purgeCloudinaryForSurveyFileIds(req.user.companyId, fileObjectIds)
+  }
+  await uploadService.purgeCloudinaryForPhotoUrls(visits.flatMap((v) => v.photoUrls ?? []))
 
   await Transaction.deleteMany({ companyId: req.user.companyId, $or: txOr })
   await Invoice.deleteMany({ companyId: req.user.companyId, $or: invoiceOr })

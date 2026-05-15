@@ -11,6 +11,7 @@ import { resolveInstrumentScope, adminIdFilter, instrumentScopeMatch, peerAwareA
 import { visitDateRangeForYear } from '../utils/yearQuery.js'
 import { owedAmount } from '../utils/visitPaymentMath.js'
 import { recomputeVisitCreditsForSite } from './visitCreditAllocation.js'
+import * as uploadService from './uploadService.js'
 
 async function nextVisitCode(companyId) {
   const key = `visit:${companyId.toString()}`
@@ -294,7 +295,7 @@ export async function appendVisitPhotos(req, visitId, { urls, fileIds }) {
 
 /**
  * Removes one site visit plus linked transactions, invoices that reference this visit,
- * visit photos / invoice PDF file rows (DB only), and refreshes the parent site's lastVisitAt.
+ * visit photos (Cloudinary + DB), invoice PDF file rows, and refreshes the parent site's lastVisitAt.
  */
 export async function deleteVisit(req, visitId) {
   const { allowedInstrumentIds } = await resolveInstrumentScope(req)
@@ -304,7 +305,7 @@ export async function deleteVisit(req, visitId) {
     ...instrumentScopeMatch(allowedInstrumentIds),
     ...(await peerAwareAdminScopeMatch(req)),
   })
-    .select('_id siteId clientId adminId instrumentId photoFileIds invoiceId visitCode')
+    .select('_id siteId clientId adminId instrumentId photoFileIds photoUrls invoiceId visitCode')
     .lean()
   if (!visit) throw new ApiError(404, 'Visit not found')
 
@@ -337,6 +338,11 @@ export async function deleteVisit(req, visitId) {
       reason: new RegExp(escapeRegex(code), 'i'),
     })
   }
+  if (fileObjectIds.length) {
+    await uploadService.purgeCloudinaryForSurveyFileIds(req.user.companyId, fileObjectIds)
+  }
+  await uploadService.purgeCloudinaryForPhotoUrls(visit.photoUrls)
+
   await Transaction.deleteMany({ companyId: req.user.companyId, $or: txOr })
   await Invoice.deleteMany({ companyId: req.user.companyId, $or: invoiceOr })
   await SiteVisit.deleteOne({ _id: vid, companyId: req.user.companyId })

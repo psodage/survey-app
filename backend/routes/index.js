@@ -235,10 +235,20 @@ router.get('/account-managers', catchAsync(async (req, res) => {
 
 router.get('/account-managers/:slug/accounts', catchAsync(async (req, res) => {
   const am = await accountManagerService.getAccountManagerBySlug(req, req.params.slug)
-  const rows = await accountManagerService.listAccountRowsForManager(req, am)
+  const year = typeof req.query?.year === 'string' ? req.query.year : undefined
+  const [rows, summary] = await Promise.all([
+    accountManagerService.listAccountRowsForManager(req, am, year),
+    accountManagerService.getLedgerSummaryForManager(req, am, year),
+  ])
   res.json({
     ok: true,
     accounts: rows,
+    summary: {
+      totalDebit: summary.totalDebit,
+      totalCredit: summary.totalCredit,
+      netBalance: summary.netBalance,
+      pendingTotal: summary.pendingTotal,
+    },
     manager: {
       slug: am.slug,
       fullName: am.fullName,

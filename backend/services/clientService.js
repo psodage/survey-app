@@ -7,6 +7,7 @@ import Transaction from '../models/Transaction.js'
 import Invoice from '../models/Invoice.js'
 import SurveyFile from '../models/SurveyFile.js'
 import { ApiError } from '../utils/ApiError.js'
+import * as uploadService from './uploadService.js'
 import { parseObjectId } from '../utils/instrumentAccess.js'
 import {
   resolveInstrumentScope,
@@ -152,8 +153,8 @@ export async function getClientById(req, id) {
 }
 
 /**
- * Permanently removes the client, all of its sites, visits, invoices, linked files,
- * and account-manager transactions that reference those records.
+ * Permanently removes the client, all of its sites, visits, invoices, linked files
+ * (including Cloudinary assets), and account-manager transactions that reference those records.
  */
 export async function deleteClientWithSites(req, clientId) {
   const { allowedInstrumentIds } = await resolveInstrumentScope(req)
@@ -171,7 +172,7 @@ export async function deleteClientWithSites(req, clientId) {
   const siteIds = sites.map((s) => s._id)
 
   const visits = await SiteVisit.find({ clientId: client._id, companyId: req.user.companyId })
-    .select('_id photoFileIds')
+    .select('_id photoFileIds photoUrls')
     .lean()
   const visitIds = visits.map((v) => v._id)
 
@@ -191,6 +192,11 @@ export async function deleteClientWithSites(req, clientId) {
   const txOr = [{ clientId: client._id }]
   if (siteIds.length) txOr.push({ siteId: { $in: siteIds } })
   if (visitIds.length) txOr.push({ siteVisitId: { $in: visitIds } })
+
+  if (fileObjectIds.length) {
+    await uploadService.purgeCloudinaryForSurveyFileIds(req.user.companyId, fileObjectIds)
+  }
+  await uploadService.purgeCloudinaryForPhotoUrls(visits.flatMap((v) => v.photoUrls ?? []))
 
   await Transaction.deleteMany({ companyId: req.user.companyId, $or: txOr })
   await Invoice.deleteMany({ companyId: req.user.companyId, clientId: client._id })
