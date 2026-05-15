@@ -4,6 +4,8 @@ declare module 'axios' {
   export interface AxiosRequestConfig {
     /** Skip global overlay and loading counter for this request. */
     skipGlobalLoading?: boolean
+    /** Force or suppress the global overlay (default: mutations only). */
+    showGlobalLoading?: boolean
     /** Custom text shown on the global loader overlay. */
     loadingMessage?: string
     /** Do not auto-retry on network / gateway errors. */
@@ -20,6 +22,7 @@ declare module 'axios' {
 
   export interface InternalAxiosRequestConfig {
     skipGlobalLoading?: boolean
+    showGlobalLoading?: boolean
     loadingMessage?: string
     skipRetry?: boolean
     skipDedup?: boolean

@@ -73,7 +73,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const loadManagers = useCallback(async () => {
-    const res = await http.get<{ ok: boolean; managers: AccountManagerSummary[] }>('/api/account-managers')
+    const res = await http.get<{ ok: boolean; managers: AccountManagerSummary[] }>('/api/account-managers', {
+      skipGlobalLoading: true,
+    })
     if (res.status === 200 && res.data?.ok) return res.data.managers ?? []
     return []
   }, [])
@@ -98,7 +100,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         companyAdmins?: CompanyAdminContact[]
         instruments: InstrumentSummary[]
         activeInstrumentId: string | null
-      }>('/api/auth/me')
+      }>('/api/auth/me', { skipGlobalLoading: true })
       if (res.status !== 200 || !res.data?.ok) {
         tokenStorage.clear()
         setToken(null)

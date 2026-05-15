@@ -18,7 +18,7 @@ export default function GlobalLoader({ visible, message }: GlobalLoaderProps) {
       <div className="global-loader__panel">
         <div className="global-loader__spinner" aria-hidden />
         <p className="global-loader__message">{message}</p>
-        <p className="global-loader__hint">Please wait while we connect to the server.</p>
+        <p className="global-loader__hint">Please wait while your changes are saved.</p>
       </div>
     </div>
   )

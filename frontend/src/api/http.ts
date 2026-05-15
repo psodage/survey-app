@@ -38,8 +38,19 @@ function sleep(ms: number) {
   return new Promise<void>((resolve) => setTimeout(resolve, ms))
 }
 
+const MUTATION_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
+
+/** Global overlay only for writes (save/delete) unless explicitly opted in. */
+export function shouldShowGlobalLoading(config: InternalAxiosRequestConfig): boolean {
+  if (config.skipGlobalLoading) return false
+  if (config.showGlobalLoading === true) return true
+  if (config.showGlobalLoading === false) return false
+  const method = (config.method ?? 'get').toUpperCase()
+  return MUTATION_METHODS.has(method)
+}
+
 function trackLoadingStart(config: InternalAxiosRequestConfig) {
-  if (config.skipGlobalLoading || config._dedupJoined) return
+  if (!shouldShowGlobalLoading(config) || config._dedupJoined) return
   if (!config._loadingSlotId) {
     config._loadingSlotId = beginTrackedRequest(config)
   }

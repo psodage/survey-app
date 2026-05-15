@@ -9,7 +9,8 @@ const MESSAGE_BY_KEY: Record<LoadingMessageKey, string> = {
   syncing: 'Syncing with server...',
 }
 
-export const MIN_LOADING_MS = 5000
+/** Short floor for mutations so the overlay does not flicker; GETs skip the global overlay. */
+export const MIN_LOADING_MS = 600
 
 export type LoadingBridgeListener = (state: {
   activeCount: number
