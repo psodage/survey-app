@@ -832,32 +832,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                     />
                   </div>
                   <div className="flex w-full flex-wrap items-center gap-2.5 md:w-auto md:justify-end">
-                    <select
-                      value={visitMachineFilter}
-                      onChange={(e) => setVisitMachineFilter(e.target.value)}
-                      className={toolbarSelectClass}
-                      aria-label="Filter by machine"
-                    >
-                      <option value="all">All machines</option>
-                      {visitMachineOptions.map((m) => (
-                        <option key={m} value={m}>
-                          {m}
-                        </option>
-                      ))}
-                    </select>
-                    <select
-                      value={visitPaymentFilter}
-                      onChange={(e) => setVisitPaymentFilter(e.target.value)}
-                      className={toolbarSelectClass}
-                      aria-label="Filter by payment mode"
-                    >
-                      <option value="all">All payment modes</option>
-                      {visitPaymentOptions.map((m) => (
-                        <option key={m} value={m}>
-                          {m}
-                        </option>
-                      ))}
-                    </select>
+                   
                     <select
                       value={visitPaymentStatusFilter}
                       onChange={(e) => setVisitPaymentStatusFilter(e.target.value)}
