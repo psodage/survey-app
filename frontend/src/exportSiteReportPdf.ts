@@ -2,6 +2,14 @@ import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import invoiceLogo from './assets/logo.jpeg'
 import { savePdf } from './utils/downloadFile'
+import {
+  formatPdfAmountCell,
+  parsePdfAmount,
+  PDF_AMOUNT_COL,
+  PDF_MARGIN,
+  PDF_TABLE_BASE_STYLES,
+  PDF_TABLE_WIDTH,
+} from './utils/pdfTableStyles'
 
 export type SiteReportVisitRow = {
   id: string
@@ -43,25 +51,26 @@ async function loadImageAsDataUrl(src: string) {
   })
 }
 
-function parseAmountDisplay(amount: string) {
-  const n = Number(String(amount).replace(/[^\d.-]/g, ''))
-  return Number.isFinite(n) ? n : 0
-}
-
-function formatPdfAmount(amount: string) {
-  return parseAmountDisplay(amount).toLocaleString('en-IN')
-}
-
 function pendingForRow(row: SiteReportVisitRow) {
   const p = row.pendingAmount?.trim()
-  if (p) return parseAmountDisplay(p)
-  return parseAmountDisplay(row.amount)
+  if (p) return parsePdfAmount(p)
+  return parsePdfAmount(row.amount)
+}
+
+const SITE_REPORT_TABLE_COLS = {
+  0: { cellWidth: 24 },
+  1: { cellWidth: 22 },
+  2: { cellWidth: 28 },
+  3: { cellWidth: 24 },
+  4: { cellWidth: 22 },
+  5: { cellWidth: 30, ...PDF_AMOUNT_COL },
+  6: { cellWidth: 32, ...PDF_AMOUNT_COL },
 }
 
 export async function exportSiteReportPdf(data: SiteReportPdfData) {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   const pageWidth = doc.internal.pageSize.getWidth()
-  const marginX = 14
+  const marginX = PDF_MARGIN
   let startY = 16
 
   try {
@@ -119,7 +128,7 @@ export async function exportSiteReportPdf(data: SiteReportPdfData) {
   }
 
   const totalVisits = data.visits.length
-  const totalRevenue = data.visits.reduce((sum, r) => sum + parseAmountDisplay(r.amount), 0)
+  const totalRevenue = data.visits.reduce((sum, r) => sum + parsePdfAmount(r.amount), 0)
   const totalPending = data.visits.reduce((sum, r) => sum + pendingForRow(r), 0)
 
   doc.setFont('helvetica', 'bold')
@@ -141,21 +150,18 @@ export async function exportSiteReportPdf(data: SiteReportPdfData) {
           r.machine || '—',
           r.paymentMode || '—',
           r.paymentStatus || '—',
-          formatPdfAmount(r.amount),
-          formatPdfAmount(String(pendingForRow(r))),
+          formatPdfAmountCell(r.amount),
+          formatPdfAmountCell(String(pendingForRow(r))),
         ])
 
   autoTable(doc, {
     startY: tableStartY,
+    tableWidth: PDF_TABLE_WIDTH,
     head: [['Visit ID', 'Date', 'Machine', 'Payment', 'Status', 'Amount (Rs)', 'Pending (Rs)']],
     body,
     headStyles: { fillColor: [243, 155, 3], textColor: 255, fontStyle: 'bold', fontSize: 9 },
-    styles: { fontSize: 8.5, cellPadding: 2, overflow: 'linebreak' },
-    columnStyles: {
-      0: { cellWidth: 22 },
-      5: { halign: 'right' },
-      6: { halign: 'right' },
-    },
+    styles: { ...PDF_TABLE_BASE_STYLES, fontSize: 8.5 },
+    columnStyles: SITE_REPORT_TABLE_COLS,
     margin: { left: marginX, right: marginX },
     didDrawPage: (drawData) => {
       const pageH = doc.internal.pageSize.getHeight()

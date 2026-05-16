@@ -1,5 +1,7 @@
+import mongoose from 'mongoose'
 import AccountManager from '../models/AccountManager.js'
 import Client from '../models/Client.js'
+import Site from '../models/Site.js'
 import SiteVisit from '../models/SiteVisit.js'
 import Transaction from '../models/Transaction.js'
 import { ApiError } from '../utils/ApiError.js'
@@ -14,22 +16,39 @@ import { decAmount, effectivePaidAmount } from '../utils/visitPaymentMath.js'
 import { visitDateRangeForYear } from '../utils/yearQuery.js'
 import { reconcileSiteCreditsForAdmin } from './visitCreditAllocation.js'
 
+function adminIdString(id) {
+  if (id == null) return ''
+  if (typeof id === 'object' && typeof id.toString === 'function') return id.toString()
+  return String(id)
+}
+
+function managerAdminObjectId(managerDoc) {
+  const raw = managerDoc?.adminId
+  if (raw == null) throw new ApiError(500, 'Account manager has no linked admin')
+  if (raw instanceof mongoose.Types.ObjectId) return raw
+  if (mongoose.isValidObjectId(raw)) return new mongoose.Types.ObjectId(adminIdString(raw))
+  throw new ApiError(500, 'Account manager has invalid admin reference')
+}
+
 /**
  * Admins may read their own ledger or another admin's on the same active instrument (header).
  * Super-admins respect optional `adminId` query scope when set.
  */
 export async function assertAccountManagerReadAccess(req, amLean) {
+  const amAdminId = adminIdString(amLean?.adminId)
+  if (!amAdminId) throw new ApiError(500, 'Account manager has no linked admin')
+
   if (req.user.role === 'super_admin') {
     const extra = optionalAdminIdQuery(req)
-    if (extra.adminId && !amLean.adminId.equals(extra.adminId)) {
+    if (extra.adminId && adminIdString(extra.adminId) !== amAdminId) {
       throw new ApiError(403, 'Forbidden')
     }
     return
   }
   if (req.user.role === 'admin') {
-    if (amLean.adminId.equals(req.user.id)) return
+    if (adminIdString(req.user.id) === amAdminId) return
     const peers = await instrumentCoworkerAdminIdStrings(req)
-    if (!peers || !peers.has(amLean.adminId.toString()) || !peers.has(req.user.id.toString())) {
+    if (!peers || !peers.has(amAdminId) || !peers.has(adminIdString(req.user.id))) {
       throw new ApiError(403, 'Forbidden')
     }
   }
@@ -71,7 +90,8 @@ export async function getAccountManagerBySlug(req, slug) {
  * Financial summary for one account manager ledger (scoped by adminId / accountManagerId, not instrument).
  */
 export async function getLedgerSummaryForManager(req, managerDoc, yearRaw) {
-  await reconcileSiteCreditsForAdmin(req.user.companyId, managerDoc.adminId)
+  const adminId = managerAdminObjectId(managerDoc)
+  await reconcileSiteCreditsForAdmin(req.user.companyId, adminId)
 
   const visitYearRange = visitDateRangeForYear(yearRaw)
   const txMatch = {
@@ -90,7 +110,7 @@ export async function getLedgerSummaryForManager(req, managerDoc, yearRaw) {
 
   const clients = await Client.find({
     companyId: req.user.companyId,
-    adminId: managerDoc.adminId,
+    adminId,
   })
     .select('_id')
     .lean()
@@ -145,9 +165,10 @@ export async function getGlobalPendingTotal(req, yearRaw) {
 /** Client → site names for credit transaction dropdowns (scoped to manager's adminId). */
 export async function listClientSiteOptionsForManager(req, managerDoc) {
   await assertAccountManagerReadAccess(req, managerDoc)
+  const adminId = managerAdminObjectId(managerDoc)
   const clients = await Client.find({
     companyId: req.user.companyId,
-    adminId: managerDoc.adminId,
+    adminId,
   })
     .select('name')
     .sort({ name: 1 })
@@ -177,12 +198,13 @@ export async function listClientSiteOptionsForManager(req, managerDoc) {
 }
 
 export async function listAccountRowsForManager(req, managerDoc, yearRaw) {
-  await reconcileSiteCreditsForAdmin(req.user.companyId, managerDoc.adminId)
+  const adminId = managerAdminObjectId(managerDoc)
+  await reconcileSiteCreditsForAdmin(req.user.companyId, adminId)
 
   const visitYearRange = visitDateRangeForYear(yearRaw)
   const clients = await Client.find({
     companyId: req.user.companyId,
-    adminId: managerDoc.adminId,
+    adminId,
   })
     .select('name phone')
     .sort({ name: 1 })

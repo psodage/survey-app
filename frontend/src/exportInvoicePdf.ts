@@ -347,9 +347,9 @@ function drawBankDetailsTable(
 const INVOICE_LINE_TABLE_COL_STYLES = {
   0: { halign: 'center' as const, cellWidth: 14 },
   1: { cellWidth: 82 },
-  2: { halign: 'right' as const, cellWidth: 24 },
-  3: { halign: 'right' as const, cellWidth: 30 },
-  4: { halign: 'right' as const, cellWidth: 32 },
+  2: { halign: 'right' as const, fontStyle: 'normal' as const, cellWidth: 24 },
+  3: { halign: 'right' as const, fontStyle: 'normal' as const, cellWidth: 30 },
+  4: { halign: 'right' as const, fontStyle: 'normal' as const, cellWidth: 32 },
 }
 
 function pdfLineTotal(row: InvoicePdfBillingLine): number {
@@ -462,6 +462,7 @@ export async function exportInvoicePdf(data: InvoicePdfData) {
     theme: 'grid',
     headStyles: { fillColor: [243, 155, 3], textColor: 255, fontStyle: 'bold' },
     styles: {
+      font: 'helvetica',
       fontSize: 9.2,
       cellPadding: { top: 2.5, right: 2.5, bottom: 2.5, left: 2.5 },
       overflow: 'linebreak',
@@ -541,8 +542,8 @@ export type CombinedVisitLine = {
 const COMBINED_INVOICE_COL_STYLES = {
   0: { halign: 'center' as const, cellWidth: 14 },
   1: { cellWidth: 58 },
-  2: { cellWidth: 88 },
-  3: { halign: 'right' as const, cellWidth: 32 },
+  2: { cellWidth: 78 },
+  3: { halign: 'right' as const, fontStyle: 'normal' as const, cellWidth: 32 },
 }
 
 function combinedSiteCellText(v: CombinedVisitLine): string {
@@ -621,6 +622,7 @@ export async function exportCombinedSiteInvoicePdf(data: {
     theme: 'grid',
     headStyles: { fillColor: [243, 155, 3], textColor: 255, fontStyle: 'bold' },
     styles: {
+      font: 'helvetica',
       fontSize: 9.2,
       cellPadding: { top: 2.5, right: 2.5, bottom: 2.5, left: 2.5 },
       overflow: 'linebreak',

@@ -1,6 +1,13 @@
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { downloadCsv, savePdf } from './downloadFile'
+import {
+  formatPdfAmountCell,
+  PDF_AMOUNT_COL,
+  PDF_MARGIN,
+  PDF_TABLE_BASE_STYLES,
+  PDF_TABLE_WIDTH,
+} from './pdfTableStyles'
 
 export type ClientExportRow = {
   name: string
@@ -70,6 +77,41 @@ function formatInrPlain(n: number) {
   return `Rs ${Math.round(n).toLocaleString('en-IN')}`
 }
 
+const CLIENT_ALL_TABLE_COLS = {
+  0: { cellWidth: 44 },
+  1: { cellWidth: 32 },
+  2: { cellWidth: 22, halign: 'right' as const },
+  3: { cellWidth: 42, ...PDF_AMOUNT_COL },
+  4: { cellWidth: 42, ...PDF_AMOUNT_COL },
+}
+
+const CLIENT_SITE_TABLE_COLS = {
+  0: { cellWidth: 36 },
+  1: { cellWidth: 42 },
+  2: { cellWidth: 28 },
+  3: { cellWidth: 22 },
+  4: { cellWidth: 54, ...PDF_AMOUNT_COL },
+}
+
+const CLIENT_VISIT_TABLE_COLS = {
+  0: { cellWidth: 26 },
+  1: { cellWidth: 14 },
+  2: { cellWidth: 24 },
+  3: { cellWidth: 32 },
+  4: { cellWidth: 28 },
+  5: { cellWidth: 20 },
+  6: { cellWidth: 38, ...PDF_AMOUNT_COL },
+}
+
+const CLIENT_CREDIT_TABLE_COLS = {
+  0: { cellWidth: 22 },
+  1: { cellWidth: 30 },
+  2: { cellWidth: 26, ...PDF_AMOUNT_COL },
+  3: { cellWidth: 28 },
+  4: { cellWidth: 32 },
+  5: { cellWidth: 44 },
+}
+
 export async function exportAllClientsPdf(clients: ClientExportRow[]) {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   doc.setFontSize(16)
@@ -86,15 +128,22 @@ export async function exportAllClientsPdf(clients: ClientExportRow[]) {
   const body =
     clients.length === 0
       ? [['—', '—', '—', '—', 'No clients found']]
-      : clients.map((c) => [c.name, c.phone, String(c.sites), c.received, c.pending])
+      : clients.map((c) => [
+          c.name,
+          c.phone,
+          String(c.sites),
+          formatPdfAmountCell(c.received),
+          formatPdfAmountCell(c.pending),
+        ])
   autoTable(doc, {
     startY: 34,
+    tableWidth: PDF_TABLE_WIDTH,
     head: [['Client Name', 'Phone', 'Total Sites', 'Received (Rs)', 'Pending (Rs)']],
     body,
     headStyles: { fillColor: [243, 155, 3], textColor: 255, fontStyle: 'bold' },
-    styles: { fontSize: 9, cellPadding: 2 },
-    margin: { left: 14, right: 14 },
-    columnStyles: { 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' } },
+    styles: PDF_TABLE_BASE_STYLES,
+    margin: { left: PDF_MARGIN, right: PDF_MARGIN },
+    columnStyles: CLIENT_ALL_TABLE_COLS,
   })
   const safeDate = new Date().toISOString().slice(0, 10)
   await savePdf(doc, `all-clients-report-${safeDate}.pdf`)
@@ -147,16 +196,23 @@ export async function exportClientPdf(data: ClientReportExportData) {
   const siteBody =
     sites.length === 0
       ? [['—', '—', '—', 'No sites found', '—']]
-      : sites.map((s) => [s.name, s.location, s.lastVisit, s.status, s.pending])
+      : sites.map((s) => [
+          s.name,
+          s.location,
+          s.lastVisit,
+          s.status,
+          formatPdfAmountCell(s.pending),
+        ])
 
   autoTable(doc, {
     startY: y,
+    tableWidth: PDF_TABLE_WIDTH,
     head: [['Site Name', 'Location', 'Last Visit', 'Status', 'Pending (Rs)']],
     body: siteBody,
     headStyles: { fillColor: [243, 155, 3], textColor: 255, fontStyle: 'bold' },
-    styles: { fontSize: 9, cellPadding: 2 },
-    margin: { left: 14, right: 14 },
-    columnStyles: { 4: { halign: 'right' } },
+    styles: PDF_TABLE_BASE_STYLES,
+    margin: { left: PDF_MARGIN, right: PDF_MARGIN },
+    columnStyles: CLIENT_SITE_TABLE_COLS,
   })
 
   y = ((doc as jsPDF & { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY ?? y) + 10
@@ -175,17 +231,18 @@ export async function exportClientPdf(data: ClientReportExportData) {
           v.site,
           v.machine,
           v.paymentStatus,
-          v.amount,
+          formatPdfAmountCell(v.amount),
         ])
 
   autoTable(doc, {
     startY: y,
-    head: [['Visit ID', 'Visit No.', 'Date', 'Site', 'Machine', 'Status', 'Amount']],
+    tableWidth: PDF_TABLE_WIDTH,
+    head: [['Visit ID', 'Visit No.', 'Date', 'Site', 'Machine', 'Status', 'Amount (Rs)']],
     body: visitBody,
     headStyles: { fillColor: [243, 155, 3], textColor: 255, fontStyle: 'bold' },
-    styles: { fontSize: 8.5, cellPadding: 2 },
-    margin: { left: 14, right: 14 },
-    columnStyles: { 6: { halign: 'right' } },
+    styles: { ...PDF_TABLE_BASE_STYLES, fontSize: 8 },
+    margin: { left: PDF_MARGIN, right: PDF_MARGIN },
+    columnStyles: CLIENT_VISIT_TABLE_COLS,
   })
 
   y = ((doc as jsPDF & { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY ?? y) + 10
@@ -202,16 +259,24 @@ export async function exportClientPdf(data: ClientReportExportData) {
   const creditBody =
     credits.length === 0
       ? [['—', '—', '—', '—', '—', 'No credit transactions']]
-      : credits.map((c) => [c.date, c.site, c.amount, c.paymentMode, c.receivedBy, c.notes || '—'])
+      : credits.map((c) => [
+          c.date,
+          c.site,
+          formatPdfAmountCell(c.amount),
+          c.paymentMode,
+          c.receivedBy,
+          c.notes || '—',
+        ])
 
   autoTable(doc, {
     startY: y,
-    head: [['Date', 'Site', 'Amount', 'Payment Mode', 'Received By', 'Notes']],
+    tableWidth: PDF_TABLE_WIDTH,
+    head: [['Date', 'Site', 'Amount (Rs)', 'Payment Mode', 'Received By', 'Notes']],
     body: creditBody,
     headStyles: { fillColor: [243, 155, 3], textColor: 255, fontStyle: 'bold' },
-    styles: { fontSize: 8.5, cellPadding: 2, overflow: 'linebreak' },
-    margin: { left: 14, right: 14 },
-    columnStyles: { 2: { halign: 'right' } },
+    styles: { ...PDF_TABLE_BASE_STYLES, fontSize: 8 },
+    margin: { left: PDF_MARGIN, right: PDF_MARGIN },
+    columnStyles: CLIENT_CREDIT_TABLE_COLS,
   })
 
   y = ((doc as jsPDF & { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY ?? y) + 12

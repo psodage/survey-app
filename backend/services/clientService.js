@@ -22,6 +22,22 @@ function formatInr(n) {
   return `₹${Math.round(n).toLocaleString('en-IN')}`
 }
 
+function trimStr(v) {
+  return typeof v === 'string' ? v.trim() : ''
+}
+
+function formatDateIn(d) {
+  if (!d) return '—'
+  const dt = new Date(d)
+  if (Number.isNaN(dt.getTime())) return '—'
+  return dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+}
+
+function populatedDocName(ref) {
+  if (ref && typeof ref === 'object' && ref.name) return String(ref.name)
+  return '—'
+}
+
 async function clientFinancials(clientId, visitDateRange) {
   const q = { clientId, ...(visitDateRange ? { visitDate: visitDateRange } : {}) }
   const visits = await SiteVisit.find(q).select('amount paymentStatus paidAmount').lean()
@@ -34,6 +50,19 @@ async function clientFinancials(clientId, visitDateRange) {
   }
   const pending = Math.max(0, revenue - received)
   return { revenue, received, pending }
+}
+
+async function siteFinancials(siteId, visitDateRange) {
+  const q = { siteId, ...(visitDateRange ? { visitDate: visitDateRange } : {}) }
+  const visits = await SiteVisit.find(q).select('amount paymentStatus paidAmount').lean()
+  let revenue = 0
+  let received = 0
+  for (const v of visits) {
+    const a = decAmount(v.amount)
+    revenue += a
+    received += effectivePaidAmount(v)
+  }
+  return { revenue, received, pending: Math.max(0, revenue - received) }
 }
 
 export async function listClients(req) {
@@ -191,15 +220,11 @@ export async function getClientReportExport(req, clientId, yearRaw) {
   const visitRows = visits.map((v) => ({
     id: v.visitCode || v._id.toString(),
     visitNo: v.visitNo,
-    date: new Date(v.visitDate).toLocaleDateString('en-IN', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    }),
-    site: v.siteId?.name ?? '—',
-    machine: v.machineLabel ?? '—',
-    paymentMode: v.paymentMode ?? '—',
-    paymentStatus: v.paymentStatus ?? 'pending',
+    date: formatDateIn(v.visitDate),
+    site: populatedDocName(v.siteId),
+    machine: trimStr(v.machineLabel) || '—',
+    paymentMode: trimStr(v.paymentMode) || '—',
+    paymentStatus: trimStr(v.paymentStatus) || 'pending',
     amount: formatInr(decAmount(v.amount)),
   }))
 
@@ -216,21 +241,19 @@ export async function getClientReportExport(req, clientId, yearRaw) {
     .limit(500)
     .lean()
 
-  const creditRows = credits.map((t) => ({
-    date: new Date(t.occurredOn).toLocaleDateString('en-IN', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    }),
-    site: t.siteId?.name ?? '—',
-    amount: formatInr(decAmount(t.amount)),
-    paymentMode: t.reason?.trim() ? t.reason.trim() : 'Credit',
-    receivedBy:
-      (t.accountManagerId && typeof t.accountManagerId === 'object'
-        ? t.accountManagerId.fullName || t.accountManagerId.shortName
-        : '') || '—',
-    notes: t.reference?.trim() || '',
-  }))
+  const creditRows = credits.map((t) => {
+    const reason = trimStr(t.reason)
+    const am =
+      t.accountManagerId && typeof t.accountManagerId === 'object' ? t.accountManagerId : null
+    return {
+      date: formatDateIn(t.occurredOn),
+      site: populatedDocName(t.siteId),
+      amount: formatInr(decAmount(t.amount)),
+      paymentMode: reason || 'Credit',
+      receivedBy: (am && (trimStr(am.fullName) || trimStr(am.shortName))) || '—',
+      notes: trimStr(t.reference),
+    }
+  })
 
   const { revenue, received, pending } = await clientFinancials(client._id, visitYearRange)
   const totalCredit = credits.reduce((sum, t) => sum + decAmount(t.amount), 0)

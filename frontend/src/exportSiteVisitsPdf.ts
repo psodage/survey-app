@@ -2,6 +2,13 @@ import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import invoiceLogo from './assets/logo.jpeg'
 import { savePdf } from './utils/downloadFile'
+import {
+  formatPdfAmountCell,
+  PDF_AMOUNT_COL,
+  PDF_MARGIN,
+  PDF_TABLE_BASE_STYLES,
+  PDF_TABLE_WIDTH,
+} from './utils/pdfTableStyles'
 
 export type SiteVisitExportRow = {
   id: string
@@ -31,13 +38,14 @@ async function loadImageAsDataUrl(src: string) {
   })
 }
 
-function parseAmountDisplay(amount: string) {
-  const n = Number(String(amount).replace(/[^\d.-]/g, ''))
-  return Number.isFinite(n) ? n : 0
-}
-
-function formatPdfAmount(amount: string) {
-  return parseAmountDisplay(amount).toLocaleString('en-IN')
+const SITE_VISITS_TABLE_COLS = {
+  0: { cellWidth: 24 },
+  1: { cellWidth: 31 },
+  2: { cellWidth: 31 },
+  3: { cellWidth: 22 },
+  4: { cellWidth: 28, ...PDF_AMOUNT_COL },
+  5: { cellWidth: 20 },
+  6: { cellWidth: 26 },
 }
 
 export type ExportSiteVisitsPdfOpts = {
@@ -49,7 +57,7 @@ export type ExportSiteVisitsPdfOpts = {
 export async function exportSiteVisitsPdf(rows: SiteVisitExportRow[], opts: ExportSiteVisitsPdfOpts = {}) {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   const pageWidth = doc.internal.pageSize.getWidth()
-  const marginX = 14
+  const marginX = PDF_MARGIN
   let startY = 16
 
   try {
@@ -97,21 +105,19 @@ export async function exportSiteVisitsPdf(rows: SiteVisitExportRow[], opts: Expo
           r.client,
           r.site,
           r.date,
-          formatPdfAmount(r.amount),
+          formatPdfAmountCell(r.amount),
           r.paymentStatus,
           r.machine || '—',
         ])
 
   autoTable(doc, {
     startY: tableStartY,
+    tableWidth: PDF_TABLE_WIDTH,
     head: [['Visit ID', 'Client', 'Site', 'Date', 'Amount (Rs)', 'Status', 'Machine']],
     body,
     headStyles: { fillColor: [243, 155, 3], textColor: 255, fontStyle: 'bold', fontSize: 9 },
-    styles: { fontSize: 8.5, cellPadding: 2, overflow: 'linebreak' },
-    columnStyles: {
-      0: { cellWidth: 22 },
-      4: { halign: 'right' },
-    },
+    styles: { ...PDF_TABLE_BASE_STYLES, fontSize: 8.5 },
+    columnStyles: SITE_VISITS_TABLE_COLS,
     margin: { left: marginX, right: marginX },
     didDrawPage: (data) => {
       const pageH = doc.internal.pageSize.getHeight()

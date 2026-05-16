@@ -2,6 +2,13 @@ import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import invoiceLogo from './assets/logo.jpeg'
 import { savePdf } from './utils/downloadFile'
+import {
+  formatPdfAmountCell,
+  PDF_AMOUNT_COL,
+  PDF_MARGIN,
+  PDF_TABLE_BASE_STYLES,
+  PDF_TABLE_WIDTH,
+} from './utils/pdfTableStyles'
 
 export type PdfTransaction = {
   type: 'debit' | 'credit'
@@ -31,7 +38,15 @@ function formatReportFilenameDate(d = new Date()) {
 }
 
 function formatPdfINR(value: number) {
-  return value.toLocaleString('en-IN', { maximumFractionDigits: 2 })
+  return formatPdfAmountCell(value)
+}
+
+const ACCOUNT_TX_TABLE_COLS = {
+  0: { cellWidth: 22 },
+  1: { cellWidth: 32, ...PDF_AMOUNT_COL },
+  2: { cellWidth: 58 },
+  3: { cellWidth: 40 },
+  4: { cellWidth: 30 },
 }
 
 function formatPdfDisplayDate(isoDate: string) {
@@ -77,7 +92,7 @@ export async function exportAccountManagerReportPdf(opts: ExportAccountManagerRe
   } = opts
 
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-  const marginX = 14
+  const marginX = PDF_MARGIN
   let startY = 16
 
   try {
@@ -138,13 +153,12 @@ export async function exportAccountManagerReportPdf(opts: ExportAccountManagerRe
 
   autoTable(doc, {
     startY: summaryY + summaryLines.length * 5 + 4,
+    tableWidth: PDF_TABLE_WIDTH,
     head: [['Type', 'Amount (Rs)', 'Reason / Client', 'Site', 'Date']],
     body,
     headStyles: { fillColor: [243, 155, 3], textColor: 255, fontStyle: 'bold' },
-    styles: { fontSize: 9, cellPadding: 1.5, overflow: 'linebreak' },
-    columnStyles: {
-      1: { halign: 'right' },
-    },
+    styles: { ...PDF_TABLE_BASE_STYLES, cellPadding: 1.5 },
+    columnStyles: ACCOUNT_TX_TABLE_COLS,
     margin: { left: marginX, right: marginX },
   })
 

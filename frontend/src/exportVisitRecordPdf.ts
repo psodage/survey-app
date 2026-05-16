@@ -2,6 +2,7 @@ import jsPDF from 'jspdf'
 import invoiceLogo from './assets/logo.jpeg'
 import { savePdf } from './utils/downloadFile'
 import { formatEngineerLine } from './utils/formatEngineerContact'
+import { formatPdfAmountCell } from './utils/pdfTableStyles'
 
 export type VisitRecordPdfAdminContact = {
   fullName: string
@@ -104,7 +105,7 @@ function lineValue(doc: jsPDF, xStart: number, xEnd: number, y: number, value: s
   doc.line(xStart, y + 0.8, xEnd, y + 0.8)
   doc.setFont('helvetica', 'normal')
   doc.setTextColor(24, 24, 24)
-  doc.setFontSize(11.5)
+  doc.setFontSize(10)
   doc.text(value || '-', xStart + 1.2, y)
 }
 
@@ -208,23 +209,21 @@ export async function exportVisitRecordPdf(data: VisitRecordPdfData) {
   const workLines = doc.splitTextToSize(workText, 286 - leftValueStart - 2)
   doc.text(workLines, leftValueStart + 1.2, y)
   if (workLines.length > 1) y += (workLines.length - 1) * 5
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(7.5)
-  doc.setTextColor(60, 60, 60)
-  doc.text('Plane Table / P.T.& Contour / Stake Out / Line Out', 61, y - 4)
 
   y += rowGap
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(10)
   doc.setTextColor(35, 35, 35)
   doc.text('Other Details :', leftLabel, y)
-  lineValue(
-    doc,
-    leftValueStart,
-    286,
-    y,
-    `${data.notes ?? '-'}  |  Payment: ${data.paymentMode}  |  Status: ${data.paymentStatus ?? '-'}  |  Rs ${data.amount}`,
-  )
+  lineValue(doc, leftValueStart, 200, y, data.notes?.trim() || '-')
+  doc.text('Amount (Rs) :', 212, y)
+  lineValue(doc, 248, 286, y, formatPdfAmountCell(data.amount))
+
+  y += rowGap
+  doc.text('Payment :', leftLabel, y)
+  lineValue(doc, leftValueStart, 120, y, data.paymentMode || '-')
+  doc.text('Status :', 125, y)
+  lineValue(doc, 152, 286, y, data.paymentStatus ?? '-')
 
   const signY = 182
   doc.line(12, signY, 90, signY)
