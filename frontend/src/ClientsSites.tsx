@@ -488,20 +488,97 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
     return `/site-details?${params.toString()}`
   }
 
-  const handleExportClientPdf = () => {
-    if (!selectedClient || exportBusy) return
+  const handleExportClientPdf = async () => {
+    if (!selectedClient?.id || exportBusy) return
     setExportBusy(true)
-    void runExport('client PDF', () => exportClientPdf(selectedClient, selectedSites)).finally(() =>
-      setExportBusy(false),
-    )
+    try {
+      const res = await http.get<{
+        ok: boolean
+        client: ClientRow
+        sites: SiteRow[]
+        visits?: Array<{
+          id: string
+          visitNo?: number
+          date: string
+          site: string
+          machine: string
+          paymentMode: string
+          paymentStatus: string
+          amount: string
+        }>
+        credits?: Array<{
+          date: string
+          site: string
+          amount: string
+          paymentMode: string
+          receivedBy: string
+          notes?: string
+        }>
+        totals?: { revenue: number; received: number; creditTotal: number; pending: number }
+      }>(`/api/clients/${selectedClient.id}/report`, { params: { year: selectedYear } })
+      if (!res.data?.ok) {
+        toast.error('Could not load client report data')
+        return
+      }
+      await runExport('client PDF', () =>
+        exportClientPdf({
+          client: res.data.client ?? selectedClient,
+          sites: res.data.sites ?? selectedSites,
+          visits: res.data.visits,
+          credits: res.data.credits,
+          totals: res.data.totals,
+        }),
+      )
+    } catch {
+      toast.error('Could not export client PDF')
+    } finally {
+      setExportBusy(false)
+    }
   }
 
-  const handleExportClientExcel = () => {
-    if (!selectedClient || exportBusy) return
+  const handleExportClientExcel = async () => {
+    if (!selectedClient?.id || exportBusy) return
     setExportBusy(true)
-    void runExport('client spreadsheet', () => exportClientExcel(selectedClient, selectedSites)).finally(() =>
-      setExportBusy(false),
-    )
+    try {
+      const res = await http.get<{
+        ok: boolean
+        client: ClientRow
+        sites: SiteRow[]
+        visits?: Array<{
+          id: string
+          visitNo?: number
+          date: string
+          site: string
+          machine: string
+          paymentStatus: string
+          amount: string
+        }>
+        credits?: Array<{
+          date: string
+          site: string
+          amount: string
+          paymentMode: string
+          receivedBy: string
+          notes?: string
+        }>
+      }>(`/api/clients/${selectedClient.id}/report`, { params: { year: selectedYear } })
+      if (!res.data?.ok) {
+        toast.error('Could not load client report data')
+        return
+      }
+      await runExport('client spreadsheet', () =>
+        exportClientExcel({
+          client: res.data.client ?? selectedClient,
+          sites: res.data.sites ?? selectedSites,
+          visits: res.data.visits,
+          credits: res.data.credits,
+        }),
+      )
+    } catch {
+      toast.error('Could not export client spreadsheet')
+    } finally {
+      setExportBusy(false)
+    }
   }
 
   const handleOpenDeleteClient = () => {

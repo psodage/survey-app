@@ -21,6 +21,7 @@ import { CollaborationBrandMark } from './CollaborationBrandMark'
 import { LayoutFooter } from './LayoutFooter'
 import { CardShell } from './dashboardCards'
 import { exportInvoicePdf } from './exportInvoicePdf'
+import { todayInvoiceDate } from './utils/invoiceDate'
 import { layoutBrandLogo } from './brandLogo'
 import { AppSelect } from './components/AppSelect'
 import { HeaderYearSelect } from './components/HeaderYearSelect'
@@ -62,7 +63,7 @@ export default function Invoice({ onNavigate }: InvoiceProps) {
     baseCharge: '1500',
     extraCharges: '1500',
     discount: '0',
-    invoiceDate: new Date().toLocaleDateString('en-GB'),
+    invoiceDate: todayInvoiceDate(),
   })
 
   const mobileBottomNav = [
@@ -116,7 +117,7 @@ export default function Invoice({ onNavigate }: InvoiceProps) {
       baseCharge,
       extraCharges,
       discount,
-      invoiceDate: formValues.invoiceDate,
+      invoiceDate: todayInvoiceDate(),
     })
   }
 
@@ -421,8 +422,9 @@ export default function Invoice({ onNavigate }: InvoiceProps) {
                       <Calendar size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#f39b03]" />
                       <input
                         type="text"
-                        value={formValues.invoiceDate}
-                        onChange={(e) => updateFormValue('invoiceDate', e.target.value)}
+                        readOnly
+                        value={todayInvoiceDate()}
+                        title="Invoice date is always today's date"
                         className="w-full rounded-xl border border-neutral-200 py-2.5 pl-9 pr-8 text-sm font-semibold text-neutral-700 outline-none focus:border-[#f39b03]"
                         placeholder="DD/MM/YYYY"
                       />

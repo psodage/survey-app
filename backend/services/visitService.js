@@ -59,6 +59,107 @@ function visitReportFields(v) {
     sitePhone: v.sitePhone ?? '',
     engineerName: v.engineerName ?? '',
     contactPerson: v.contactPerson ?? '',
+    dwgNo: v.dwgNo ?? '',
+  }
+}
+
+function normalizeBillingInput(body) {
+  const rawLines = Array.isArray(body.billingLines) ? body.billingLines : []
+  const normalizedLines = rawLines
+    .map((row) => {
+      const particular = typeof row?.particular === 'string' ? row.particular.trim() : ''
+      const quantity = Number(row?.quantity)
+      const rate = Number(row?.rate)
+      const lineAmtRaw = Number(row?.amount)
+      const q = Number.isFinite(quantity) ? quantity : 0
+      const r = Number.isFinite(rate) ? rate : 0
+      const flat = Number.isFinite(lineAmtRaw) ? lineAmtRaw : 0
+      const fromQtyRate = q !== 0 && r !== 0 ? q * r : 0
+      const lineValue = fromQtyRate !== 0 ? fromQtyRate : flat
+      if (!particular && lineValue === 0) return null
+      if (q !== 0 && r !== 0) return { particular, quantity: q, rate: r }
+      return { particular, quantity: 0, rate: 0, amount: flat }
+    })
+    .filter(Boolean)
+
+  const otherRaw = Number(body.billingOtherCharges)
+  const other = Number.isFinite(otherRaw) ? otherRaw : 0
+  const qty = Number(body.billingQuantity)
+  const rate = Number(body.billingRate)
+  const hasMultiBilling = normalizedLines.length > 0
+  const hasLegacyBilling = !hasMultiBilling && Number.isFinite(qty) && Number.isFinite(rate)
+
+  let computedFromBilling = null
+  let billingLinesToStore
+  let billingParticularOut = body.billingParticular?.trim()
+  let billingQuantityOut
+  let billingRateOut
+  let billingOtherChargesOut
+
+  if (hasMultiBilling) {
+    const subtotal = normalizedLines.reduce((sum, row) => {
+      const q = row.quantity ?? 0
+      const r = row.rate ?? 0
+      if (q !== 0 && r !== 0) return sum + q * r
+      const a = Number(row.amount)
+      return sum + (Number.isFinite(a) ? a : 0)
+    }, 0)
+    computedFromBilling = Math.round(subtotal + other)
+    billingLinesToStore = normalizedLines
+    billingOtherChargesOut = other
+    const joined = normalizedLines
+      .map((row) => {
+        const q = row.quantity ?? 0
+        const r = row.rate ?? 0
+        if (q !== 0 && r !== 0) return row.particular || `${q} × ${r}`
+        const a = Number(row.amount)
+        if (Number.isFinite(a) && a !== 0) return row.particular || `${a}`
+        return row.particular || ''
+      })
+      .join(' · ')
+    billingParticularOut = joined.slice(0, 500) || billingParticularOut
+    if (normalizedLines.length === 1) {
+      billingQuantityOut = normalizedLines[0].quantity
+      billingRateOut = normalizedLines[0].rate
+    }
+  } else if (hasLegacyBilling) {
+    computedFromBilling = Math.round(qty * rate + other)
+    billingParticularOut = body.billingParticular?.trim()
+    billingQuantityOut = qty
+    billingRateOut = rate
+    billingOtherChargesOut = other
+  }
+
+  return {
+    computedFromBilling,
+    billingLinesToStore,
+    billingParticularOut,
+    billingQuantityOut,
+    billingRateOut,
+    billingOtherChargesOut,
+  }
+}
+
+function serializeVisitRow(v, visitNo) {
+  return {
+    id: v.visitCode || v._id.toString(),
+    _id: v._id.toString(),
+    visitMongoId: v._id.toString(),
+    visitNo,
+    client: v.clientId?.name ?? '',
+    site: v.siteId?.name ?? '',
+    date: new Date(v.visitDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
+    machine: v.machineLabel ?? '—',
+    work: v.workDescription ?? '',
+    amount: decToDisplay(parseFloat((v.amount ?? 0).toString()) || 0),
+    pendingAmount: decToDisplay(owedAmount(v)),
+    paymentMode: v.paymentMode ?? '—',
+    paymentStatus: paymentLabel(v.paymentStatus),
+    notes: v.notes ?? '',
+    photoUrls: v.photoUrls ?? [],
+    billingLines: serializeBillingLines(v.billingLines),
+    billingOtherCharges: Number.isFinite(Number(v.billingOtherCharges)) ? Number(v.billingOtherCharges) : 0,
+    ...visitReportFields(v),
   }
 }
 
@@ -110,7 +211,7 @@ export async function listVisits(req) {
   }
   const visits = await SiteVisit.find(match)
     .select(
-      'visitCode visitNo visitDate machineLabel workDescription amount paymentStatus paidAmount paymentMode notes photoUrls billingLines billingOtherCharges clientId siteId siteAddress sitePhone engineerName contactPerson',
+      'visitCode visitNo visitDate machineLabel workDescription amount paymentStatus paidAmount paymentMode notes photoUrls billingLines billingOtherCharges clientId siteId siteAddress sitePhone engineerName contactPerson dwgNo',
     )
     .sort({ visitDate: -1 })
     .limit(200)
@@ -118,26 +219,7 @@ export async function listVisits(req) {
     .populate('siteId', 'name')
     .lean()
   const rows = await Promise.all(
-    visits.map(async (v) => ({
-      id: v.visitCode || v._id.toString(),
-      _id: v._id.toString(),
-      visitMongoId: v._id.toString(),
-      visitNo: await resolveVisitNo(v),
-      client: v.clientId?.name ?? '',
-      site: v.siteId?.name ?? '',
-      date: new Date(v.visitDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
-      machine: v.machineLabel ?? '—',
-      work: v.workDescription ?? '',
-      amount: decToDisplay(parseFloat((v.amount ?? 0).toString()) || 0),
-      pendingAmount: decToDisplay(owedAmount(v)),
-      paymentMode: v.paymentMode ?? '—',
-      paymentStatus: paymentLabel(v.paymentStatus),
-      notes: v.notes ?? '',
-      photoUrls: v.photoUrls ?? [],
-      billingLines: serializeBillingLines(v.billingLines),
-      billingOtherCharges: Number.isFinite(Number(v.billingOtherCharges)) ? Number(v.billingOtherCharges) : 0,
-      ...visitReportFields(v),
-    })),
+    visits.map(async (v) => serializeVisitRow(v, await resolveVisitNo(v))),
   )
   return rows
 }
@@ -168,74 +250,18 @@ export async function createVisit(req, body, { preUploadedPhotos } = {}) {
     ''
   const sitePhone = typeof body.sitePhone === 'string' ? body.sitePhone.trim() : ''
   const engineerName = typeof body.engineerName === 'string' ? body.engineerName.trim() : ''
+  const dwgNo = typeof body.dwgNo === 'string' ? body.dwgNo.trim() : ''
   const contactPerson =
     (typeof body.contactPerson === 'string' && body.contactPerson.trim()) || engineerName
-  const otherRaw = Number(body.billingOtherCharges)
-  const other = Number.isFinite(otherRaw) ? otherRaw : 0
 
-  const rawLines = Array.isArray(body.billingLines) ? body.billingLines : []
-  const normalizedLines = rawLines
-    .map((row) => {
-      const particular = typeof row?.particular === 'string' ? row.particular.trim() : ''
-      const quantity = Number(row?.quantity)
-      const rate = Number(row?.rate)
-      const lineAmtRaw = Number(row?.amount)
-      const q = Number.isFinite(quantity) ? quantity : 0
-      const r = Number.isFinite(rate) ? rate : 0
-      const flat = Number.isFinite(lineAmtRaw) ? lineAmtRaw : 0
-      const fromQtyRate = q !== 0 && r !== 0 ? q * r : 0
-      const lineValue = fromQtyRate !== 0 ? fromQtyRate : flat
-      if (!particular && lineValue === 0) return null
-      if (q !== 0 && r !== 0) return { particular, quantity: q, rate: r }
-      return { particular, quantity: 0, rate: 0, amount: flat }
-    })
-    .filter(Boolean)
-
-  const qty = Number(body.billingQuantity)
-  const rate = Number(body.billingRate)
-  const hasMultiBilling = normalizedLines.length > 0
-  const hasLegacyBilling = !hasMultiBilling && Number.isFinite(qty) && Number.isFinite(rate)
-
-  let computedFromBilling = null
-  let billingLinesToStore = undefined
-  let billingParticularOut = body.billingParticular?.trim()
-  let billingQuantityOut = undefined
-  let billingRateOut = undefined
-  let billingOtherChargesOut = undefined
-
-  if (hasMultiBilling) {
-    const subtotal = normalizedLines.reduce((sum, row) => {
-      const q = row.quantity ?? 0
-      const r = row.rate ?? 0
-      if (q !== 0 && r !== 0) return sum + q * r
-      const a = Number(row.amount)
-      return sum + (Number.isFinite(a) ? a : 0)
-    }, 0)
-    computedFromBilling = Math.round(subtotal + other)
-    billingLinesToStore = normalizedLines
-    billingOtherChargesOut = other
-    const joined = normalizedLines
-      .map((row) => {
-        const q = row.quantity ?? 0
-        const r = row.rate ?? 0
-        if (q !== 0 && r !== 0) return row.particular || `${q} × ${r}`
-        const a = Number(row.amount)
-        if (Number.isFinite(a) && a !== 0) return row.particular || `${a}`
-        return row.particular || ''
-      })
-      .join(' · ')
-    billingParticularOut = joined.slice(0, 500) || billingParticularOut
-    if (normalizedLines.length === 1) {
-      billingQuantityOut = normalizedLines[0].quantity
-      billingRateOut = normalizedLines[0].rate
-    }
-  } else if (hasLegacyBilling) {
-    computedFromBilling = Math.round(qty * rate + other)
-    billingParticularOut = body.billingParticular?.trim()
-    billingQuantityOut = qty
-    billingRateOut = rate
-    billingOtherChargesOut = other
-  }
+  const {
+    computedFromBilling,
+    billingLinesToStore,
+    billingParticularOut,
+    billingQuantityOut,
+    billingRateOut,
+    billingOtherChargesOut,
+  } = normalizeBillingInput(body)
 
   const amountNum = computedFromBilling != null ? computedFromBilling : Number(body.amount) || 0
   const amountSafe = Number.isFinite(Number(amountNum)) ? Number(amountNum) : 0
@@ -255,6 +281,7 @@ export async function createVisit(req, body, { preUploadedPhotos } = {}) {
     siteAddress: siteAddress || undefined,
     sitePhone: sitePhone || undefined,
     engineerName: engineerName || undefined,
+    dwgNo: dwgNo || undefined,
     contactPerson: contactPerson || undefined,
     workDescription: body.workDescription?.trim(),
     machineLabel: body.machineLabel?.trim(),
@@ -296,25 +323,11 @@ export async function createVisit(req, body, { preUploadedPhotos } = {}) {
   site.lastVisitAt = visitDate
   await site.save()
 
-  return {
-    id: visit.visitCode,
-    _id: visit._id.toString(),
-    visitNo: visit.visitNo ?? visitNo,
-    client: clientRow.name ?? '',
-    site: site.name,
-    date: new Date(visit.visitDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
-    machine: visit.machineLabel ?? '',
-    work: visit.workDescription ?? '',
-    amount: decToDisplay(amountSafe),
-    pendingAmount: decToDisplay(owedAmount(visit)),
-    paymentMode: visit.paymentMode ?? '',
-    paymentStatus: paymentLabel(visit.paymentStatus),
-    notes: visit.notes ?? '',
-    photoUrls: visit.photoUrls ?? [],
-    billingLines: serializeBillingLines(visit.billingLines),
-    billingOtherCharges: Number.isFinite(Number(visit.billingOtherCharges)) ? Number(visit.billingOtherCharges) : 0,
-    ...visitReportFields(visit),
-  }
+  const populated = await SiteVisit.findById(visit._id)
+    .populate('clientId', 'name')
+    .populate('siteId', 'name')
+    .lean()
+  return serializeVisitRow(populated ?? visit, visit.visitNo ?? visitNo)
 }
 
 export async function getVisitById(req, visitId) {
@@ -330,25 +343,68 @@ export async function getVisitById(req, visitId) {
     .lean()
   if (!visit) throw new ApiError(404, 'Visit not found')
   const visitNo = await resolveVisitNo(visit)
-  return {
-    id: visit.visitCode || visit._id.toString(),
-    _id: visit._id.toString(),
-    visitNo,
-    client: visit.clientId?.name,
-    site: visit.siteId?.name,
-    date: new Date(visit.visitDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
-    machine: visit.machineLabel,
-    work: visit.workDescription,
-    amount: decToDisplay(parseFloat((visit.amount ?? 0).toString()) || 0),
-    pendingAmount: decToDisplay(owedAmount(visit)),
-    paymentMode: visit.paymentMode,
-    paymentStatus: paymentLabel(visit.paymentStatus),
-    notes: visit.notes,
-    photoUrls: visit.photoUrls ?? [],
-    billingLines: serializeBillingLines(visit.billingLines),
-    billingOtherCharges: Number.isFinite(Number(visit.billingOtherCharges)) ? Number(visit.billingOtherCharges) : 0,
-    ...visitReportFields(visit),
+  return serializeVisitRow(visit, visitNo)
+}
+
+export async function updateVisit(req, visitId, body) {
+  const { allowedInstrumentIds } = await resolveInstrumentScope(req)
+  const visit = await SiteVisit.findOne({
+    _id: visitId,
+    companyId: req.user.companyId,
+    ...instrumentScopeMatch(allowedInstrumentIds),
+    ...(await peerAwareAdminScopeMatch(req)),
+  })
+  if (!visit) throw new ApiError(404, 'Visit not found')
+
+  if (body.visitDate) {
+    const d = new Date(body.visitDate)
+    if (!Number.isNaN(d.getTime())) visit.visitDate = d
   }
+  if (typeof body.siteAddress === 'string') visit.siteAddress = body.siteAddress.trim()
+  if (typeof body.sitePhone === 'string') visit.sitePhone = body.sitePhone.trim()
+  if (typeof body.engineerName === 'string') visit.engineerName = body.engineerName.trim()
+  if (typeof body.dwgNo === 'string') visit.dwgNo = body.dwgNo.trim()
+  if (typeof body.contactPerson === 'string') visit.contactPerson = body.contactPerson.trim()
+  if (typeof body.workDescription === 'string') visit.workDescription = body.workDescription.trim()
+  if (typeof body.machineLabel === 'string') visit.machineLabel = body.machineLabel.trim()
+  if (typeof body.notes === 'string') visit.notes = body.notes.trim()
+  if (typeof body.paymentMode === 'string') visit.paymentMode = body.paymentMode.trim()
+
+  if (body.paymentStatus != null) {
+    const paymentStatusRaw = String(body.paymentStatus).toLowerCase()
+    const paymentMap = { pending: 'pending', partial: 'partial', paid: 'paid', waived: 'waived' }
+    if (paymentMap[paymentStatusRaw]) visit.paymentStatus = paymentMap[paymentStatusRaw]
+  }
+
+  const billingPatch = normalizeBillingInput(body)
+  if (billingPatch.computedFromBilling != null) {
+    visit.amount = mongoose.Types.Decimal128.fromString(billingPatch.computedFromBilling.toFixed(2))
+    visit.billingLines = billingPatch.billingLinesToStore
+    visit.billingParticular = billingPatch.billingParticularOut
+    visit.billingQuantity = billingPatch.billingQuantityOut
+    visit.billingRate = billingPatch.billingRateOut
+    visit.billingOtherCharges = billingPatch.billingOtherChargesOut
+  } else if (body.amount != null) {
+    const amountNum = Number(body.amount)
+    if (Number.isFinite(amountNum)) {
+      visit.amount = mongoose.Types.Decimal128.fromString(amountNum.toFixed(2))
+    }
+  }
+
+  await visit.save()
+
+  const latest = await SiteVisit.findOne({ siteId: visit.siteId, companyId: req.user.companyId })
+    .sort({ visitDate: -1 })
+    .select('visitDate')
+    .lean()
+  if (latest?.visitDate) {
+    await Site.updateOne(
+      { _id: visit.siteId, companyId: req.user.companyId },
+      { $set: { lastVisitAt: latest.visitDate } },
+    )
+  }
+
+  return getVisitById(req, visitId)
 }
 
 /**

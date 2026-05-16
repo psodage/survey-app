@@ -140,6 +140,122 @@ function escapeRegex(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
+export async function getClientReportExport(req, clientId, yearRaw) {
+  const client = await getClientById(req, clientId)
+  const visitYearRange = visitDateRangeForYear(yearRaw)
+
+  const sites = await Site.find({ clientId: client._id, companyId: req.user.companyId })
+    .select('name locationLabel address status lastVisitAt')
+    .sort({ name: 1 })
+    .lean()
+
+  const siteRows = []
+  for (const s of sites) {
+    const { received, pending } = await siteFinancials(s._id, visitYearRange)
+    const lastVisit = visitYearRange
+      ? await SiteVisit.findOne({ siteId: s._id, visitDate: visitYearRange })
+          .sort({ visitDate: -1 })
+          .select('visitDate')
+          .lean()
+      : null
+    const lastVisitLabel = lastVisit?.visitDate
+      ? new Date(lastVisit.visitDate).toLocaleDateString('en-IN', {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric',
+        })
+      : s.lastVisitAt
+        ? new Date(s.lastVisitAt).toLocaleDateString('en-IN', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+          })
+        : '—'
+    siteRows.push({
+      name: s.name,
+      location: s.locationLabel || s.address || '—',
+      lastVisit: lastVisitLabel,
+      status: s.status === 'on_hold' ? 'On Hold' : s.status === 'completed' ? 'Completed' : 'Active',
+      pending: formatInr(pending),
+    })
+  }
+
+  const visitMatch = { clientId: client._id, ...(visitYearRange ? { visitDate: visitYearRange } : {}) }
+  const visits = await SiteVisit.find(visitMatch)
+    .select('visitCode visitNo visitDate machineLabel paymentMode paymentStatus amount siteId')
+    .populate('siteId', 'name')
+    .sort({ visitDate: -1 })
+    .limit(500)
+    .lean()
+
+  const visitRows = visits.map((v) => ({
+    id: v.visitCode || v._id.toString(),
+    visitNo: v.visitNo,
+    date: new Date(v.visitDate).toLocaleDateString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    }),
+    site: v.siteId?.name ?? '—',
+    machine: v.machineLabel ?? '—',
+    paymentMode: v.paymentMode ?? '—',
+    paymentStatus: v.paymentStatus ?? 'pending',
+    amount: formatInr(decAmount(v.amount)),
+  }))
+
+  const creditMatch = {
+    companyId: req.user.companyId,
+    clientId: client._id,
+    type: 'credit',
+    ...(visitYearRange ? { occurredOn: visitYearRange } : {}),
+  }
+  const credits = await Transaction.find(creditMatch)
+    .populate('siteId', 'name')
+    .populate('accountManagerId', 'fullName shortName')
+    .sort({ occurredOn: -1 })
+    .limit(500)
+    .lean()
+
+  const creditRows = credits.map((t) => ({
+    date: new Date(t.occurredOn).toLocaleDateString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    }),
+    site: t.siteId?.name ?? '—',
+    amount: formatInr(decAmount(t.amount)),
+    paymentMode: t.reason?.trim() ? t.reason.trim() : 'Credit',
+    receivedBy:
+      (t.accountManagerId && typeof t.accountManagerId === 'object'
+        ? t.accountManagerId.fullName || t.accountManagerId.shortName
+        : '') || '—',
+    notes: t.reference?.trim() || '',
+  }))
+
+  const { revenue, received, pending } = await clientFinancials(client._id, visitYearRange)
+  const totalCredit = credits.reduce((sum, t) => sum + decAmount(t.amount), 0)
+
+  return {
+    client: {
+      name: client.name,
+      phone: client.phone ?? '',
+      sites: sites.length,
+      revenue: formatInr(revenue),
+      received: formatInr(received),
+      pending: formatInr(pending),
+    },
+    sites: siteRows,
+    visits: visitRows,
+    credits: creditRows,
+    totals: {
+      revenue,
+      received,
+      creditTotal: totalCredit,
+      pending,
+    },
+  }
+}
+
 export async function getClientById(req, id) {
   const { allowedInstrumentIds } = await resolveInstrumentScope(req)
   const client = await Client.findOne({

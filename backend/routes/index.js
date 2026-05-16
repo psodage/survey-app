@@ -30,6 +30,7 @@ import {
   createClientSchema,
   createSiteSchema,
   createVisitSchema,
+  updateVisitSchema,
   createTransactionSchema,
   createAdminSchema,
   assignInstrumentsSchema,
@@ -110,6 +111,13 @@ router.post('/clients', validateBody(createClientSchema), catchAsync(async (req,
   res.status(201).json({ ok: true, client: data })
 }))
 
+router.get('/clients/:id/report', catchAsync(async (req, res) => {
+  const id = parseObjectId(req.params.id, 'client id')
+  const year = typeof req.query?.year === 'string' ? req.query.year : undefined
+  const data = await clientService.getClientReportExport(req, id, year)
+  res.json({ ok: true, ...data })
+}))
+
 router.get('/clients/:id/sites', catchAsync(async (req, res) => {
   const id = parseObjectId(req.params.id, 'client id')
   const data = await siteService.listSitesForClient(req, id)
@@ -171,6 +179,28 @@ router.get('/visits/:id', catchAsync(async (req, res) => {
   const data = await visitService.getVisitById(req, id)
   res.json({ ok: true, visit: data })
 }))
+
+router.put(
+  '/site-visits/:id',
+  requireRole('admin', 'super_admin'),
+  validateBody(updateVisitSchema),
+  catchAsync(async (req, res) => {
+    const id = parseObjectId(req.params.id, 'visit id')
+    const data = await visitService.updateVisit(req, id, req.body)
+    res.json({ ok: true, visit: data })
+  }),
+)
+
+router.put(
+  '/visits/:id',
+  requireRole('admin', 'super_admin'),
+  validateBody(updateVisitSchema),
+  catchAsync(async (req, res) => {
+    const id = parseObjectId(req.params.id, 'visit id')
+    const data = await visitService.updateVisit(req, id, req.body)
+    res.json({ ok: true, visit: data })
+  }),
+)
 
 const deleteSiteVisitHandler = catchAsync(async (req, res) => {
   const id = parseObjectId(req.params.id, 'visit id')
@@ -267,6 +297,12 @@ router.post('/transactions/:slug', validateBody(createTransactionSchema), catchA
 router.get('/account-managers', catchAsync(async (req, res) => {
   const data = await accountManagerService.listAccountManagers(req)
   res.json({ ok: true, managers: data })
+}))
+
+router.get('/account-managers/:slug/client-sites', catchAsync(async (req, res) => {
+  const am = await accountManagerService.getAccountManagerBySlug(req, req.params.slug)
+  const clientSites = await accountManagerService.listClientSiteOptionsForManager(req, am)
+  res.json({ ok: true, clientSites })
 }))
 
 router.get('/account-managers/:slug/accounts', catchAsync(async (req, res) => {

@@ -8,6 +8,7 @@ import {
   CircleDollarSign,
   ClipboardList,
   Download,
+  Pencil,
   LayoutGrid,
   LogOut,
   MapPin,
@@ -35,9 +36,12 @@ import {
   toolbarSecondaryButtonClass,
 } from './dashboardCards'
 import { ConfirmAlert } from './ConfirmAlert'
+import { EditSiteVisitModal, type EditSiteVisitInitial } from './components/EditSiteVisitModal'
 import { exportCombinedSiteInvoicePdf, exportInvoicePdf, type InvoicePdfBillingLine } from './exportInvoicePdf'
 import { exportSiteReportPdf } from './exportSiteReportPdf'
 import { exportVisitRecordPdf } from './exportVisitRecordPdf'
+import { formatBillingLinesForDisplay } from './utils/formatBillingLines'
+import { todayInvoiceDate } from './utils/invoiceDate'
 import { AppSelect } from './components/AppSelect'
 import { toast } from 'sonner'
 import { layoutBrandLogo } from './brandLogo'
@@ -90,6 +94,7 @@ type SiteVisitRecord = {
   photoUrls?: string[]
   billingLines?: InvoicePdfBillingLine[]
   billingOtherCharges?: number
+  dwgNo?: string
 }
 
 const toolbarSelectClass =
@@ -154,7 +159,10 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
     sitePhone?: string
     engineerName?: string
     contactPerson?: string
+    dwgNo?: string
   } | null>(null)
+  const [editVisitOpen, setEditVisitOpen] = useState(false)
+  const [editVisitInitial, setEditVisitInitial] = useState<EditSiteVisitInitial | null>(null)
 
   const loadVisitDetail = useCallback(async () => {
     if (!isVisitMode) {
@@ -182,6 +190,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
           sitePhone?: string
           engineerName?: string
           contactPerson?: string
+          dwgNo?: string
           photoUrls?: string[]
           billingLines?: InvoicePdfBillingLine[]
           billingOtherCharges?: number
@@ -209,6 +218,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
         sitePhone: v.sitePhone,
         engineerName: v.engineerName,
         contactPerson: v.contactPerson,
+        dwgNo: v.dwgNo,
       })
     } catch {
       setVisitPhotoUrls([])
@@ -607,7 +617,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
       baseCharge: 0,
       extraCharges: 0,
       discount: 0,
-      invoiceDate: new Date().toLocaleDateString('en-GB'),
+      invoiceDate: todayInvoiceDate(),
       visitId: record.id,
       paymentStatus: record.paymentStatus,
       pendingAmount: pendingNum,
@@ -621,12 +631,37 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
     ).finally(() => setExportBusy(false))
   }
 
+  const openEditVisit = (record?: SiteVisitRecord) => {
+    const mid = record?.visitMongoId ?? visitMongoId
+    if (!mid) {
+      toast.error('Missing visit id')
+      return
+    }
+    setEditVisitInitial({
+      visitMongoId: mid,
+      visitId: record?.id ?? visitId,
+      date: record?.date ?? effectiveVisitDate,
+      engineerName: record?.engineerName ?? effectiveEngineerName,
+      dwgNo: record?.dwgNo ?? visitDetailFromApi?.dwgNo,
+      machine: record?.machine ?? effectiveMachine,
+      notes: record?.notes ?? effectiveNotes,
+      paymentMode: record?.paymentMode ?? effectivePaymentMode,
+      paymentStatus: record?.paymentStatus ?? effectivePaymentStatus,
+      billingLines: record?.billingLines ?? visitBillingForInvoice.billingLines,
+      billingOtherCharges: record?.billingOtherCharges ?? visitBillingForInvoice.billingOtherCharges,
+    })
+    setEditVisitOpen(true)
+  }
+
   const handleCommonSiteInvoice = () => {
     if (exportBusy || relatedVisitRecords.length === 0) return
     const visits = relatedVisitRecords.map((r) => ({
       visitId: r.id,
+      visitNo: r.visitNo,
       date: r.date,
       machine: r.machine,
+      work: r.work,
+      billingLines: r.billingLines,
       amount: pendingAmountNum(r),
     }))
     setExportBusy(true)
@@ -635,7 +670,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
         client,
         site: name,
         location: effectiveLocation || undefined,
-        invoiceDate: new Date().toLocaleDateString('en-GB'),
+        invoiceDate: todayInvoiceDate(),
         visits,
       }),
     ).finally(() => setExportBusy(false))
@@ -654,6 +689,8 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
     siteAddress?: string
     sitePhone?: string
     engineerName?: string
+    billingLines?: InvoicePdfBillingLine[]
+    dwgNo?: string
     photoUrls?: string[]
   }) => {
     if (exportBusy) return
@@ -678,11 +715,14 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
         paymentStatus: record.paymentStatus,
         amount: record.amount,
         notes: record.notes,
-        work: record.work,
         contactPerson: effectiveContactPerson,
         phone: reportPhone || '-',
         dwgRefBy: 'Samarth Land Surveyors',
-        dwgNo: record.visitId.replace('SV-', ''),
+        dwgNo: record.dwgNo?.trim() || visitDetailFromApi?.dwgNo?.trim() || '—',
+        work: formatBillingLinesForDisplay(
+          record.billingLines ?? visitBillingForInvoice.billingLines,
+          record.work ?? effectiveWork,
+        ),
         engineerName: reportEngineer || '-',
         photoUrls: photos,
       }),
@@ -1092,11 +1132,23 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                     <p className="sm:col-span-2">
                       <span className="text-neutral-500">Notes:</span> {effectiveNotes}
                     </p>
+                    <p>
+                      <span className="text-neutral-500">DWG No.:</span>{' '}
+                      {visitDetailFromApi?.dwgNo?.trim() || '—'}
+                    </p>
                     <p className="sm:col-span-2">
                       <span className="text-neutral-500">Work Details:</span> {effectiveWork}
                     </p>
                   </div>
                   <div className="flex flex-col gap-2 border-t border-neutral-200 px-4 py-3 pb-6 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3 sm:px-6 sm:py-4 md:pb-4">
+                    <button
+                      type="button"
+                      onClick={() => openEditVisit()}
+                      className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-white px-4 text-xs font-extrabold text-neutral-800 ring-1 ring-black/5 transition hover:bg-neutral-50 sm:text-sm"
+                    >
+                      <Pencil size={15} className="text-[#f39b03]" />
+                      Edit visit
+                    </button>
                     <button
                       type="button"
                       onClick={() =>
@@ -1167,7 +1219,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                             baseCharge: 0,
                             extraCharges: 0,
                             discount: 0,
-                            invoiceDate: new Date().toLocaleDateString('en-GB'),
+                            invoiceDate: todayInvoiceDate(),
                             visitId: visitId !== '-' ? visitId : undefined,
                             paymentStatus: effectivePaymentStatus !== '-' ? effectivePaymentStatus : undefined,
                             pendingAmount: pendingForVisit,
@@ -1475,6 +1527,16 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
         </div>
         <div aria-hidden className="mobile-nav-safe-spacer" />
       </nav>
+
+      <EditSiteVisitModal
+        open={editVisitOpen}
+        initial={editVisitInitial}
+        onClose={() => setEditVisitOpen(false)}
+        onSaved={() => {
+          void loadVisitDetail()
+          if (!isVisitMode) reloadSiteVisits()
+        }}
+      />
 
       <ConfirmAlert
         open={Boolean(pendingDeleteVisit)}

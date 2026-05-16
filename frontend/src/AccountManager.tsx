@@ -228,9 +228,9 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
             manager?: LedgerMeta
             summary?: LedgerSummary
           }>(`/api/account-managers/${managerIdFromRoute}/accounts`, { params: yearParams }),
-          http.get<{ ok: boolean; sites: Array<{ clientName: string; name: string }> }>('/api/sites', {
-            params: { year: selectedYear },
-          }),
+          http.get<{ ok: boolean; clientSites: Record<string, string[]> }>(
+            `/api/account-managers/${managerIdFromRoute}/client-sites`,
+          ),
         ])
         if (cancelled) return
         if (!aRes.data?.ok) {
@@ -256,13 +256,10 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
           }))
         }
         if (aRes.data?.ok) setAccountRows(aRes.data.accounts)
-        if (sRes.data?.ok) {
-          const m: Record<string, string[]> = {}
-          for (const s of sRes.data.sites) {
-            if (!m[s.clientName]) m[s.clientName] = []
-            m[s.clientName].push(s.name)
-          }
-          setClientSiteOptions(m)
+        if (sRes.data?.ok && sRes.data.clientSites) {
+          setClientSiteOptions(sRes.data.clientSites)
+        } else {
+          setClientSiteOptions({})
         }
         prevManagerSlugRef.current = managerIdFromRoute
         setLedgerLoadState('ok')

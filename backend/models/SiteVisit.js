@@ -16,6 +16,8 @@ const siteVisitSchema = new Schema(
     siteAddress: { type: String, trim: true },
     sitePhone: { type: String, trim: true },
     engineerName: { type: String, trim: true },
+    /** Optional drawing reference number for survey deliverables. */
+    dwgNo: { type: String, trim: true, maxlength: 120 },
     contactPerson: { type: String, trim: true },
     workDescription: { type: String, trim: true },
     machineLabel: { type: String, trim: true },

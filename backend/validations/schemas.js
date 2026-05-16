@@ -65,6 +65,7 @@ export const createVisitSchema = z.object({
   siteAddress: z.string().max(500).optional(),
   sitePhone: z.string().max(30).optional(),
   engineerName: z.string().max(200).optional(),
+  dwgNo: z.string().max(120).optional(),
   contactPerson: z.string().max(200).optional(),
   workDescription: z.string().max(5000).optional(),
   machineLabel: z.string().max(200).optional(),
@@ -79,6 +80,15 @@ export const createVisitSchema = z.object({
   paymentStatus: z.string().max(50).optional(),
   notes: z.string().max(5000).optional(),
 })
+
+export const updateVisitSchema = createVisitSchema
+  .omit({ siteId: true })
+  .partial()
+  .extend({
+    visitDate: z.string().optional(),
+    paymentMode: z.string().max(100).optional(),
+    paymentStatus: z.string().max(50).optional(),
+  })
 
 export const createTransactionSchema = z.object({
   type: z.enum(['debit', 'credit']),

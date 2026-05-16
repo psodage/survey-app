@@ -1,13 +1,16 @@
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import invoiceDefaultLogo from './assets/logo.jpeg'
+import invoiceStamp from './assets/stamp.png'
 import { fetchInvoiceBankColumns } from './invoiceBankColumns'
 import { fetchInvoiceCompanyHeader, type InvoicePdfCompanyHeader } from './invoiceCompanyHeader'
 import { savePdf } from './utils/downloadFile'
+import { formatBillingLinesForDisplay } from './utils/formatBillingLines'
+import { todayInvoiceDate } from './utils/invoiceDate'
 
 export type InvoicePdfBankColumns = {
-  left: { lines: string[]; signatureUrl?: string | null }
-  right: { lines: string[]; signatureUrl?: string | null }
+  left: { lines: string[] }
+  right: { lines: string[] }
 }
 
 /** One row from site visit billing (qty×rate or flat amount). */
@@ -220,28 +223,24 @@ function normalizeBankColumnLines(lines?: string[] | null): string[] {
   return trimmed.length ? trimmed : ['—']
 }
 
+let cachedStampDataUrl: string | null = null
+
+async function loadInvoiceStampDataUrl(): Promise<string | null> {
+  if (cachedStampDataUrl) return cachedStampDataUrl
+  try {
+    const src = typeof invoiceStamp === 'string' ? invoiceStamp : String(invoiceStamp)
+    cachedStampDataUrl = await loadImageAsDataUrl(src)
+    return cachedStampDataUrl
+  } catch {
+    return null
+  }
+}
+
 async function resolveInvoiceBankDrawModel(bc?: InvoicePdfBankColumns) {
   const leftLines = normalizeBankColumnLines(bc?.left?.lines)
   const rightLines = normalizeBankColumnLines(bc?.right?.lines)
-  let leftSignatureDataUrl: string | null = null
-  let rightSignatureDataUrl: string | null = null
-  const lu = bc?.left?.signatureUrl?.trim()
-  const ru = bc?.right?.signatureUrl?.trim()
-  if (lu) {
-    try {
-      leftSignatureDataUrl = await loadImageAsDataUrl(lu)
-    } catch {
-      leftSignatureDataUrl = null
-    }
-  }
-  if (ru) {
-    try {
-      rightSignatureDataUrl = await loadImageAsDataUrl(ru)
-    } catch {
-      rightSignatureDataUrl = null
-    }
-  }
-  return { leftLines, rightLines, leftSignatureDataUrl, rightSignatureDataUrl }
+  const stampDataUrl = await loadInvoiceStampDataUrl()
+  return { leftLines, rightLines, stampDataUrl }
 }
 
 /** Match jspdf-autotable `grid` theme (defaultStyles lineColor + grid.table lineWidth) */
@@ -257,16 +256,13 @@ function drawBankDetailsTable(
   cols: {
     leftLines: string[]
     rightLines: string[]
-    leftSignatureDataUrl: string | null
-    rightSignatureDataUrl: string | null
+    stampDataUrl: string | null
   },
 ) {
   const tableW = right - left
   const halfW = tableW / 2
   const pad = { top: 3, right: 3, bottom: 3, left: 3 }
-
-  const hasSig = Boolean(cols.leftSignatureDataUrl || cols.rightSignatureDataUrl)
-  const sigRowIndex = 2
+  const signatoryRowIndex = 2
 
   const body = [
     [
@@ -286,14 +282,6 @@ function drawBankDetailsTable(
       { content: cols.leftLines.join('\n'), styles: { halign: 'left', cellWidth: halfW } },
       { content: cols.rightLines.join('\n'), styles: { halign: 'left', cellWidth: halfW } },
     ],
-    ...(hasSig
-      ? ([
-          [
-            { content: ' ', styles: { minCellHeight: 22, cellWidth: halfW } },
-            { content: ' ', styles: { minCellHeight: 22, cellWidth: halfW } },
-          ],
-        ] as const)
-      : []),
     [
       {
         content: 'Authorised Signatory',
@@ -303,7 +291,7 @@ function drawBankDetailsTable(
           valign: 'bottom',
           fontStyle: 'bold',
           fontSize: 9.5,
-          minCellHeight: 26,
+          minCellHeight: cols.stampDataUrl ? 32 : 22,
         },
       },
     ],
@@ -340,21 +328,15 @@ function drawBankDetailsTable(
       1: { cellWidth: halfW },
     },
     didDrawCell: (data) => {
-      if (!hasSig || data.section !== 'body') return
-      if (data.row.index !== sigRowIndex) return
-      const fmt = (url: string) => dataUrlImageFormat(url)
-      const imgH = 16
-      const imgW = 40
-      if (data.column.index === 0 && cols.leftSignatureDataUrl) {
-        const x = data.cell.x + 4
-        const y = data.cell.y + data.cell.height - imgH - 2
-        doc.addImage(cols.leftSignatureDataUrl, fmt(cols.leftSignatureDataUrl), x, y, imgW, imgH)
-      }
-      if (data.column.index === 1 && cols.rightSignatureDataUrl) {
-        const x = data.cell.x + 4
-        const y = data.cell.y + data.cell.height - imgH - 2
-        doc.addImage(cols.rightSignatureDataUrl, fmt(cols.rightSignatureDataUrl), x, y, imgW, imgH)
-      }
+      if (!cols.stampDataUrl || data.section !== 'body') return
+      if (data.row.index !== signatoryRowIndex || data.column.index !== 0) return
+      const fmt = dataUrlImageFormat(cols.stampDataUrl)
+      const imgW = 28
+      const imgH = 28
+      const labelW = doc.getTextWidth('Authorised Signatory')
+      const stampX = right - labelW - imgW - 6
+      const stampY = data.cell.y + 2
+      doc.addImage(cols.stampDataUrl, fmt, stampX, stampY, imgW, imgH)
     },
   })
 
@@ -453,7 +435,7 @@ export async function exportInvoicePdf(data: InvoicePdfData) {
   const headerRuleY = drawInvoiceHeader(doc, logoDataUrl, {
     title: 'INVOICE',
     invoiceNo,
-    invoiceDate: data.invoiceDate,
+    invoiceDate: todayInvoiceDate(),
     paymentStatus: data.paymentStatus,
     ...co,
   })
@@ -547,12 +529,35 @@ export async function exportInvoicePdf(data: InvoicePdfData) {
 
 export type CombinedVisitLine = {
   visitId: string
+  visitNo?: number | string
   date: string
   machine: string
   amount: number
   notes?: string
   work?: string
   billingLines?: InvoicePdfBillingLine[]
+}
+
+const COMBINED_INVOICE_COL_STYLES = {
+  0: { halign: 'center' as const, cellWidth: 14 },
+  1: { cellWidth: 58 },
+  2: { cellWidth: 88 },
+  3: { halign: 'right' as const, cellWidth: 32 },
+}
+
+function combinedSiteCellText(v: CombinedVisitLine): string {
+  const visitNo =
+    v.visitNo != null && String(v.visitNo).trim() !== ''
+      ? String(v.visitNo)
+      : v.visitId.replace(/^SV-/i, '')
+  return `Site Visit No: ${visitNo}\nDate: ${v.date}`
+}
+
+function combinedParticularCellText(v: CombinedVisitLine): string {
+  const fromLines = formatBillingLinesForDisplay(v.billingLines, '')
+  if (fromLines) return fromLines
+  const work = (v.work ?? v.machine ?? '').trim()
+  return work || '—'
 }
 
 export async function exportCombinedSiteInvoicePdf(data: {
@@ -581,7 +586,7 @@ export async function exportCombinedSiteInvoicePdf(data: {
   const headerRuleY = drawInvoiceHeader(doc, logoDataUrl, {
     title: 'INVOICE (COMBINED)',
     invoiceNo,
-    invoiceDate: data.invoiceDate,
+    invoiceDate: todayInvoiceDate(),
     paymentStatus: 'Unpaid',
     ...co,
   })
@@ -603,17 +608,16 @@ export async function exportCombinedSiteInvoicePdf(data: {
 
   const tableBody = visits.map((v, i) => [
     String(i + 1),
-    `Site Visit: ${v.visitId}\nDate: ${v.date}`,
-    '1',
-    formatInr(v.amount),
+    combinedSiteCellText(v),
+    combinedParticularCellText(v),
     formatInr(v.amount),
   ])
 
   autoTable(doc, {
     startY: billTop + 23,
     tableWidth: right - left,
-    head: [['Sr. No.', 'Particular', 'Quantity', 'Rate', 'Amount']],
-    body: tableBody.length ? tableBody : [['-', 'No billable visits', '-', formatInr(0), formatInr(0)]],
+    head: [['Sr. No.', 'Site', 'Particular', 'Amount']],
+    body: tableBody.length ? tableBody : [['-', 'No billable visits', '—', formatInr(0)]],
     theme: 'grid',
     headStyles: { fillColor: [243, 155, 3], textColor: 255, fontStyle: 'bold' },
     styles: {
@@ -622,7 +626,7 @@ export async function exportCombinedSiteInvoicePdf(data: {
       overflow: 'linebreak',
       ...INVOICE_TABLE_BORDER,
     },
-    columnStyles: INVOICE_LINE_TABLE_COL_STYLES,
+    columnStyles: COMBINED_INVOICE_COL_STYLES,
     margin: { left, right: pageWidth - right },
   })
 

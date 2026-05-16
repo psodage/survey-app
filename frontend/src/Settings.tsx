@@ -279,7 +279,6 @@ export default function Settings({ onNavigate }: SettingsProps) {
         const th = (c.invoiceDefaults?.theme ?? 'modern').toLowerCase()
         setInvoiceTheme(th === 'classic' ? 'classic' : th === 'minimal' ? 'minimal' : 'modern')
         setFooterNote(c.invoiceDefaults?.footerNote ?? '')
-        setSignatureUrl(c.invoiceDefaults?.signatureUrl ?? null)
         setStampUrl(c.invoiceDefaults?.stampUrl ?? null)
 
         const logo = c.branding?.logoUrl
@@ -590,7 +589,6 @@ export default function Settings({ onNavigate }: SettingsProps) {
       </tbody>
     </table>
     <div class="sig">
-      ${signatureUrl ? `<div><div style="font-size:11px;color:#71717a;margin-bottom:4px;">Signature</div><img src="${esc(signatureUrl)}" alt="Signature"/></div>` : ''}
       ${stampUrl ? `<div><div style="font-size:11px;color:#71717a;margin-bottom:4px;">Stamp</div><img src="${esc(stampUrl)}" alt="Stamp"/></div>` : ''}
     </div>
   </div>
@@ -1161,38 +1159,6 @@ export default function Settings({ onNavigate }: SettingsProps) {
                         />
                       </Field>
                     </div>
-                    <div className="mt-4 grid grid-cols-1 gap-3 sm:max-w-md">
-                      <div className="rounded-xl border border-neutral-100 bg-white p-2.5 md:p-3">
-                        <div className="text-xs font-extrabold text-neutral-900">Your signature (bank block)</div>
-                        <div className="mt-2 flex min-h-[100px] items-center justify-center overflow-hidden rounded-lg bg-neutral-50 ring-1 ring-black/5">
-                          {bankSigPreview ? (
-                            <img
-                              src={bankSigPreview}
-                              alt="Bank signature preview"
-                              className="max-h-28 w-full object-contain p-2"
-                            />
-                          ) : (
-                            <span className="px-3 text-center text-xs font-semibold text-neutral-500">
-                              No signature uploaded
-                            </span>
-                          )}
-                        </div>
-                        <input
-                          ref={bankSigInputRef}
-                          type="file"
-                          accept="image/png,image/jpeg,image/gif,image/webp"
-                          className="sr-only"
-                          onChange={handleBankSignatureChange}
-                        />
-                        <button
-                          type="button"
-                          onClick={handleBankSignaturePick}
-                          className="mt-3 w-full rounded-xl border border-neutral-200 bg-white px-4 py-2 text-sm font-extrabold text-neutral-900 shadow-sm ring-1 ring-black/5 transition hover:border-[#f39b03]/40 hover:text-[#f39b03]"
-                        >
-                          Upload bank signature
-                        </button>
-                      </div>
-                    </div>
                   </CardShell>
                 </div>
 
@@ -1265,76 +1231,9 @@ export default function Settings({ onNavigate }: SettingsProps) {
                 {/* PDF & Invoice Preferences */}
                 <CardShell title="PDF & invoice">
                   <div className="grid gap-4">
-                    <div className="rounded-xl border border-neutral-100 bg-white p-2.5 md:p-3">
-                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        <div className="rounded-xl bg-white p-2.5 shadow-sm ring-1 ring-black/5 md:p-3">
-                          <div className="text-xs font-extrabold text-neutral-900">Signature</div>
-                          <div className="mt-2 flex min-h-[100px] items-center justify-center overflow-hidden rounded-lg bg-neutral-50 ring-1 ring-black/5">
-                            {signatureUrl ? (
-                              <img
-                                src={signatureUrl}
-                                alt="Signature preview"
-                                className="max-h-28 w-full object-contain p-2"
-                              />
-                            ) : (
-                              <span className="px-3 text-center text-xs font-semibold text-neutral-500">
-                                No signature uploaded
-                              </span>
-                            )}
-                          </div>
-                          <button
-                            type="button"
-                            onClick={handleSignaturePick}
-                            disabled={companyLocked}
-                            className="mt-3 w-full rounded-xl border border-neutral-200 bg-white px-4 py-2 text-sm font-extrabold text-neutral-900 shadow-sm ring-1 ring-black/5 transition hover:border-[#f39b03]/40 hover:text-[#f39b03] disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            Upload signature
-                          </button>
-                          <input
-                            ref={signatureInputRef}
-                            type="file"
-                            accept="image/png,image/jpeg,image/gif,image/webp"
-                            className="sr-only"
-                            onChange={handleSignatureChange}
-                          />
-                        </div>
-
-                        <div className="rounded-xl bg-white p-2.5 shadow-sm ring-1 ring-black/5 md:p-3">
-                          <div className="text-xs font-extrabold text-neutral-900">Stamp</div>
-                          <div className="mt-2 flex min-h-[100px] items-center justify-center overflow-hidden rounded-lg bg-neutral-50 ring-1 ring-black/5">
-                            {stampUrl ? (
-                              <img
-                                src={stampUrl}
-                                alt="Stamp preview"
-                                className="max-h-28 w-full object-contain p-2"
-                              />
-                            ) : (
-                              <span className="px-3 text-center text-xs font-semibold text-neutral-500">
-                                No stamp uploaded
-                              </span>
-                            )}
-                          </div>
-                          <button
-                            type="button"
-                            onClick={handleStampPick}
-                            disabled={companyLocked}
-                            className="mt-3 w-full rounded-xl border border-neutral-200 bg-white px-4 py-2 text-sm font-extrabold text-neutral-900 shadow-sm ring-1 ring-black/5 transition hover:border-[#f39b03]/40 hover:text-[#f39b03] disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            Upload stamp
-                          </button>
-                          <input
-                            ref={stampInputRef}
-                            type="file"
-                            accept="image/png,image/jpeg,image/gif,image/webp"
-                            className="sr-only"
-                            onChange={handleStampChange}
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                 
-
+                    <p className="text-xs font-semibold text-neutral-600">
+                      Invoice PDFs use the company stamp asset bundled with the app (Authorised Signatory block).
+                    </p>
                     <Field label="Footer note">
                       <textarea
                         value={footerNote}

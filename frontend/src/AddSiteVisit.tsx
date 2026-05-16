@@ -150,6 +150,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
   const [visitDate] = useState(() => getHeaderDateLabel())
   const [machine, setMachine] = useState('Total Station')
   const [engineerName, setEngineerName] = useState('')
+  const [dwgNo, setDwgNo] = useState('')
   const [siteAddress, setSiteAddress] = useState('')
   const [sitePhone, setSitePhone] = useState('')
   const [billingLines, setBillingLines] = useState<BillingLineDraft[]>(() => defaultBillingLines())
@@ -937,6 +938,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                         siteAddress: siteAddress.trim(),
                         sitePhone: sitePhone.trim(),
                         engineerName: engineerName.trim(),
+                        dwgNo: dwgNo.trim() || undefined,
                         contactPerson: engineerName.trim(),
                         workDescription: workDetails,
                         machineLabel: machine,
@@ -1113,6 +1115,16 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                         value={engineerName}
                         onChange={(e) => setEngineerName(e.target.value)}
                         placeholder="Enter engineer name"
+                        className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
+                      />
+                    </label>
+
+                    <label className="grid gap-2">
+                      <span className="text-xs font-bold text-neutral-700">DWG No.</span>
+                      <input
+                        value={dwgNo}
+                        onChange={(e) => setDwgNo(e.target.value)}
+                        placeholder="Enter DWG number"
                         className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
                       />
                     </label>

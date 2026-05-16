@@ -199,7 +199,15 @@ export async function exportVisitRecordPdf(data: VisitRecordPdfData) {
 
   y += rowGap
   doc.text('Work Type :', leftLabel, y)
-  lineValue(doc, leftValueStart, 286, y, data.work ?? '-')
+  const workText = (data.work ?? '-').trim() || '-'
+  doc.setDrawColor(40, 40, 40)
+  doc.line(leftValueStart, y + 0.8, 286, y + 0.8)
+  doc.setFont('helvetica', 'normal')
+  doc.setTextColor(24, 24, 24)
+  doc.setFontSize(10)
+  const workLines = doc.splitTextToSize(workText, 286 - leftValueStart - 2)
+  doc.text(workLines, leftValueStart + 1.2, y)
+  if (workLines.length > 1) y += (workLines.length - 1) * 5
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(7.5)
   doc.setTextColor(60, 60, 60)

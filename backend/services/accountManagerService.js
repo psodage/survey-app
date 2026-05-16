@@ -142,6 +142,40 @@ export async function getGlobalPendingTotal(req, yearRaw) {
   return Math.max(0, revenue - received)
 }
 
+/** Client → site names for credit transaction dropdowns (scoped to manager's adminId). */
+export async function listClientSiteOptionsForManager(req, managerDoc) {
+  await assertAccountManagerReadAccess(req, managerDoc)
+  const clients = await Client.find({
+    companyId: req.user.companyId,
+    adminId: managerDoc.adminId,
+  })
+    .select('name')
+    .sort({ name: 1 })
+    .limit(500)
+    .lean()
+  if (clients.length === 0) return {}
+
+  const clientIds = clients.map((c) => c._id)
+  const sites = await Site.find({
+    companyId: req.user.companyId,
+    clientId: { $in: clientIds },
+  })
+    .select('name clientId')
+    .sort({ name: 1 })
+    .lean()
+
+  const clientNameById = new Map(clients.map((c) => [c._id.toString(), c.name]))
+  const out = {}
+  for (const c of clients) {
+    out[c.name] = []
+  }
+  for (const s of sites) {
+    const name = clientNameById.get(s.clientId?.toString())
+    if (name && out[name]) out[name].push(s.name)
+  }
+  return out
+}
+
 export async function listAccountRowsForManager(req, managerDoc, yearRaw) {
   await reconcileSiteCreditsForAdmin(req.user.companyId, managerDoc.adminId)
 

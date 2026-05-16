@@ -19,6 +19,39 @@ export type SiteExportRow = {
   pending: string
 }
 
+export type ClientVisitExportRow = {
+  id: string
+  visitNo?: number
+  date: string
+  site: string
+  machine: string
+  paymentMode: string
+  paymentStatus: string
+  amount: string
+}
+
+export type ClientCreditExportRow = {
+  date: string
+  site: string
+  amount: string
+  paymentMode: string
+  receivedBy: string
+  notes?: string
+}
+
+export type ClientReportExportData = {
+  client: ClientExportRow
+  sites: SiteExportRow[]
+  visits?: ClientVisitExportRow[]
+  credits?: ClientCreditExportRow[]
+  totals?: {
+    revenue: number
+    received: number
+    creditTotal: number
+    pending: number
+  }
+}
+
 function escapeCsvCell(value: string | number) {
   const t = String(value).replace(/"/g, '""')
   if (/[",\n\r]/.test(t)) return `"${t}"`
@@ -31,6 +64,10 @@ function rowsToCsv(headers: string[], rows: (string | number)[][]) {
     lines.push(row.map(escapeCsvCell).join(','))
   }
   return lines.join('\n')
+}
+
+function formatInrPlain(n: number) {
+  return `Rs ${Math.round(n).toLocaleString('en-IN')}`
 }
 
 export async function exportAllClientsPdf(clients: ClientExportRow[]) {
@@ -72,49 +109,170 @@ export async function exportAllClientsExcel(clients: ClientExportRow[]) {
   await downloadCsv(csv, `all-clients-report-${safeDate}.csv`)
 }
 
-export async function exportClientPdf(client: ClientExportRow, sites: SiteExportRow[]) {
+export async function exportClientPdf(data: ClientReportExportData) {
+  const { client, sites, visits = [], credits = [], totals } = data
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+  let y = 16
+
   doc.setFontSize(16)
   doc.setTextColor(23, 23, 23)
-  doc.text(`Client Report: ${client.name}`, 14, 16)
+  doc.text(`Client Report: ${client.name}`, 14, y)
+  y += 10
   doc.setFontSize(10)
   doc.setTextColor(82, 82, 82)
-  doc.text(`Phone: ${client.phone}`, 14, 23)
-  doc.text(`Total Sites: ${client.sites}`, 14, 28)
-  doc.text(`Total Revenue: ${client.revenue}`, 78, 28)
-  doc.text(`Received: ${client.received}`, 14, 33)
-  doc.text(`Pending: ${client.pending}`, 78, 33)
+  doc.text(`Phone: ${client.phone}`, 14, y)
+  y += 5
+  doc.text(`Total Sites: ${client.sites}`, 14, y)
+  y += 5
+  doc.text(`Total Revenue: ${client.revenue}`, 14, y)
+  doc.text(`Received: ${client.received}`, 105, y)
+  y += 5
+  doc.text(`Pending: ${client.pending}`, 14, y)
+  if (totals) {
+    doc.text(`Credits (transactions): ${formatInrPlain(totals.creditTotal)}`, 105, y)
+  }
+  y += 5
   doc.text(
     `Generated: ${new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}`,
     14,
-    38,
+    y,
   )
-  const body =
+  y += 8
+
+  doc.setFontSize(11)
+  doc.setTextColor(35, 35, 35)
+  doc.text('Sites', 14, y)
+  y += 2
+
+  const siteBody =
     sites.length === 0
       ? [['—', '—', '—', 'No sites found', '—']]
       : sites.map((s) => [s.name, s.location, s.lastVisit, s.status, s.pending])
+
   autoTable(doc, {
-    startY: 44,
+    startY: y,
     head: [['Site Name', 'Location', 'Last Visit', 'Status', 'Pending (Rs)']],
-    body,
+    body: siteBody,
     headStyles: { fillColor: [243, 155, 3], textColor: 255, fontStyle: 'bold' },
     styles: { fontSize: 9, cellPadding: 2 },
     margin: { left: 14, right: 14 },
     columnStyles: { 4: { halign: 'right' } },
   })
+
+  y = ((doc as jsPDF & { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY ?? y) + 10
+
+  doc.setFontSize(11)
+  doc.text('Site Visits', 14, y)
+  y += 2
+
+  const visitBody =
+    visits.length === 0
+      ? [['—', '—', '—', '—', '—', '—', 'No visits']]
+      : visits.map((v) => [
+          v.id,
+          v.visitNo != null ? String(v.visitNo) : '—',
+          v.date,
+          v.site,
+          v.machine,
+          v.paymentStatus,
+          v.amount,
+        ])
+
+  autoTable(doc, {
+    startY: y,
+    head: [['Visit ID', 'Visit No.', 'Date', 'Site', 'Machine', 'Status', 'Amount']],
+    body: visitBody,
+    headStyles: { fillColor: [243, 155, 3], textColor: 255, fontStyle: 'bold' },
+    styles: { fontSize: 8.5, cellPadding: 2 },
+    margin: { left: 14, right: 14 },
+    columnStyles: { 6: { halign: 'right' } },
+  })
+
+  y = ((doc as jsPDF & { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY ?? y) + 10
+
+  if (y > 250) {
+    doc.addPage()
+    y = 16
+  }
+
+  doc.setFontSize(11)
+  doc.text('Client Credit Transactions', 14, y)
+  y += 2
+
+  const creditBody =
+    credits.length === 0
+      ? [['—', '—', '—', '—', '—', 'No credit transactions']]
+      : credits.map((c) => [c.date, c.site, c.amount, c.paymentMode, c.receivedBy, c.notes || '—'])
+
+  autoTable(doc, {
+    startY: y,
+    head: [['Date', 'Site', 'Amount', 'Payment Mode', 'Received By', 'Notes']],
+    body: creditBody,
+    headStyles: { fillColor: [243, 155, 3], textColor: 255, fontStyle: 'bold' },
+    styles: { fontSize: 8.5, cellPadding: 2, overflow: 'linebreak' },
+    margin: { left: 14, right: 14 },
+    columnStyles: { 2: { halign: 'right' } },
+  })
+
+  y = ((doc as jsPDF & { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY ?? y) + 12
+
+  if (totals) {
+    doc.setFontSize(10)
+    doc.setTextColor(55, 55, 55)
+    doc.text(`Total revenue: ${formatInrPlain(totals.revenue)}`, 14, y)
+    y += 5
+    doc.text(`Total received / credits: ${formatInrPlain(totals.received)}`, 14, y)
+    y += 5
+    doc.text(`Credit transactions total: ${formatInrPlain(totals.creditTotal)}`, 14, y)
+    y += 5
+    doc.setFont('helvetica', 'bold')
+    doc.text(`Pending amount: ${formatInrPlain(totals.pending)}`, 14, y)
+  }
+
   const safeName = client.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
   const safeDate = new Date().toISOString().slice(0, 10)
   await savePdf(doc, `client-report-${safeName || 'client'}-${safeDate}.pdf`)
 }
 
-export async function exportClientExcel(client: ClientExportRow, sites: SiteExportRow[]) {
-  const csv = rowsToCsv(
-    ['Site Name', 'Location', 'Last Visit', 'Status', 'Pending'],
-    sites.length
-      ? sites.map((s) => [s.name, s.location, s.lastVisit, s.status, s.pending])
-      : [['—', '—', '—', '—', 'No sites']],
+export async function exportClientExcel(data: ClientReportExportData) {
+  const { client, sites, visits = [], credits = [] } = data
+  const sections: string[] = []
+
+  sections.push(
+    rowsToCsv(
+      ['Client', 'Phone', 'Sites', 'Revenue', 'Received', 'Pending'],
+      [[client.name, client.phone, client.sites, client.revenue, client.received, client.pending]],
+    ),
   )
+  sections.push('')
+  sections.push(
+    rowsToCsv(
+      ['Site Name', 'Location', 'Last Visit', 'Status', 'Pending'],
+      sites.length
+        ? sites.map((s) => [s.name, s.location, s.lastVisit, s.status, s.pending])
+        : [['—', '—', '—', '—', 'No sites']],
+    ),
+  )
+  sections.push('')
+  sections.push(
+    rowsToCsv(
+      ['Visit ID', 'Visit No.', 'Date', 'Site', 'Machine', 'Status', 'Amount'],
+      visits.length
+        ? visits.map((v) => [v.id, v.visitNo ?? '', v.date, v.site, v.machine, v.paymentStatus, v.amount])
+        : [['—', '—', '—', '—', '—', '—', 'No visits']],
+    ),
+  )
+  sections.push('')
+  sections.push(
+    rowsToCsv(
+      ['Date', 'Site', 'Amount', 'Payment Mode', 'Received By', 'Notes'],
+      credits.length
+        ? credits.map((c) => [c.date, c.site, c.amount, c.paymentMode, c.receivedBy, c.notes ?? ''])
+        : [['—', '—', '—', '—', '—', 'No credits']],
+    ),
+  )
+
   const safeName = client.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
   const safeDate = new Date().toISOString().slice(0, 10)
-  await downloadCsv(csv, `client-sites-${safeName || 'client'}-${safeDate}.csv`)
+  await downloadCsv(sections.join('\n'), `client-report-${safeName || 'client'}-${safeDate}.csv`)
 }
