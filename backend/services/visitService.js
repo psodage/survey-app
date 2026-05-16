@@ -428,10 +428,12 @@ export async function deleteVisit(req, visitId) {
     .select('pdfFileId')
     .lean()
 
-  const fileIdSet = new Set()
-  for (const fid of visit.photoFileIds ?? []) {
-    if (fid) fileIdSet.add(fid.toString())
-  }
+  const visitPhotoFileIds = await uploadService.collectSiteVisitSurveyFileIds(
+    req.user.companyId,
+    vid,
+    visit.photoFileIds,
+  )
+  const fileIdSet = new Set(visitPhotoFileIds.map((id) => id.toString()))
   for (const inv of invoices) {
     if (inv.pdfFileId) fileIdSet.add(inv.pdfFileId.toString())
   }

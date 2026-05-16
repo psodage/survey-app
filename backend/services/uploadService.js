@@ -80,6 +80,32 @@ export async function deleteCloudinaryAssets(assets) {
   return { deleted, skipped: false }
 }
 
+/**
+ * All SurveyFile rows for a site visit: `photoFileIds` on the visit plus `linked.entityId`.
+ * @param {mongoose.Types.ObjectId|string} companyId
+ * @param {mongoose.Types.ObjectId|string} visitId
+ * @param {unknown[]} [photoFileIds]
+ */
+export async function collectSiteVisitSurveyFileIds(companyId, visitId, photoFileIds = []) {
+  const idSet = new Set()
+  for (const fid of photoFileIds ?? []) {
+    if (fid) idSet.add(fid.toString())
+  }
+  const vid =
+    visitId instanceof mongoose.Types.ObjectId ? visitId : new mongoose.Types.ObjectId(String(visitId))
+  const linkedRows = await SurveyFile.find({
+    companyId,
+    'linked.entityType': 'site_visit',
+    'linked.entityId': vid,
+  })
+    .select('_id')
+    .lean()
+  for (const row of linkedRows) {
+    idSet.add(row._id.toString())
+  }
+  return [...idSet].map((id) => new mongoose.Types.ObjectId(id))
+}
+
 /** Remove Cloudinary blobs for SurveyFile rows (by Mongo ids). */
 export async function purgeCloudinaryForSurveyFileIds(companyId, fileObjectIds) {
   if (!fileObjectIds?.length) return

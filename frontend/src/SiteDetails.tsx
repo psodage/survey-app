@@ -20,7 +20,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { Fragment, useCallback, useMemo, useState, type ReactNode } from 'react'
-import { useLocation as useRouterLocation } from 'react-router-dom'
+import { useLocation as useRouterLocation, useNavigate } from 'react-router-dom'
 import { useSelectedYear } from './context/SelectedYearContext'
 import { AccountManagerSidebarBlock } from './AccountManagerSidebarBlock'
 import { CollaborationBrandMark } from './CollaborationBrandMark'
@@ -106,6 +106,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
   const [exportBusy, setExportBusy] = useState(false)
   const [pendingDeleteVisit, setPendingDeleteVisit] = useState<SiteVisitRecord | null>(null)
   const [deleteVisitBusy, setDeleteVisitBusy] = useState(false)
+  const navigate = useNavigate()
   const { pathname: routerPathname, search } = useRouterLocation()
   const urlParams = useMemo(() => new URLSearchParams(search), [search])
   const mode = urlParams.get('mode') ?? 'site'
@@ -477,6 +478,17 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
     void loadSiteVisits()
   }
 
+  const buildSiteListParams = useCallback(() => {
+    const params = new URLSearchParams({ client, name })
+    if (siteId) params.set('siteId', siteId)
+    if (effectiveLocation) params.set('location', effectiveLocation)
+    if (lastVisit !== '-') params.set('lastVisit', lastVisit)
+    if (status) params.set('status', status)
+    if (pending) params.set('pending', pending)
+    if (receivedParam) params.set('received', receivedParam)
+    return params
+  }, [client, name, siteId, effectiveLocation, lastVisit, status, pending, receivedParam])
+
   const handleConfirmDeleteVisit = async () => {
     if (!pendingDeleteVisit) return
     const mid = pendingDeleteVisit.visitMongoId
@@ -487,21 +499,18 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
     }
     setDeleteVisitBusy(true)
     try {
-      const res = await http.delete<{ ok?: boolean }>(`/api/visits/${mid}`)
-      if (!res.data?.ok) {
+      const res = await http.delete<{ ok?: boolean; success?: boolean; message?: string }>(
+        `/api/site-visits/${mid}`,
+      )
+      if (!res.data?.ok && !res.data?.success) {
         toast.error('Could not delete visit')
         return
       }
-      toast.success('Visit deleted')
+      toast.success(res.data.message ?? 'Site visit and related photos deleted successfully')
       setPendingDeleteVisit(null)
+      setRelatedVisitRecords((prev) => prev.filter((v) => v.visitMongoId !== mid))
       if (isVisitMode && visitMongoId === mid) {
-        const params = new URLSearchParams({ client, name })
-        if (siteId) params.set('siteId', siteId)
-        if (effectiveLocation) params.set('location', effectiveLocation)
-        if (lastVisit !== '-') params.set('lastVisit', lastVisit)
-        if (status) params.set('status', status)
-        if (pending) params.set('pending', pending)
-        onNavigate(`/site-details?${params.toString()}`)
+        navigate(`/site-details?${buildSiteListParams().toString()}`, { replace: true })
         return
       }
       reloadSiteVisits()
@@ -1134,7 +1143,9 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                       className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 text-xs font-extrabold text-rose-700 transition hover:bg-rose-100 sm:text-sm disabled:opacity-50"
                     >
                       <Trash2 size={15} />
-                      Delete visit
+                      {deleteVisitBusy && pendingDeleteVisit?.visitMongoId === visitMongoId
+                        ? 'Deleting…'
+                        : 'Delete visit'}
                     </button>
                     <button
                       type="button"
@@ -1295,14 +1306,19 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                                 {record.visitMongoId ? (
                                   <button
                                     type="button"
+                                    disabled={
+                                      deleteVisitBusy && pendingDeleteVisit?.visitMongoId === record.visitMongoId
+                                    }
                                     onClick={(event) => {
                                       event.stopPropagation()
                                       setPendingDeleteVisit(record)
                                     }}
-                                    className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-2.5 text-[10px] font-extrabold text-rose-700 transition hover:bg-rose-100"
+                                    className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-2.5 text-[10px] font-extrabold text-rose-700 transition hover:bg-rose-100 disabled:opacity-50"
                                   >
                                     <Trash2 size={12} />
-                                    Delete
+                                    {deleteVisitBusy && pendingDeleteVisit?.visitMongoId === record.visitMongoId
+                                      ? 'Deleting…'
+                                      : 'Delete'}
                                   </button>
                                 ) : null}
                               </div>
@@ -1393,14 +1409,20 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                                   {record.visitMongoId ? (
                                     <button
                                       type="button"
+                                      disabled={
+                                        deleteVisitBusy &&
+                                        pendingDeleteVisit?.visitMongoId === record.visitMongoId
+                                      }
                                       onClick={(event) => {
                                         event.stopPropagation()
                                         setPendingDeleteVisit(record)
                                       }}
-                                      className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-2.5 text-[11px] font-extrabold text-rose-700 transition hover:bg-rose-100"
+                                      className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-2.5 text-[11px] font-extrabold text-rose-700 transition hover:bg-rose-100 disabled:opacity-50"
                                     >
                                       <Trash2 size={12} />
-                                      Delete
+                                      {deleteVisitBusy && pendingDeleteVisit?.visitMongoId === record.visitMongoId
+                                        ? 'Deleting…'
+                                        : 'Delete'}
                                     </button>
                                   ) : (
                                     '—'
@@ -1458,7 +1480,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
         open={Boolean(pendingDeleteVisit)}
         variant="danger"
         title="Delete this site visit?"
-        description="This removes the visit record, linked transactions, and photos from Cloudinary. This cannot be undone."
+        description="Are you sure you want to delete this site visit? This will also delete related uploaded photos."
         detail={
           pendingDeleteVisit
             ? `${pendingDeleteVisit.id} · ${pendingDeleteVisit.date} · ${pendingDeleteVisit.client} / ${pendingDeleteVisit.site}`

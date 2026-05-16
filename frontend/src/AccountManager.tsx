@@ -322,9 +322,10 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
     if (!canEditLedger) setIsAddOpen(false)
   }, [canEditLedger])
 
-  const sessionDisplayName = (user?.fullName?.trim() || '').length > 0 ? user.fullName.trim() : 'Signed in'
-  const sessionEmail = (user?.email?.trim() || '').length > 0 ? user.email.trim() : (company?.email ?? '').trim()
-  const sessionPhone = (user?.phone?.trim() || '').length > 0 ? user.phone.trim() : ''
+  const profileDisplayName = user?.fullName?.trim() || user?.email?.trim() || 'User'
+  const sessionDisplayName = user?.fullName?.trim() ? `Er. ${user.fullName.trim()}` : profileDisplayName
+  const sessionEmail = user?.email?.trim() || company?.email?.trim() || ''
+  const sessionPhone = user?.phone?.trim() || ''
   const roleLabel = user?.role === 'super_admin' ? 'Super admin' : 'Admin'
 
   const visibleTransactions = useMemo(() => {

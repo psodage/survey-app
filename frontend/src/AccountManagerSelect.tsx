@@ -66,7 +66,12 @@ type InstrumentPeerAm = {
 }
 
 export default function AccountManagerSelect({ onNavigate }: AccountManagerSelectProps) {
-  const { managers, token, activeInstrumentId, user } = useAuth()
+  const { managers, token, activeInstrumentId, user, company } = useAuth()
+  const profileDisplayName = user?.fullName?.trim() || user?.email?.trim() || 'User'
+  const sessionDisplayName = user?.fullName?.trim() ? `Er. ${user.fullName.trim()}` : profileDisplayName
+  const sessionEmail = user?.email?.trim() || company?.email?.trim() || ''
+  const sessionPhone = user?.phone?.trim() || ''
+  const roleLabel = user?.role === 'super_admin' ? 'Super admin' : 'Admin'
   const { refreshTick } = useRefresh()
   const [instrumentAdmins, setInstrumentAdmins] = useState<InstrumentPeerAm[]>([])
 
@@ -230,28 +235,32 @@ export default function AccountManagerSelect({ onNavigate }: AccountManagerSelec
                 <div className="grid h-16 w-16 place-items-center rounded-2xl bg-white/10 text-white ring-1 ring-white/15">
                   <CircleUserRound size={32} strokeWidth={1.75} />
                 </div>
-                <div className="mt-3 text-base font-extrabold text-white">Er. Shubham Bhoi</div>
-                <div className="mt-1 text-xs font-semibold text-white/65">Admin</div>
+                <div className="mt-3 text-base font-extrabold text-white">{sessionDisplayName}</div>
+                <div className="mt-1 text-xs font-semibold text-white/65">{roleLabel}</div>
               </div>
               <div className="mt-4 space-y-2 border-t border-white/10 pt-4">
-                <a
-                  href="mailto:samarthlandsurveyors@gmail.com"
-                  className="flex items-center gap-2 rounded-xl px-2 py-2 text-left text-xs font-semibold text-white/90 hover:bg-white/5"
-                >
-                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white/10 text-[#f39b03]">
-                    <Mail size={15} />
-                  </span>
-                  <span className="min-w-0 truncate">samarthlandsurveyors@gmail.com</span>
-                </a>
-                <a
-                  href="tel:+918643001010"
-                  className="flex items-center gap-2 rounded-xl px-2 py-2 text-left text-xs font-semibold text-white/90 hover:bg-white/5"
-                >
-                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white/10 text-[#f39b03]">
-                    <Phone size={15} />
-                  </span>
-                  <span>+91 86430 01010</span>
-                </a>
+                {sessionEmail ? (
+                  <a
+                    href={`mailto:${sessionEmail}`}
+                    className="flex items-center gap-2 rounded-xl px-2 py-2 text-left text-xs font-semibold text-white/90 hover:bg-white/5"
+                  >
+                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white/10 text-[#f39b03]">
+                      <Mail size={15} />
+                    </span>
+                    <span className="min-w-0 truncate">{sessionEmail}</span>
+                  </a>
+                ) : null}
+                {sessionPhone ? (
+                  <a
+                    href={`tel:${sessionPhone.replace(/\s/g, '')}`}
+                    className="flex items-center gap-2 rounded-xl px-2 py-2 text-left text-xs font-semibold text-white/90 hover:bg-white/5"
+                  >
+                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white/10 text-[#f39b03]">
+                      <Phone size={15} />
+                    </span>
+                    <span>{sessionPhone}</span>
+                  </a>
+                ) : null}
               </div>
             </div>
           </div>
@@ -344,8 +353,8 @@ export default function AccountManagerSelect({ onNavigate }: AccountManagerSelec
                     <CircleUserRound size={18} />
                   </div>
                   <div className="min-w-0 text-left">
-                    <div className="truncate text-xs font-extrabold text-neutral-900 sm:text-sm">Er. Shubham Bhoi</div>
-                    <div className="text-[11px] font-semibold text-neutral-600">Admin</div>
+                    <div className="truncate text-xs font-extrabold text-neutral-900 sm:text-sm">{sessionDisplayName}</div>
+                    <div className="text-[11px] font-semibold text-neutral-600">{roleLabel}</div>
                   </div>
                 </div>
               </div>

@@ -308,12 +308,14 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
     }
     setDeleteVisitBusy(true)
     try {
-      const res = await http.delete<{ ok?: boolean }>(`/api/visits/${mid}`)
-      if (!res.data?.ok) {
+      const res = await http.delete<{ ok?: boolean; success?: boolean; message?: string }>(
+        `/api/site-visits/${mid}`,
+      )
+      if (!res.data?.ok && !res.data?.success) {
         toast.error('Could not delete visit')
         return
       }
-      toast.success('Visit deleted')
+      toast.success(res.data.message ?? 'Site visit and related photos deleted successfully')
       setPendingDeleteVisit(null)
       setShowAddForm(false)
       if (mode === 'add') {

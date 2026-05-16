@@ -172,11 +172,18 @@ router.get('/visits/:id', catchAsync(async (req, res) => {
   res.json({ ok: true, visit: data })
 }))
 
-router.delete('/visits/:id', catchAsync(async (req, res) => {
+const deleteSiteVisitHandler = catchAsync(async (req, res) => {
   const id = parseObjectId(req.params.id, 'visit id')
   await visitService.deleteVisit(req, id)
-  res.json({ ok: true })
-}))
+  res.json({
+    ok: true,
+    success: true,
+    message: 'Site visit and related photos deleted successfully',
+  })
+})
+
+router.delete('/site-visits/:id', requireRole('admin', 'super_admin'), deleteSiteVisitHandler)
+router.delete('/visits/:id', requireRole('admin', 'super_admin'), deleteSiteVisitHandler)
 
 router.post(
   '/visits/:id/photos',
