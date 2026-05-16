@@ -5,7 +5,7 @@ type StartupScreenProps = {
 
 /** Full-screen bootstrap UI (server wake + session load). Matches app dark shell — not a white flash. */
 export function StartupScreen({
-  title = 'Starting server...',
+  title = 'Loading...',
   subtitle = 'This may take a few seconds.',
 }: StartupScreenProps) {
   return (
