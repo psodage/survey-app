@@ -680,13 +680,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
           tone: 'bg-sky-100 text-sky-700',
           cardTint: 'bg-sky-50/90',
         },
-        {
-          title: 'Visit ID',
-          value: visitId,
-          icon: ClipboardList,
-          tone: 'bg-violet-100 text-violet-700',
-          cardTint: 'bg-violet-50/90',
-        },
+      
         {
           title: 'Visit No.',
           value: effectiveVisitNo != null ? String(effectiveVisitNo) : '—',
