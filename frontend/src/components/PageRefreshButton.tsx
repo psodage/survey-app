@@ -15,24 +15,30 @@ const variantClass: Record<NonNullable<PageRefreshButtonProps['variant']>, strin
 }
 
 export function PageRefreshButton({ variant = 'onDark', className = '' }: PageRefreshButtonProps) {
-  const { requestRefresh } = useRefresh()
+  const { requestRefresh, isRefreshing } = useRefresh()
   const [spinning, setSpinning] = useState(false)
 
-  const handleClick = () => {
-    requestRefresh()
+  const handleClick = async () => {
     setSpinning(true)
-    window.setTimeout(() => setSpinning(false), 650)
+    try {
+      await requestRefresh()
+    } finally {
+      window.setTimeout(() => setSpinning(false), 350)
+    }
   }
+
+  const showSpin = spinning || isRefreshing
 
   return (
     <button
       type="button"
       className={[variantClass[variant], className].filter(Boolean).join(' ')}
       aria-label="Refresh page"
-      disabled={spinning}
-      onClick={handleClick}
+      aria-busy={showSpin}
+      disabled={showSpin}
+      onClick={() => void handleClick()}
     >
-      <RefreshCw size={18} strokeWidth={2} className={spinning ? 'animate-spin' : undefined} />
+      <RefreshCw size={18} strokeWidth={2} className={showSpin ? 'animate-spin' : undefined} />
     </button>
   )
 }

@@ -106,6 +106,7 @@ type SiteRow = {
   location: string
   lastVisit: string
   status: 'Active' | 'On Hold' | 'Completed'
+  received: string
   pending: string
 }
 
@@ -166,6 +167,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
             location: string
             lastVisit: string
             status: string
+            received: string
             pending: string
           }>
         }>('/api/sites', { params: { year: selectedYear } }),
@@ -193,6 +195,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
             location: s.location,
             lastVisit: s.lastVisit,
             status: s.status as SiteRow['status'],
+            received: s.received ?? '₹0',
             pending: s.pending,
           })
         }
@@ -478,6 +481,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
       location: site.location,
       lastVisit: site.lastVisit,
       status: site.status,
+      received: site.received,
       pending: site.pending,
     })
     if (site.id) params.set('siteId', site.id)

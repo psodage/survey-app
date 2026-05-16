@@ -8,7 +8,7 @@ import { ApiError } from '../utils/ApiError.js'
 import { resolveInstrumentScope, optionalAdminIdQuery, instrumentScopeMatch, peerAwareAdminScopeMatch } from '../utils/scope.js'
 import { visitDateRangeForYear } from '../utils/yearQuery.js'
 import * as accountManagerService from './accountManagerService.js'
-import { applyCreditToSiteVisits, recomputeVisitCreditsForSite } from './visitCreditAllocation.js'
+import { recomputeVisitCreditsForSite } from './visitCreditAllocation.js'
 
 function decNum(v) {
   return parseFloat((v ?? 0).toString()) || 0
@@ -144,12 +144,10 @@ export async function createTransaction(req, accountManagerId, body) {
     await session.withTransaction(async () => {
       const [t] = await Transaction.create([txPayload], { session })
       created = t
-      await applyCreditToSiteVisits(session, {
+      await recomputeVisitCreditsForSite(session, {
         companyId: req.user.companyId,
         adminId: am.adminId,
         siteId,
-        instrumentId,
-        creditAmount,
       })
     })
   } finally {
@@ -181,13 +179,12 @@ export async function deleteTransaction(req, txId) {
   })
   if (!t) throw new ApiError(404, 'Transaction not found')
 
-  const shouldRecompute = t.type === 'credit' && t.siteId != null && t.instrumentId != null
+  const shouldRecompute = t.type === 'credit' && t.siteId != null
   if (shouldRecompute) {
     await recomputeVisitCreditsForSite(null, {
       companyId: t.companyId,
       adminId: t.adminId,
       siteId: t.siteId,
-      instrumentId: t.instrumentId,
     })
   }
 

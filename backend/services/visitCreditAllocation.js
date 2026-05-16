@@ -3,29 +3,29 @@ import SiteVisit from '../models/SiteVisit.js'
 import Transaction from '../models/Transaction.js'
 import { owedAmount, effectivePaidAmount, decAmount } from '../utils/visitPaymentMath.js'
 
+function toObjectId(v) {
+  return v instanceof mongoose.Types.ObjectId ? v : new mongoose.Types.ObjectId(String(v))
+}
+
 /**
- * Apply a credit (FIFO by visitDate) to pending/partial visits on the site.
+ * Apply a credit (FIFO by visitDate) to visits on the site that still owe money.
  * Updates paymentStatus and paidAmount. Unallocated surplus is left on the Transaction only.
  */
-export async function applyCreditToSiteVisits(session, { companyId, adminId, siteId, instrumentId, creditAmount }) {
-  if (!siteId || !instrumentId) return
+export async function applyCreditToSiteVisits(session, { companyId, adminId, siteId, creditAmount }) {
+  if (!siteId) return
   const amount = Number(creditAmount)
   if (!Number.isFinite(amount) || amount <= 0) return
 
-  const instId =
-    instrumentId instanceof mongoose.Types.ObjectId ? instrumentId : new mongoose.Types.ObjectId(String(instrumentId))
-  const siteObjectId = siteId instanceof mongoose.Types.ObjectId ? siteId : new mongoose.Types.ObjectId(String(siteId))
-  const adminObjectId = adminId instanceof mongoose.Types.ObjectId ? adminId : new mongoose.Types.ObjectId(String(adminId))
-  const companyObjectId =
-    companyId instanceof mongoose.Types.ObjectId ? companyId : new mongoose.Types.ObjectId(String(companyId))
+  const siteObjectId = toObjectId(siteId)
+  const adminObjectId = toObjectId(adminId)
+  const companyObjectId = toObjectId(companyId)
 
   const visits = await (() => {
     let q = SiteVisit.find({
       companyId: companyObjectId,
       adminId: adminObjectId,
       siteId: siteObjectId,
-      instrumentId: instId,
-      paymentStatus: { $nin: ['paid', 'waived'] },
+      paymentStatus: { $ne: 'waived' },
     }).sort({ visitDate: 1 })
     if (session != null) q = q.session(session)
     return q.lean()
@@ -73,21 +73,17 @@ export async function applyCreditToSiteVisits(session, { companyId, adminId, sit
  * site (ledger-driven rows only), then replay all remaining credit transactions in date order so pending
  * matches FIFO allocation — same rule as {@link applyCreditToSiteVisits}.
  */
-export async function recomputeVisitCreditsForSite(session, { companyId, adminId, siteId, instrumentId }) {
-  if (!siteId || !instrumentId) return
+export async function recomputeVisitCreditsForSite(session, { companyId, adminId, siteId }) {
+  if (!siteId) return
 
-  const instId =
-    instrumentId instanceof mongoose.Types.ObjectId ? instrumentId : new mongoose.Types.ObjectId(String(instrumentId))
-  const siteObjectId = siteId instanceof mongoose.Types.ObjectId ? siteId : new mongoose.Types.ObjectId(String(siteId))
-  const adminObjectId = adminId instanceof mongoose.Types.ObjectId ? adminId : new mongoose.Types.ObjectId(String(adminId))
-  const companyObjectId =
-    companyId instanceof mongoose.Types.ObjectId ? companyId : new mongoose.Types.ObjectId(String(companyId))
+  const siteObjectId = toObjectId(siteId)
+  const adminObjectId = toObjectId(adminId)
+  const companyObjectId = toObjectId(companyId)
 
   const clearFilter = {
     companyId: companyObjectId,
     adminId: adminObjectId,
     siteId: siteObjectId,
-    instrumentId: instId,
     paymentStatus: { $ne: 'waived' },
     paidAmount: { $exists: true, $ne: null },
   }
@@ -98,7 +94,6 @@ export async function recomputeVisitCreditsForSite(session, { companyId, adminId
     companyId: companyObjectId,
     adminId: adminObjectId,
     siteId: siteObjectId,
-    instrumentId: instId,
     type: 'credit',
   }).sort({ occurredOn: 1, _id: 1 })
   if (session != null) q = q.session(session)
@@ -110,8 +105,26 @@ export async function recomputeVisitCreditsForSite(session, { companyId, adminId
       companyId: companyObjectId,
       adminId: adminObjectId,
       siteId: siteObjectId,
-      instrumentId: instId,
       creditAmount,
+    })
+  }
+}
+
+/** Replay FIFO credit allocation for every site that has ledger credits under this admin. */
+export async function reconcileSiteCreditsForAdmin(companyId, adminId) {
+  const companyObjectId = toObjectId(companyId)
+  const adminObjectId = toObjectId(adminId)
+  const siteIds = await Transaction.distinct('siteId', {
+    companyId: companyObjectId,
+    adminId: adminObjectId,
+    type: 'credit',
+    siteId: { $ne: null },
+  })
+  for (const siteId of siteIds) {
+    await recomputeVisitCreditsForSite(null, {
+      companyId: companyObjectId,
+      adminId: adminObjectId,
+      siteId,
     })
   }
 }

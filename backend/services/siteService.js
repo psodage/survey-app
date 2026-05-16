@@ -21,7 +21,7 @@ function statusLabel(s) {
   return 'Completed'
 }
 
-async function sitePending(siteId, visitDateRange) {
+async function siteFinancials(siteId, visitDateRange) {
   const q = { siteId, ...(visitDateRange ? { visitDate: visitDateRange } : {}) }
   const visits = await SiteVisit.find(q).select('amount paymentStatus paidAmount').lean()
   let total = 0
@@ -31,7 +31,7 @@ async function sitePending(siteId, visitDateRange) {
     total += a
     received += effectivePaidAmount(v)
   }
-  return Math.max(0, total - received)
+  return { revenue: total, received, pending: Math.max(0, total - received) }
 }
 
 async function lastVisitLabelForSite(siteId, visitDateRange, fallbackLastVisitAt) {
@@ -65,7 +65,7 @@ export async function listSitesForClient(req, clientId) {
     .lean()
   const out = []
   for (const s of sites) {
-    const pending = await sitePending(s._id, visitYearRange)
+    const { received, pending } = await siteFinancials(s._id, visitYearRange)
     const lastVisit = await lastVisitLabelForSite(s._id, visitYearRange, s.lastVisitAt)
     out.push({
       id: s._id.toString(),
@@ -73,6 +73,7 @@ export async function listSitesForClient(req, clientId) {
       location: s.locationLabel || s.address || '—',
       lastVisit,
       status: statusLabel(s.status),
+      received: formatInr(received),
       pending: formatInr(pending),
     })
   }
@@ -97,14 +98,14 @@ export async function createSite(req, { clientId, name, locationLabel }) {
     locationLabel: locationLabel?.trim(),
     status: 'active',
   })
-  const pending = 0
   return {
     id: site._id.toString(),
     name: site.name,
     location: site.locationLabel || '—',
     lastVisit: '—',
     status: 'Active',
-    pending: formatInr(pending),
+    received: formatInr(0),
+    pending: formatInr(0),
   }
 }
 
@@ -125,7 +126,7 @@ export async function listAllSites(req) {
     .lean()
   const out = []
   for (const s of sites) {
-    const pending = await sitePending(s._id, visitYearRange)
+    const { received, pending } = await siteFinancials(s._id, visitYearRange)
     const lastVisit = await lastVisitLabelForSite(s._id, visitYearRange, s.lastVisitAt)
     const inst = s.instrumentId && typeof s.instrumentId === 'object' ? s.instrumentId : null
     out.push({
@@ -135,6 +136,7 @@ export async function listAllSites(req) {
       location: s.locationLabel || s.address || '—',
       lastVisit,
       status: statusLabel(s.status),
+      received: formatInr(received),
       pending: formatInr(pending),
       instrumentName: inst?.name ?? '',
       instrumentCategory: inst?.category ?? '',

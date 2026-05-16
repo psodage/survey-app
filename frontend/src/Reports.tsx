@@ -27,7 +27,7 @@ import { AppSelect } from './components/AppSelect'
 import { layoutBrandLogo } from './brandLogo'
 import { HeaderYearSelect } from './components/HeaderYearSelect'
 import { PageRefreshButton } from './components/PageRefreshButton'
-import { useRefresh } from './context/RefreshContext'
+import { usePageRefresh } from './context/RefreshContext'
 import { useSelectedYear } from './context/SelectedYearContext'
 import { toast } from 'sonner'
 import http from './api/http'
@@ -74,7 +74,6 @@ export default function Reports({ onNavigate }: ReportsProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const { pathname } = useLocation()
   const { selectedYear } = useSelectedYear()
-  const { refreshTick } = useRefresh()
 
   const [reportType, setReportType] = useState<string>('Site-wise')
   const [clientFilter, setClientFilter] = useState('')
@@ -115,10 +114,7 @@ export default function Reports({ onNavigate }: ReportsProps) {
     }
   }, [reportType, clientFilter, siteFilter, fromDate, toDate, machineType, searchQuery, statusFilter])
 
-  useEffect(() => {
-    if (refreshTick === 0) return
-    void loadReportRows()
-  }, [refreshTick, loadReportRows])
+  usePageRefresh(() => loadReportRows(), [loadReportRows])
 
   const navItems: NavItem[] = [
     { label: 'Dashboard', icon: <LayoutGrid size={16} /> },

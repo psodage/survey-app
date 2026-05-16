@@ -11,7 +11,11 @@ export function parseVisitListAmount(amount: string) {
 export function visitOwedAmount(record: VisitAmountRecord) {
   const pending = record.pendingAmount?.trim()
   if (pending) return parseVisitListAmount(pending)
-  return parseVisitListAmount(record.amount)
+  const bill = parseVisitListAmount(record.amount)
+  if (record.paymentStatus === 'Paid') return 0
+  if (record.paymentStatus === 'Waived') return 0
+  if (record.paymentStatus === 'Partial') return bill * 0.5
+  return bill
 }
 
 export function computeVisitListStats(records: VisitAmountRecord[]) {
@@ -21,12 +25,10 @@ export function computeVisitListStats(records: VisitAmountRecord[]) {
 
   for (const r of records) {
     const bill = parseVisitListAmount(r.amount)
+    const owed = visitOwedAmount(r)
     totalRevenue += bill
-    if (r.paymentStatus === 'Paid') {
-      receivedAmount += bill
-    } else if (r.paymentStatus !== 'Waived') {
-      pendingAmount += visitOwedAmount(r)
-    }
+    receivedAmount += Math.max(0, bill - owed)
+    pendingAmount += owed
   }
 
   return {

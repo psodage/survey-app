@@ -19,7 +19,7 @@ import {
   X,
   type LucideIcon,
 } from 'lucide-react'
-import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { Fragment, useCallback, useMemo, useState, type ReactNode } from 'react'
 import { useLocation as useRouterLocation } from 'react-router-dom'
 import { useSelectedYear } from './context/SelectedYearContext'
 import { AccountManagerSidebarBlock } from './AccountManagerSidebarBlock'
@@ -43,11 +43,12 @@ import { toast } from 'sonner'
 import { layoutBrandLogo } from './brandLogo'
 import { HeaderYearSelect } from './components/HeaderYearSelect'
 import { PageRefreshButton } from './components/PageRefreshButton'
-import { useRefresh } from './context/RefreshContext'
+import { usePageRefresh } from './context/RefreshContext'
 import { signOut } from './signOut'
 import http from './api/http'
 import { useAuth } from './context/AuthContext'
 import { runExport } from './utils/runExport'
+import { computeVisitListStats } from './utils/visitListStats'
 
 type NavItem = {
   label: string
@@ -97,7 +98,6 @@ const toolbarSelectClass =
 export function SiteDetails({ onNavigate }: SiteDetailsProps) {
   const { token, user, company, companyAdmins } = useAuth()
   const { selectedYear } = useSelectedYear()
-  const { refreshTick } = useRefresh()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [visitsSearchQuery, setVisitsSearchQuery] = useState('')
   const [visitMachineFilter, setVisitMachineFilter] = useState('all')
@@ -118,6 +118,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
   const lastVisit = urlParams.get('lastVisit') ?? '-'
   const status = urlParams.get('status') ?? 'Active'
   const pending = urlParams.get('pending') ?? '₹0'
+  const receivedParam = urlParams.get('received') ?? '₹0'
   const visitId = urlParams.get('visitId') ?? '-'
   const visitDate = urlParams.get('date') ?? '-'
   const machine = urlParams.get('machine') ?? '-'
@@ -140,13 +141,21 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
   const [visitPendingForInvoice, setVisitPendingForInvoice] = useState<string | null>(null)
   const [visitDetailFromApi, setVisitDetailFromApi] = useState<{
     visitNo?: number
+    date?: string
+    machine?: string
+    amount?: string
+    pendingAmount?: string
+    paymentMode?: string
+    paymentStatus?: string
+    notes?: string
+    work?: string
     siteAddress?: string
     sitePhone?: string
     engineerName?: string
     contactPerson?: string
   } | null>(null)
 
-  useEffect(() => {
+  const loadVisitDetail = useCallback(async () => {
     if (!isVisitMode) {
       setVisitPhotoUrls([])
       setVisitBillingForInvoice({ billingLines: [], billingOtherCharges: 0 })
@@ -155,12 +164,19 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
       return
     }
     if (!visitMongoId || !token) return
-    let cancelled = false
-    void http
-      .get<{
+    try {
+      const res = await http.get<{
         ok: boolean
         visit?: {
           visitNo?: number
+          date?: string
+          machine?: string
+          amount?: string
+          pendingAmount?: string
+          paymentMode?: string
+          paymentStatus?: string
+          notes?: string
+          work?: string
           siteAddress?: string
           sitePhone?: string
           engineerName?: string
@@ -168,38 +184,42 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
           photoUrls?: string[]
           billingLines?: InvoicePdfBillingLine[]
           billingOtherCharges?: number
-          pendingAmount?: string
         }
-      }>(`/api/visits/${visitMongoId}`)
-      .then((res) => {
-        if (cancelled || !res.data?.ok || !res.data.visit) return
-        const v = res.data.visit
-        setVisitPhotoUrls(v.photoUrls ?? [])
-        setVisitBillingForInvoice({
-          billingLines: v.billingLines ?? [],
-          billingOtherCharges: Number(v.billingOtherCharges) || 0,
-        })
-        setVisitPendingForInvoice(v.pendingAmount ?? null)
-        setVisitDetailFromApi({
-          visitNo: v.visitNo,
-          siteAddress: v.siteAddress,
-          sitePhone: v.sitePhone,
-          engineerName: v.engineerName,
-          contactPerson: v.contactPerson,
-        })
+      }>(`/api/visits/${visitMongoId}`, { params: { _t: Date.now() } })
+      if (!res.data?.ok || !res.data.visit) return
+      const v = res.data.visit
+      setVisitPhotoUrls(v.photoUrls ?? [])
+      setVisitBillingForInvoice({
+        billingLines: v.billingLines ?? [],
+        billingOtherCharges: Number(v.billingOtherCharges) || 0,
       })
-      .catch(() => {
-        if (!cancelled) {
-          setVisitPhotoUrls([])
-          setVisitBillingForInvoice({ billingLines: [], billingOtherCharges: 0 })
-          setVisitPendingForInvoice(null)
-          setVisitDetailFromApi(null)
-        }
+      setVisitPendingForInvoice(v.pendingAmount ?? null)
+      setVisitDetailFromApi({
+        visitNo: v.visitNo,
+        date: v.date,
+        machine: v.machine,
+        amount: v.amount,
+        pendingAmount: v.pendingAmount,
+        paymentMode: v.paymentMode,
+        paymentStatus: v.paymentStatus,
+        notes: v.notes,
+        work: v.work,
+        siteAddress: v.siteAddress,
+        sitePhone: v.sitePhone,
+        engineerName: v.engineerName,
+        contactPerson: v.contactPerson,
       })
-    return () => {
-      cancelled = true
+    } catch {
+      setVisitPhotoUrls([])
+      setVisitBillingForInvoice({ billingLines: [], billingOtherCharges: 0 })
+      setVisitPendingForInvoice(null)
+      setVisitDetailFromApi(null)
     }
-  }, [isVisitMode, visitMongoId, token, refreshTick])
+  }, [isVisitMode, visitMongoId, token])
+
+  usePageRefresh(loadVisitDetail, [loadVisitDetail], {
+    enabled: isVisitMode && Boolean(visitMongoId && token),
+  })
 
   const effectiveLocation = useMemo(() => {
     const fromApi = visitDetailFromApi?.siteAddress?.trim()
@@ -244,86 +264,100 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
     return effectiveEngineerName || 'Site Coordinator'
   }, [visitDetailFromApi?.contactPerson, contactPerson, effectiveEngineerName])
 
-  useEffect(() => {
-    if (isVisitMode) return
-    if (!token) {
+  const effectiveVisitDate = visitDetailFromApi?.date?.trim() || visitDate
+  const effectiveMachine = visitDetailFromApi?.machine?.trim() || machine
+  const effectiveAmount = visitDetailFromApi?.amount?.trim() || amount
+  const effectivePaymentMode = visitDetailFromApi?.paymentMode?.trim() || paymentMode
+  const effectivePaymentStatus = visitDetailFromApi?.paymentStatus?.trim() || paymentStatus
+  const effectiveNotes = visitDetailFromApi?.notes?.trim() || notes
+  const effectiveWork = visitDetailFromApi?.work?.trim() || work
+
+  const loadSiteVisits = useCallback(async () => {
+    if (isVisitMode || !token) {
       setRelatedVisitRecords([])
       setVisitsFetchState('idle')
       return
     }
-    let cancelled = false
     setVisitsFetchState('loading')
-    ;(async () => {
-      try {
-        const params: { year: string; siteId?: string } = { year: selectedYear }
-        if (siteId) params.siteId = siteId
-        const res = await http.get<{
-          ok: boolean
-          visits: Array<{
-            id: string
-            visitMongoId?: string
-            visitNo?: number
-            client: string
-            site: string
-            date: string
-            machine: string
-            work: string
-            amount: string
-            pendingAmount?: string
-            paymentMode: string
-            paymentStatus: string
-            notes: string
-            siteAddress?: string
-            sitePhone?: string
-            engineerName?: string
-            photoUrls?: string[]
-            billingLines?: InvoicePdfBillingLine[]
-            billingOtherCharges?: number
-          }>
-        }>('/api/visits', { params })
-        if (cancelled) return
-        if (!res.data?.ok) {
-          setRelatedVisitRecords([])
-          setVisitsFetchState('error')
-          return
-        }
-        let rows: SiteVisitRecord[] = (res.data.visits ?? []).map((v) => ({
-          id: v.id,
-          visitMongoId: v.visitMongoId,
-          visitNo: v.visitNo,
-          client: v.client,
-          site: v.site,
-          date: v.date,
-          machine: v.machine,
-          amount: v.amount,
-          pendingAmount: v.pendingAmount,
-          paymentMode: v.paymentMode,
-          paymentStatus: v.paymentStatus,
-          notes: v.notes,
-          work: v.work,
-          siteAddress: v.siteAddress,
-          sitePhone: v.sitePhone,
-          engineerName: v.engineerName,
-          photoUrls: v.photoUrls,
-          billingLines: v.billingLines,
-          billingOtherCharges: v.billingOtherCharges,
-        }))
-        if (!siteId && client !== 'Unknown Client' && name !== 'Unknown Site') {
-          rows = rows.filter((v) => v.client === client && v.site === name)
-        }
-        setRelatedVisitRecords(rows)
-        setVisitsFetchState('ok')
-      } catch {
-        if (!cancelled) {
-          setRelatedVisitRecords([])
-          setVisitsFetchState('error')
-        }
+    try {
+      const params: { year: string; siteId?: string; _t?: number } = { year: selectedYear, _t: Date.now() }
+      if (siteId) params.siteId = siteId
+      const res = await http.get<{
+        ok: boolean
+        visits: Array<{
+          id: string
+          visitMongoId?: string
+          visitNo?: number
+          client: string
+          site: string
+          date: string
+          machine: string
+          work: string
+          amount: string
+          pendingAmount?: string
+          paymentMode: string
+          paymentStatus: string
+          notes: string
+          siteAddress?: string
+          sitePhone?: string
+          engineerName?: string
+          photoUrls?: string[]
+          billingLines?: InvoicePdfBillingLine[]
+          billingOtherCharges?: number
+        }>
+      }>('/api/visits', { params })
+      if (!res.data?.ok) {
+        setRelatedVisitRecords([])
+        setVisitsFetchState('error')
+        return
       }
-    })()
-    return () => {
-      cancelled = true
+      let rows: SiteVisitRecord[] = (res.data.visits ?? []).map((v) => ({
+        id: v.id,
+        visitMongoId: v.visitMongoId,
+        visitNo: v.visitNo,
+        client: v.client,
+        site: v.site,
+        date: v.date,
+        machine: v.machine,
+        amount: v.amount,
+        pendingAmount: v.pendingAmount,
+        paymentMode: v.paymentMode,
+        paymentStatus: v.paymentStatus,
+        notes: v.notes,
+        work: v.work,
+        siteAddress: v.siteAddress,
+        sitePhone: v.sitePhone,
+        engineerName: v.engineerName,
+        photoUrls: v.photoUrls,
+        billingLines: v.billingLines,
+        billingOtherCharges: v.billingOtherCharges,
+      }))
+      if (!siteId && client !== 'Unknown Client' && name !== 'Unknown Site') {
+        rows = rows.filter((v) => v.client === client && v.site === name)
+      }
+      setRelatedVisitRecords(rows)
+      setVisitsFetchState('ok')
+    } catch {
+      setRelatedVisitRecords([])
+      setVisitsFetchState('error')
     }
-  }, [isVisitMode, token, selectedYear, siteId, client, name, refreshTick])
+  }, [isVisitMode, token, selectedYear, siteId, client, name])
+
+  usePageRefresh(loadSiteVisits, [loadSiteVisits], { enabled: !isVisitMode && Boolean(token) })
+
+  const siteVisitStats = useMemo(() => computeVisitListStats(relatedVisitRecords), [relatedVisitRecords])
+
+  const formatRupee = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`
+
+  const sitePendingDisplay = useMemo(() => {
+    if (relatedVisitRecords.length > 0) return formatRupee(siteVisitStats.pendingAmount)
+    return pending
+  }, [relatedVisitRecords.length, siteVisitStats.pendingAmount, pending])
+
+  const siteReceivedDisplay = useMemo(() => {
+    if (relatedVisitRecords.length > 0) return formatRupee(siteVisitStats.receivedAmount)
+    return receivedParam
+  }, [relatedVisitRecords.length, siteVisitStats.receivedAmount, receivedParam])
 
   const parseVisitAmount = (amount: string) => Number(amount.replace(/[^\d.]/g, '')) || 0
 
@@ -440,32 +474,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
   }
 
   const reloadSiteVisits = () => {
-    if (!token || isVisitMode) return
-    setVisitsFetchState('loading')
-    void (async () => {
-      try {
-        const params: { year: string; siteId?: string } = { year: selectedYear }
-        if (siteId) params.siteId = siteId
-        const res = await http.get<{
-          ok: boolean
-          visits: SiteVisitRecord[]
-        }>('/api/visits', { params })
-        if (!res.data?.ok) {
-          setRelatedVisitRecords([])
-          setVisitsFetchState('error')
-          return
-        }
-        let rows = res.data.visits ?? []
-        if (!siteId && client !== 'Unknown Client' && name !== 'Unknown Site') {
-          rows = rows.filter((v) => v.client === client && v.site === name)
-        }
-        setRelatedVisitRecords(rows)
-        setVisitsFetchState('ok')
-      } catch {
-        setRelatedVisitRecords([])
-        setVisitsFetchState('error')
-      }
-    })()
+    void loadSiteVisits()
   }
 
   const handleConfirmDeleteVisit = async () => {
@@ -690,17 +699,27 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
         },
         {
           title: 'Visit Date',
-          value: visitDate,
+          value: effectiveVisitDate,
           icon: Calendar,
           tone: 'bg-amber-100 text-amber-700',
           cardTint: 'bg-amber-50/90',
         },
         {
           title: 'Amount',
-          value: `Rs ${amount}`,
+          value: `Rs ${effectiveAmount}`,
           icon: CircleDollarSign,
           tone: 'bg-emerald-100 text-emerald-700',
           cardTint: 'bg-emerald-50/90',
+        },
+        {
+          title: 'Payment',
+          value: effectivePaymentStatus,
+          icon: CircleDollarSign,
+          tone:
+            effectivePaymentStatus === 'Paid'
+              ? 'bg-emerald-100 text-emerald-700'
+              : 'bg-rose-100 text-rose-700',
+          cardTint: effectivePaymentStatus === 'Paid' ? 'bg-emerald-50/90' : 'bg-rose-50/90',
         },
       ]
     : [
@@ -726,8 +745,15 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
       cardTint: 'bg-amber-50/90',
     },
     {
-      title: 'Pending Amount',
-      value: pending,
+      title: 'Paid',
+      value: siteReceivedDisplay,
+      icon: CircleDollarSign,
+      tone: 'bg-emerald-100 text-emerald-700',
+      cardTint: 'bg-emerald-50/90',
+    },
+    {
+      title: 'Pending',
+      value: sitePendingDisplay,
       icon: CircleDollarSign,
       tone: 'bg-rose-100 text-rose-700',
       cardTint: 'bg-rose-50/90',
@@ -955,7 +981,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                   </div>
                   {isVisitMode ? (
                     <p className="text-[11px] font-semibold leading-snug text-neutral-800 md:text-sm">
-                      <span className="font-extrabold text-neutral-500">Payment status:</span> {paymentStatus}
+                      <span className="font-extrabold text-neutral-500">Payment status:</span> {effectivePaymentStatus}
                     </p>
                   ) : visitPaymentStatusSummary ? (
                     <p className="text-[11px] font-semibold leading-snug text-neutral-800 md:text-sm">
@@ -1046,19 +1072,19 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                 <CardShell title="Visit Details" className="overflow-hidden" bodyClassName="p-0">
                   <div className="grid grid-cols-1 gap-3 p-4 text-sm font-semibold text-neutral-700 sm:grid-cols-2 sm:px-6 sm:py-5">
                     <p>
-                      <span className="text-neutral-500">Machine:</span> {machine}
+                      <span className="text-neutral-500">Machine:</span> {effectiveMachine}
                     </p>
                     <p>
-                      <span className="text-neutral-500">Payment Mode:</span> {paymentMode}
+                      <span className="text-neutral-500">Payment Mode:</span> {effectivePaymentMode}
                     </p>
                     <p>
-                      <span className="text-neutral-500">Payment Status:</span> {paymentStatus}
+                      <span className="text-neutral-500">Payment Status:</span> {effectivePaymentStatus}
                     </p>
                     <p className="sm:col-span-2">
-                      <span className="text-neutral-500">Notes:</span> {notes}
+                      <span className="text-neutral-500">Notes:</span> {effectiveNotes}
                     </p>
                     <p className="sm:col-span-2">
-                      <span className="text-neutral-500">Work Details:</span> {work}
+                      <span className="text-neutral-500">Work Details:</span> {effectiveWork}
                     </p>
                   </div>
                   <div className="flex flex-col gap-2 border-t border-neutral-200 px-4 py-3 pb-6 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3 sm:px-6 sm:py-4 md:pb-4">
@@ -1068,13 +1094,13 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                         handleExportVisitPdf({
                           visitId,
                           visitNo: effectiveVisitNo,
-                          date: visitDate,
-                          machine,
-                          amount,
-                          paymentMode,
-                          paymentStatus,
-                          notes,
-                          work,
+                          date: effectiveVisitDate,
+                          machine: effectiveMachine,
+                          amount: effectiveAmount,
+                          paymentMode: effectivePaymentMode,
+                          paymentStatus: effectivePaymentStatus,
+                          notes: effectiveNotes,
+                          work: effectiveWork,
                           siteAddress: effectiveLocation,
                           sitePhone: effectivePhone,
                           engineerName: effectiveEngineerName,
@@ -1094,13 +1120,13 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                             visitMongoId,
                             client,
                             site: name,
-                            date: visitDate,
-                            machine,
-                            amount,
-                            paymentMode,
-                            paymentStatus,
-                            notes,
-                            work,
+                            date: effectiveVisitDate,
+                            machine: effectiveMachine,
+                            amount: effectiveAmount,
+                            paymentMode: effectivePaymentMode,
+                            paymentStatus: effectivePaymentStatus,
+                            notes: effectiveNotes,
+                            work: effectiveWork,
                           })
                         }
                       }}
@@ -1118,13 +1144,13 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                         const pendingForVisit =
                           visitPendingForInvoice != null && visitPendingForInvoice.trim() !== ''
                             ? parseVisitAmount(visitPendingForInvoice)
-                            : parseVisitAmount(amount)
+                            : parseVisitAmount(effectiveAmount)
                         setExportBusy(true)
                         void runExport('invoice', () =>
                           exportInvoicePdf({
                             client,
                             site: `${siteAddressLine} (Visit ${visitId})`,
-                            workType: machine,
+                            workType: effectiveMachine,
                             totalPoints: 1,
                             ratePerPoint: pendingForVisit > 0 ? pendingForVisit : 0,
                             baseCharge: 0,
@@ -1132,7 +1158,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                             discount: 0,
                             invoiceDate: new Date().toLocaleDateString('en-GB'),
                             visitId: visitId !== '-' ? visitId : undefined,
-                            paymentStatus: paymentStatus !== '-' ? paymentStatus : undefined,
+                            paymentStatus: effectivePaymentStatus !== '-' ? effectivePaymentStatus : undefined,
                             pendingAmount: pendingForVisit,
                             ...(visitBillingForInvoice.billingLines.length
                               ? {

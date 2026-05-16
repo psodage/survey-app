@@ -41,7 +41,7 @@ import { isAxiosError } from 'axios'
 import { layoutBrandLogo } from './brandLogo'
 import { HeaderYearSelect } from './components/HeaderYearSelect'
 import { PageRefreshButton } from './components/PageRefreshButton'
-import { useRefresh } from './context/RefreshContext'
+import { usePageRefresh } from './context/RefreshContext'
 import { getHeaderDateLabel } from './headerDateLabel'
 import { toast } from 'sonner'
 import http from './api/http'
@@ -132,7 +132,6 @@ function defaultBillingLines(): BillingLineDraft[] {
 export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
   const { token, user } = useAuth()
   const { selectedYear } = useSelectedYear()
-  const { refreshTick } = useRefresh()
   const { pathname, search } = useLocation()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [clientOptions, setClientOptions] = useState<string[]>([])
@@ -207,11 +206,9 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
     } catch {
       toast.error('Could not load visits data')
     }
-  }, [token, selectedYear, refreshTick])
+  }, [token, selectedYear])
 
-  useEffect(() => {
-    void loadData()
-  }, [loadData, refreshTick])
+  usePageRefresh(loadData, [loadData])
 
   useEffect(() => {
     const s = apiSites.find((x) => x.clientName === client && x.name === site)

@@ -12,6 +12,7 @@ import {
 } from '../utils/scope.js'
 import { decAmount, effectivePaidAmount } from '../utils/visitPaymentMath.js'
 import { visitDateRangeForYear } from '../utils/yearQuery.js'
+import { reconcileSiteCreditsForAdmin } from './visitCreditAllocation.js'
 
 /**
  * Admins may read their own ledger or another admin's on the same active instrument (header).
@@ -70,6 +71,8 @@ export async function getAccountManagerBySlug(req, slug) {
  * Financial summary for one account manager ledger (scoped by adminId / accountManagerId, not instrument).
  */
 export async function getLedgerSummaryForManager(req, managerDoc, yearRaw) {
+  await reconcileSiteCreditsForAdmin(req.user.companyId, managerDoc.adminId)
+
   const visitYearRange = visitDateRangeForYear(yearRaw)
   const txMatch = {
     companyId: req.user.companyId,
@@ -140,6 +143,8 @@ export async function getGlobalPendingTotal(req, yearRaw) {
 }
 
 export async function listAccountRowsForManager(req, managerDoc, yearRaw) {
+  await reconcileSiteCreditsForAdmin(req.user.companyId, managerDoc.adminId)
+
   const visitYearRange = visitDateRangeForYear(yearRaw)
   const clients = await Client.find({
     companyId: req.user.companyId,
@@ -167,8 +172,27 @@ export async function listAccountRowsForManager(req, managerDoc, yearRaw) {
     row.received += effectivePaidAmount(v)
   }
 
+  const txMatch = {
+    companyId: req.user.companyId,
+    accountManagerId: managerDoc._id,
+    clientId: { $in: clientIds },
+    ...(visitYearRange ? { occurredOn: visitYearRange } : {}),
+  }
+  const txs = await Transaction.find(txMatch).select('clientId type amount').lean()
+  const txByClient = new Map()
+  for (const t of txs) {
+    const id = t.clientId?.toString()
+    if (!id) continue
+    if (!txByClient.has(id)) txByClient.set(id, { debit: 0, credit: 0 })
+    const row = txByClient.get(id)
+    const a = decAmount(t.amount)
+    if (t.type === 'debit') row.debit += a
+    else row.credit += a
+  }
+
   return clients.map((c) => {
     const agg = byClient.get(c._id.toString()) ?? { revenue: 0, received: 0 }
+    const txAgg = txByClient.get(c._id.toString()) ?? { debit: 0, credit: 0 }
     const pending = Math.max(0, agg.revenue - agg.received)
     return {
       name: c.name,
@@ -176,8 +200,8 @@ export async function listAccountRowsForManager(req, managerDoc, yearRaw) {
       totalRevenue: formatInr(agg.revenue),
       received: formatInr(agg.received),
       pending: formatInr(pending),
-      debit: formatInr(0),
-      credit: formatInr(agg.received),
+      debit: formatInr(txAgg.debit),
+      credit: formatInr(txAgg.credit),
     }
   })
 }
