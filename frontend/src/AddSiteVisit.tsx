@@ -87,6 +87,7 @@ type VisitRecord = {
   id: string
   _id?: string
   visitMongoId?: string
+  visitNo?: number
   client: string
   site: string
   date: string
@@ -97,6 +98,8 @@ type VisitRecord = {
   paymentMode: string
   paymentStatus: string
   notes: string
+  siteAddress?: string
+  sitePhone?: string
   photoUrls?: string[]
 }
 
@@ -104,6 +107,7 @@ type ApiSite = {
   id: string
   clientName: string
   name: string
+  location?: string
   instrumentName?: string
   instrumentCategory?: string
 }
@@ -147,6 +151,8 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
   const [visitDate] = useState(() => getHeaderDateLabel())
   const [machine, setMachine] = useState('Total Station')
   const [engineerName, setEngineerName] = useState('')
+  const [siteAddress, setSiteAddress] = useState('')
+  const [sitePhone, setSitePhone] = useState('')
   const [billingLines, setBillingLines] = useState<BillingLineDraft[]>(() => defaultBillingLines())
   const [billingOtherCharges, setBillingOtherCharges] = useState('0')
   const [workDetails, setWorkDetails] = useState(
@@ -172,6 +178,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
             id: string
             clientName: string
             name: string
+            location?: string
             instrumentName?: string
             instrumentCategory?: string
           }>
@@ -186,7 +193,12 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
         for (const s of sRes.data.sites) {
           if (!grouped[s.clientName]) grouped[s.clientName] = []
           grouped[s.clientName].push(s.name)
-          flat.push({ id: s.id, clientName: s.clientName, name: s.name })
+          flat.push({
+            id: s.id,
+            clientName: s.clientName,
+            name: s.name,
+            location: s.location && s.location !== '—' ? s.location : undefined,
+          })
         }
       }
       setSitesByClient(grouped)
@@ -204,6 +216,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
   useEffect(() => {
     const s = apiSites.find((x) => x.clientName === client && x.name === site)
     setMachine(machineLabelFromSite(s))
+    if (s?.location) setSiteAddress(s.location)
   }, [client, site, apiSites])
 
   useEffect(() => {
@@ -275,7 +288,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
     setVisitPaymentStatusFilter('all')
   }
 
-  const visitListStats = useMemo(() => computeVisitListStats(filteredVisitRecords), [filteredVisitRecords])
+  const visitListStats = useMemo(() => computeVisitListStats(visitRecords), [visitRecords])
 
   const visitListFilterNote = useMemo(() => {
     if (!hasActiveVisitListFilters) return undefined
@@ -360,6 +373,9 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
       notes: record.notes,
       work: record.work,
     })
+    if (record.visitNo != null) params.set('visitNo', String(record.visitNo))
+    if (record.siteAddress?.trim()) params.set('location', record.siteAddress.trim())
+    if (record.sitePhone?.trim()) params.set('phone', record.sitePhone.trim())
     const mid = record.visitMongoId ?? record._id
     if (mid) params.set('visitMongoId', mid)
     return `/site-details?${params.toString()}`
@@ -592,10 +608,8 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                 <section className="grid grid-cols-2 gap-1.5 md:gap-4 xl:grid-cols-4">
                   <StatCard
                     title="Total Visits"
-                    value={String(filteredVisitRecords.length)}
-                    subtitle={
-                      hasActiveVisitListFilters ? `${selectedYear} · ${filteredVisitRecords.length} of ${visitRecords.length}` : selectedYear
-                    }
+                    value={String(visitListStats.visitCount)}
+                    subtitle={selectedYear}
                     icon={<ClipboardList className="text-sky-600" />}
                     toneClass="bg-sky-100"
                     mobileCardTint="bg-sky-50/90"
@@ -603,11 +617,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                   <StatCard
                     title="Visit Revenue"
                     value={`₹ ${visitListStats.totalRevenue.toLocaleString('en-IN')}`}
-                    subtitle={
-                      hasActiveVisitListFilters
-                        ? `Filtered · ${selectedYear}`
-                        : selectedYear
-                    }
+                    subtitle={selectedYear}
                     icon={<Briefcase className="text-emerald-600" />}
                     toneClass="bg-emerald-100"
                     mobileCardTint="bg-emerald-50/90"
@@ -615,11 +625,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                   <StatCard
                     title="Received Amount"
                     value={`₹ ${visitListStats.receivedAmount.toLocaleString('en-IN')}`}
-                    subtitle={
-                      hasActiveVisitListFilters
-                        ? `Filtered · ${selectedYear}`
-                        : selectedYear
-                    }
+                    subtitle={selectedYear}
                     icon={<Calendar className="text-violet-600" />}
                     toneClass="bg-violet-100"
                     mobileCardTint="bg-violet-50/90"
@@ -627,7 +633,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                   <StatCard
                     title="Pending Visit Amount"
                     value={`₹ ${visitListStats.pendingAmount.toLocaleString('en-IN')}`}
-                    subtitle={hasActiveVisitListFilters ? 'Filtered outstanding' : 'Outstanding'}
+                    subtitle="Outstanding"
                     icon={<MapPin className="text-rose-600" />}
                     toneClass="bg-rose-100"
                     mobileCardTint="bg-rose-50/90"
@@ -908,6 +914,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                     const validationError = validateSiteVisitForm({
                       client,
                       site,
+                      siteAddress,
                       machine,
                       billingLines,
                       billingOtherCharges,
@@ -928,6 +935,10 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                     try {
                       const visitPayload = {
                         siteId: match.id,
+                        siteAddress: siteAddress.trim(),
+                        sitePhone: sitePhone.trim(),
+                        engineerName: engineerName.trim(),
+                        contactPerson: engineerName.trim(),
                         workDescription: workDetails,
                         machineLabel: machine,
                         billingLines: billingLines.map((line) => {
@@ -953,7 +964,15 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
 
                       type VisitCreateRes = {
                         ok: boolean
-                        visit?: { id: string; _id: string; amount: string; paymentStatus: string }
+                        visit?: {
+                          id: string
+                          _id: string
+                          visitNo?: number
+                          amount: string
+                          paymentStatus: string
+                          siteAddress?: string
+                          sitePhone?: string
+                        }
                         error?: string
                       }
 
@@ -990,6 +1009,11 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                         engineerName,
                         contactPerson: engineerName,
                       })
+                      if (v.visitNo != null) params.set('visitNo', String(v.visitNo))
+                      const addr = (v.siteAddress ?? siteAddress).trim()
+                      if (addr) params.set('location', addr)
+                      const ph = (v.sitePhone ?? sitePhone).trim()
+                      if (ph) params.set('phone', ph)
                       if (match.id) params.set('siteId', match.id)
                       setShowAddForm(false)
                       onNavigate(`/site-details?${params.toString()}`)
@@ -1060,6 +1084,27 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                         value={machine}
                         title="Set automatically from the instrument linked to this site"
                         className="h-11 w-full cursor-default rounded-xl border border-neutral-200 bg-neutral-50 px-3 text-sm font-semibold text-neutral-800 outline-none"
+                      />
+                    </label>
+
+                    <label className="grid gap-2 md:col-span-2">
+                      <span className="text-xs font-bold text-neutral-700">Site address</span>
+                      <input
+                        value={siteAddress}
+                        onChange={(e) => setSiteAddress(e.target.value)}
+                        placeholder="Full site address for survey report"
+                        className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
+                      />
+                    </label>
+
+                    <label className="grid gap-2">
+                      <span className="text-xs font-bold text-neutral-700">Site phone</span>
+                      <input
+                        value={sitePhone}
+                        onChange={(e) => setSitePhone(e.target.value)}
+                        placeholder="Contact number at site"
+                        inputMode="tel"
+                        className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
                       />
                     </label>
 

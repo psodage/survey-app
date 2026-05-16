@@ -62,6 +62,10 @@ const billingLineSchema = z.object({
 export const createVisitSchema = z.object({
   siteId: z.string().min(1),
   visitDate: z.string().optional(),
+  siteAddress: z.string().max(500).optional(),
+  sitePhone: z.string().max(30).optional(),
+  engineerName: z.string().max(200).optional(),
+  contactPerson: z.string().max(200).optional(),
   workDescription: z.string().max(5000).optional(),
   machineLabel: z.string().max(200).optional(),
   /** When non-empty, server computes amount from these lines + billingOtherCharges. */

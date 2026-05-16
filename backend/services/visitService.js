@@ -33,6 +33,35 @@ function escapeRegex(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
+async function nextVisitNoForSite(siteId) {
+  const existing = await SiteVisit.findOne({ siteId }).sort({ visitNo: -1 }).select('visitNo').lean()
+  if (existing?.visitNo && existing.visitNo >= 1) return existing.visitNo + 1
+  const count = await SiteVisit.countDocuments({ siteId })
+  return count + 1
+}
+
+async function resolveVisitNo(visit) {
+  if (visit.visitNo && visit.visitNo >= 1) return visit.visitNo
+  const n = await SiteVisit.countDocuments({
+    siteId: visit.siteId,
+    $or: [
+      { visitDate: { $lt: visit.visitDate } },
+      { visitDate: visit.visitDate, _id: { $lte: visit._id } },
+    ],
+  })
+  return n || 1
+}
+
+function visitReportFields(v) {
+  return {
+    visitNo: v.visitNo,
+    siteAddress: v.siteAddress ?? '',
+    sitePhone: v.sitePhone ?? '',
+    engineerName: v.engineerName ?? '',
+    contactPerson: v.contactPerson ?? '',
+  }
+}
+
 /** Billing lines as stored on SiteVisit → safe JSON for clients / PDF. */
 function serializeBillingLines(billingLines) {
   if (!Array.isArray(billingLines) || billingLines.length === 0) return []
@@ -81,31 +110,36 @@ export async function listVisits(req) {
   }
   const visits = await SiteVisit.find(match)
     .select(
-      'visitCode visitDate machineLabel workDescription amount paymentStatus paidAmount paymentMode notes photoUrls billingLines billingOtherCharges clientId siteId',
+      'visitCode visitNo visitDate machineLabel workDescription amount paymentStatus paidAmount paymentMode notes photoUrls billingLines billingOtherCharges clientId siteId siteAddress sitePhone engineerName contactPerson',
     )
     .sort({ visitDate: -1 })
     .limit(200)
     .populate('clientId', 'name')
     .populate('siteId', 'name')
     .lean()
-  return visits.map((v) => ({
-    id: v.visitCode || v._id.toString(),
-    _id: v._id.toString(),
-    visitMongoId: v._id.toString(),
-    client: v.clientId?.name ?? '',
-    site: v.siteId?.name ?? '',
-    date: new Date(v.visitDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
-    machine: v.machineLabel ?? '—',
-    work: v.workDescription ?? '',
-    amount: decToDisplay(parseFloat((v.amount ?? 0).toString()) || 0),
-    pendingAmount: decToDisplay(owedAmount(v)),
-    paymentMode: v.paymentMode ?? '—',
-    paymentStatus: paymentLabel(v.paymentStatus),
-    notes: v.notes ?? '',
-    photoUrls: v.photoUrls ?? [],
-    billingLines: serializeBillingLines(v.billingLines),
-    billingOtherCharges: Number.isFinite(Number(v.billingOtherCharges)) ? Number(v.billingOtherCharges) : 0,
-  }))
+  const rows = await Promise.all(
+    visits.map(async (v) => ({
+      id: v.visitCode || v._id.toString(),
+      _id: v._id.toString(),
+      visitMongoId: v._id.toString(),
+      visitNo: await resolveVisitNo(v),
+      client: v.clientId?.name ?? '',
+      site: v.siteId?.name ?? '',
+      date: new Date(v.visitDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
+      machine: v.machineLabel ?? '—',
+      work: v.workDescription ?? '',
+      amount: decToDisplay(parseFloat((v.amount ?? 0).toString()) || 0),
+      pendingAmount: decToDisplay(owedAmount(v)),
+      paymentMode: v.paymentMode ?? '—',
+      paymentStatus: paymentLabel(v.paymentStatus),
+      notes: v.notes ?? '',
+      photoUrls: v.photoUrls ?? [],
+      billingLines: serializeBillingLines(v.billingLines),
+      billingOtherCharges: Number.isFinite(Number(v.billingOtherCharges)) ? Number(v.billingOtherCharges) : 0,
+      ...visitReportFields(v),
+    })),
+  )
+  return rows
 }
 
 /** @param {{ url: string, publicId: string, mimeType?: string }[]} preUploadedPhotos */
@@ -125,7 +159,17 @@ export async function createVisit(req, body, { preUploadedPhotos } = {}) {
   if (!clientRow) throw new ApiError(404, 'Client not found for this site')
 
   const visitCode = await nextVisitCode(req.user.companyId)
+  const visitNo = await nextVisitNoForSite(site._id)
   const visitDate = body.visitDate ? new Date(body.visitDate) : new Date()
+  const siteAddress =
+    (typeof body.siteAddress === 'string' && body.siteAddress.trim()) ||
+    site.locationLabel?.trim() ||
+    site.address?.trim() ||
+    ''
+  const sitePhone = typeof body.sitePhone === 'string' ? body.sitePhone.trim() : ''
+  const engineerName = typeof body.engineerName === 'string' ? body.engineerName.trim() : ''
+  const contactPerson =
+    (typeof body.contactPerson === 'string' && body.contactPerson.trim()) || engineerName
   const otherRaw = Number(body.billingOtherCharges)
   const other = Number.isFinite(otherRaw) ? otherRaw : 0
 
@@ -206,7 +250,12 @@ export async function createVisit(req, body, { preUploadedPhotos } = {}) {
     clientId: site.clientId,
     siteId: site._id,
     visitCode,
+    visitNo,
     visitDate,
+    siteAddress: siteAddress || undefined,
+    sitePhone: sitePhone || undefined,
+    engineerName: engineerName || undefined,
+    contactPerson: contactPerson || undefined,
     workDescription: body.workDescription?.trim(),
     machineLabel: body.machineLabel?.trim(),
     billingLines: billingLinesToStore,
@@ -250,6 +299,7 @@ export async function createVisit(req, body, { preUploadedPhotos } = {}) {
   return {
     id: visit.visitCode,
     _id: visit._id.toString(),
+    visitNo: visit.visitNo ?? visitNo,
     client: clientRow.name ?? '',
     site: site.name,
     date: new Date(visit.visitDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
@@ -263,6 +313,7 @@ export async function createVisit(req, body, { preUploadedPhotos } = {}) {
     photoUrls: visit.photoUrls ?? [],
     billingLines: serializeBillingLines(visit.billingLines),
     billingOtherCharges: Number.isFinite(Number(visit.billingOtherCharges)) ? Number(visit.billingOtherCharges) : 0,
+    ...visitReportFields(visit),
   }
 }
 
@@ -278,9 +329,11 @@ export async function getVisitById(req, visitId) {
     .populate('siteId', 'name')
     .lean()
   if (!visit) throw new ApiError(404, 'Visit not found')
+  const visitNo = await resolveVisitNo(visit)
   return {
     id: visit.visitCode || visit._id.toString(),
     _id: visit._id.toString(),
+    visitNo,
     client: visit.clientId?.name,
     site: visit.siteId?.name,
     date: new Date(visit.visitDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
@@ -294,6 +347,7 @@ export async function getVisitById(req, visitId) {
     photoUrls: visit.photoUrls ?? [],
     billingLines: serializeBillingLines(visit.billingLines),
     billingOtherCharges: Number.isFinite(Number(visit.billingOtherCharges)) ? Number(visit.billingOtherCharges) : 0,
+    ...visitReportFields(visit),
   }
 }
 

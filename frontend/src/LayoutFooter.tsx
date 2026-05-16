@@ -2,16 +2,9 @@ import { Fragment, useMemo } from 'react'
 import { Mail, Phone } from 'lucide-react'
 import { layoutBrandLogo } from './brandLogo'
 import { useAuth } from './context/AuthContext'
+import { formatEngineerLine } from './utils/formatEngineerContact'
 
 const DEFAULT_EMAIL = 'samarthlandsurveyors@gmail.com'
-
-function formatEngineerLine(fullName: string, phone: string) {
-  const name = (fullName || '').trim()
-  const ph = (phone || '').trim()
-  const base = name.replace(/^Er\.\s*/i, '').trim()
-  const withTitle = base ? `Er. ${base}` : ''
-  return [withTitle, ph].filter(Boolean).join(' ')
-}
 
 export function LayoutFooter() {
   const { company, companyAdmins } = useAuth()

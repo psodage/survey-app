@@ -10,7 +10,13 @@ const siteVisitSchema = new Schema(
     clientId: { type: Schema.Types.ObjectId, ref: 'Client', required: true, index: true },
     siteId: { type: Schema.Types.ObjectId, ref: 'Site', required: true, index: true },
     visitCode: { type: String, trim: true, uppercase: true },
+    /** 1-based visit index for this site (first visit = 1). */
+    visitNo: { type: Number, min: 1 },
     visitDate: { type: Date, required: true, index: true },
+    siteAddress: { type: String, trim: true },
+    sitePhone: { type: String, trim: true },
+    engineerName: { type: String, trim: true },
+    contactPerson: { type: String, trim: true },
     workDescription: { type: String, trim: true },
     machineLabel: { type: String, trim: true },
     /** Multiple billing line items: qty × rate, or a fixed line amount when qty/rate are not used. */

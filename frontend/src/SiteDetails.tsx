@@ -71,6 +71,7 @@ type SiteDetailsProps = {
 type SiteVisitRecord = {
   id: string
   visitMongoId?: string
+  visitNo?: number
   client: string
   site: string
   date: string
@@ -82,6 +83,9 @@ type SiteVisitRecord = {
   paymentStatus: string
   notes: string
   work?: string
+  siteAddress?: string
+  sitePhone?: string
+  engineerName?: string
   photoUrls?: string[]
   billingLines?: InvoicePdfBillingLine[]
   billingOtherCharges?: number
@@ -91,7 +95,7 @@ const toolbarSelectClass =
   'h-8 min-w-[128px] flex-1 rounded-md border border-neutral-200 bg-white px-2.5 text-xs font-bold text-neutral-700 outline-none transition focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20 md:h-10 md:min-w-[150px] md:rounded-lg md:px-3 md:text-sm sm:flex-initial'
 
 export function SiteDetails({ onNavigate }: SiteDetailsProps) {
-  const { token } = useAuth()
+  const { token, user, company, companyAdmins } = useAuth()
   const { selectedYear } = useSelectedYear()
   const { refreshTick } = useRefresh()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
@@ -108,7 +112,9 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
   const isVisitMode = mode === 'visit'
   const client = urlParams.get('client') ?? 'Unknown Client'
   const name = urlParams.get('name') ?? 'Unknown Site'
-  const location = urlParams.get('location') ?? 'Unknown Location'
+  const locationParam = urlParams.get('location') ?? ''
+  const sitePhoneParam = urlParams.get('phone') ?? ''
+  const visitNoParam = urlParams.get('visitNo')
   const lastVisit = urlParams.get('lastVisit') ?? '-'
   const status = urlParams.get('status') ?? 'Active'
   const pending = urlParams.get('pending') ?? '₹0'
@@ -132,12 +138,20 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
     billingOtherCharges: number
   }>({ billingLines: [], billingOtherCharges: 0 })
   const [visitPendingForInvoice, setVisitPendingForInvoice] = useState<string | null>(null)
+  const [visitDetailFromApi, setVisitDetailFromApi] = useState<{
+    visitNo?: number
+    siteAddress?: string
+    sitePhone?: string
+    engineerName?: string
+    contactPerson?: string
+  } | null>(null)
 
   useEffect(() => {
     if (!isVisitMode) {
       setVisitPhotoUrls([])
       setVisitBillingForInvoice({ billingLines: [], billingOtherCharges: 0 })
       setVisitPendingForInvoice(null)
+      setVisitDetailFromApi(null)
       return
     }
     if (!visitMongoId || !token) return
@@ -146,6 +160,11 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
       .get<{
         ok: boolean
         visit?: {
+          visitNo?: number
+          siteAddress?: string
+          sitePhone?: string
+          engineerName?: string
+          contactPerson?: string
           photoUrls?: string[]
           billingLines?: InvoicePdfBillingLine[]
           billingOtherCharges?: number
@@ -161,18 +180,69 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
           billingOtherCharges: Number(v.billingOtherCharges) || 0,
         })
         setVisitPendingForInvoice(v.pendingAmount ?? null)
+        setVisitDetailFromApi({
+          visitNo: v.visitNo,
+          siteAddress: v.siteAddress,
+          sitePhone: v.sitePhone,
+          engineerName: v.engineerName,
+          contactPerson: v.contactPerson,
+        })
       })
       .catch(() => {
         if (!cancelled) {
           setVisitPhotoUrls([])
           setVisitBillingForInvoice({ billingLines: [], billingOtherCharges: 0 })
           setVisitPendingForInvoice(null)
+          setVisitDetailFromApi(null)
         }
       })
     return () => {
       cancelled = true
     }
   }, [isVisitMode, visitMongoId, token, refreshTick])
+
+  const effectiveLocation = useMemo(() => {
+    const fromApi = visitDetailFromApi?.siteAddress?.trim()
+    if (fromApi) return fromApi
+    const fromUrl = locationParam.trim()
+    if (fromUrl && fromUrl !== 'Unknown Location') return fromUrl
+    return ''
+  }, [visitDetailFromApi?.siteAddress, locationParam])
+
+  const effectivePhone = useMemo(() => {
+    const fromApi = visitDetailFromApi?.sitePhone?.trim()
+    if (fromApi) return fromApi
+    return sitePhoneParam.trim()
+  }, [visitDetailFromApi?.sitePhone, sitePhoneParam])
+
+  const effectiveVisitNo = useMemo(() => {
+    if (visitDetailFromApi?.visitNo != null) return visitDetailFromApi.visitNo
+    const parsed = visitNoParam ? Number(visitNoParam) : NaN
+    return Number.isFinite(parsed) && parsed >= 1 ? parsed : undefined
+  }, [visitDetailFromApi?.visitNo, visitNoParam])
+
+  const pdfAdminContacts = useMemo(
+    () =>
+      companyAdmins
+        .filter((a) => (a.fullName || '').trim() || (a.phone || '').trim())
+        .map((a) => ({ fullName: a.fullName, phone: a.phone })),
+    [companyAdmins],
+  )
+
+  const effectiveEngineerName = useMemo(() => {
+    const fromApi = visitDetailFromApi?.engineerName?.trim()
+    if (fromApi) return fromApi
+    if (engineerName.trim()) return engineerName.trim()
+    if (user?.fullName?.trim()) return `Er. ${user.fullName.trim()}`
+    return ''
+  }, [visitDetailFromApi?.engineerName, engineerName, user?.fullName])
+
+  const effectiveContactPerson = useMemo(() => {
+    const fromApi = visitDetailFromApi?.contactPerson?.trim()
+    if (fromApi) return fromApi
+    if (contactPerson.trim()) return contactPerson.trim()
+    return effectiveEngineerName || 'Site Coordinator'
+  }, [visitDetailFromApi?.contactPerson, contactPerson, effectiveEngineerName])
 
   useEffect(() => {
     if (isVisitMode) return
@@ -192,6 +262,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
           visits: Array<{
             id: string
             visitMongoId?: string
+            visitNo?: number
             client: string
             site: string
             date: string
@@ -202,6 +273,9 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
             paymentMode: string
             paymentStatus: string
             notes: string
+            siteAddress?: string
+            sitePhone?: string
+            engineerName?: string
             photoUrls?: string[]
             billingLines?: InvoicePdfBillingLine[]
             billingOtherCharges?: number
@@ -216,6 +290,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
         let rows: SiteVisitRecord[] = (res.data.visits ?? []).map((v) => ({
           id: v.id,
           visitMongoId: v.visitMongoId,
+          visitNo: v.visitNo,
           client: v.client,
           site: v.site,
           date: v.date,
@@ -226,6 +301,9 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
           paymentStatus: v.paymentStatus,
           notes: v.notes,
           work: v.work,
+          siteAddress: v.siteAddress,
+          sitePhone: v.sitePhone,
+          engineerName: v.engineerName,
           photoUrls: v.photoUrls,
           billingLines: v.billingLines,
           billingOtherCharges: v.billingOtherCharges,
@@ -342,7 +420,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
       exportSiteReportPdf({
         client,
         siteName: name,
-        location: location !== 'Unknown Location' ? location : undefined,
+        location: effectiveLocation || undefined,
         status,
         lastVisit,
         year: selectedYear,
@@ -410,7 +488,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
       if (isVisitMode && visitMongoId === mid) {
         const params = new URLSearchParams({ client, name })
         if (siteId) params.set('siteId', siteId)
-        if (location !== 'Unknown Location') params.set('location', location)
+        if (effectiveLocation) params.set('location', effectiveLocation)
         if (lastVisit !== '-') params.set('lastVisit', lastVisit)
         if (status) params.set('status', status)
         if (pending) params.set('pending', pending)
@@ -438,6 +516,14 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
       notes: record.notes,
       work: record.work ?? '',
     })
+    if (record.visitNo != null) next.set('visitNo', String(record.visitNo))
+    if (record.siteAddress?.trim()) next.set('location', record.siteAddress.trim())
+    else if (effectiveLocation) next.set('location', effectiveLocation)
+    if (record.sitePhone?.trim()) next.set('phone', record.sitePhone.trim())
+    if (record.engineerName?.trim()) {
+      next.set('engineerName', record.engineerName.trim())
+      next.set('contactPerson', record.engineerName.trim())
+    }
     if (record.visitMongoId) next.set('visitMongoId', record.visitMongoId)
     if (siteId) next.set('siteId', siteId)
     return `/site-details?${next.toString()}`
@@ -486,7 +572,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
         ? 'bg-amber-50 text-amber-700 ring-amber-200'
         : 'bg-emerald-50 text-emerald-700 ring-emerald-200'
 
-  const siteAddressLine = [name, location !== 'Unknown Location' ? location : ''].filter(Boolean).join(', ')
+  const siteAddressLine = [name, effectiveLocation].filter(Boolean).join(', ')
 
   const handleIndividualVisitInvoice = (record: SiteVisitRecord) => {
     if (exportBusy) return
@@ -530,7 +616,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
       exportCombinedSiteInvoicePdf({
         client,
         site: name,
-        location: location !== 'Unknown Location' ? location : undefined,
+        location: effectiveLocation || undefined,
         invoiceDate: new Date().toLocaleDateString('en-GB'),
         visits,
       }),
@@ -539,6 +625,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
 
   const handleExportVisitPdf = (record: {
     visitId: string
+    visitNo?: number
     date: string
     machine: string
     amount: string
@@ -546,17 +633,27 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
     paymentStatus?: string
     notes?: string
     work?: string
+    siteAddress?: string
+    sitePhone?: string
+    engineerName?: string
     photoUrls?: string[]
   }) => {
     if (exportBusy) return
     const photos = record.photoUrls?.length ? record.photoUrls : visitPhotoUrls
+    const reportLocation = record.siteAddress?.trim() || effectiveLocation
+    const reportPhone = record.sitePhone?.trim() || effectivePhone
+    const reportVisitNo = record.visitNo ?? effectiveVisitNo
+    const reportEngineer = record.engineerName?.trim() || effectiveEngineerName
     setExportBusy(true)
     void runExport('visit PDF', () =>
       exportVisitRecordPdf({
         visitId: record.visitId,
+        visitNo: reportVisitNo,
         client,
         siteName: name,
-        location,
+        location: reportLocation || undefined,
+        adminContacts: pdfAdminContacts,
+        companyEmail: company?.email,
         date: record.date,
         machine: record.machine,
         paymentMode: record.paymentMode,
@@ -564,11 +661,11 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
         amount: record.amount,
         notes: record.notes,
         work: record.work,
-        contactPerson: contactPerson || 'Site Coordinator',
-        phone: '-',
+        contactPerson: effectiveContactPerson,
+        phone: reportPhone || '-',
         dwgRefBy: 'Samarth Land Surveyors',
         dwgNo: record.visitId.replace('SV-', ''),
-        engineerName: engineerName || 'Er. Shubham Bhoi',
+        engineerName: reportEngineer || '-',
         photoUrls: photos,
       }),
     ).finally(() => setExportBusy(false))
@@ -589,6 +686,13 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
           icon: ClipboardList,
           tone: 'bg-violet-100 text-violet-700',
           cardTint: 'bg-violet-50/90',
+        },
+        {
+          title: 'Visit No.',
+          value: effectiveVisitNo != null ? String(effectiveVisitNo) : '—',
+          icon: ClipboardList,
+          tone: 'bg-indigo-100 text-indigo-700',
+          cardTint: 'bg-indigo-50/90',
         },
         {
           title: 'Visit Date',
@@ -615,7 +719,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
     },
     {
       title: 'Location',
-      value: location,
+      value: effectiveLocation || '—',
       icon: MapPin,
       tone: 'bg-emerald-100 text-emerald-700',
       cardTint: 'bg-emerald-50/90',
@@ -969,6 +1073,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                       onClick={() =>
                         handleExportVisitPdf({
                           visitId,
+                          visitNo: effectiveVisitNo,
                           date: visitDate,
                           machine,
                           amount,
@@ -976,6 +1081,9 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                           paymentStatus,
                           notes,
                           work,
+                          siteAddress: effectiveLocation,
+                          sitePhone: effectivePhone,
+                          engineerName: effectiveEngineerName,
                         })
                       }
                       className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#f39b03] px-4 text-xs font-extrabold text-white transition hover:bg-[#e18e03] sm:text-sm"
@@ -1134,6 +1242,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                                     event.stopPropagation()
                                     void handleExportVisitPdf({
                                       visitId: record.id,
+                                      visitNo: record.visitNo,
                                       date: record.date,
                                       machine: record.machine,
                                       amount: record.amount,
@@ -1141,6 +1250,10 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                                       paymentStatus: record.paymentStatus,
                                       notes: record.notes,
                                       work: record.work,
+                                      siteAddress: record.siteAddress,
+                                      sitePhone: record.sitePhone,
+                                      engineerName: record.engineerName,
+                                      photoUrls: record.photoUrls,
                                     })
                                   }}
                                   className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-neutral-200 bg-white px-2.5 text-[10px] font-extrabold text-neutral-800 transition hover:bg-neutral-50"
@@ -1223,6 +1336,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                                       event.stopPropagation()
                                       void handleExportVisitPdf({
                                         visitId: record.id,
+                                        visitNo: record.visitNo,
                                         date: record.date,
                                         machine: record.machine,
                                         amount: record.amount,
@@ -1230,6 +1344,10 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                                         paymentStatus: record.paymentStatus,
                                         notes: record.notes,
                                         work: record.work,
+                                        siteAddress: record.siteAddress,
+                                        sitePhone: record.sitePhone,
+                                        engineerName: record.engineerName,
+                                        photoUrls: record.photoUrls,
                                       })
                                     }}
                                     className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-neutral-200 bg-white px-2.5 text-[11px] font-extrabold text-neutral-800 transition hover:bg-neutral-50"

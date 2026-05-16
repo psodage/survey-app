@@ -1,12 +1,23 @@
 import jsPDF from 'jspdf'
 import invoiceLogo from './assets/logo.jpeg'
 import { savePdf } from './utils/downloadFile'
+import { formatEngineerLine } from './utils/formatEngineerContact'
+
+export type VisitRecordPdfAdminContact = {
+  fullName: string
+  phone: string
+}
 
 export type VisitRecordPdfData = {
   visitId: string
+  /** 1-based visit number for this site (shown as Visit No.). */
+  visitNo?: number | string
   client: string
   siteName: string
   location?: string
+  /** Company admin contacts for PDF header (name + phone). */
+  adminContacts?: VisitRecordPdfAdminContact[]
+  companyEmail?: string
   date: string
   machine: string
   paymentMode: string
@@ -121,12 +132,22 @@ export async function exportVisitRecordPdf(data: VisitRecordPdfData) {
   doc.setFontSize(14)
   doc.text('DAILY SURVEY REPORT', pageWidth / 2, 37, { align: 'center' })
 
+  const adminLines = (data.adminContacts ?? [])
+    .map((a) => formatEngineerLine(a.fullName, a.phone, ' - '))
+    .filter((line) => line.length > 0)
+  const emailLine = (data.companyEmail ?? 'samarthlandsurveyors@gmail.com').trim()
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(6)
-  doc.text('Er. Shubham Bhoi - 8643001010', 211, 15)
-  doc.text('Er. Sanket Katakar - 7026016077', 211, 21)
+  let adminY = 15
+  const adminLineGap = 6
+  if (adminLines.length) {
+    for (const line of adminLines) {
+      doc.text(line, 211, adminY)
+      adminY += adminLineGap
+    }
+  }
   doc.setFont('helvetica', 'italic')
-  doc.text('samarthlandsurveyors@gmail.com', 211, 27)
+  doc.text(emailLine, 211, adminY)
   doc.setDrawColor(50, 50, 50)
   doc.line(10, 42, 286, 42)
 
@@ -142,7 +163,11 @@ export async function exportVisitRecordPdf(data: VisitRecordPdfData) {
   doc.text('Site Report No. :', leftLabel, y)
   lineValue(doc, leftValueStart, 108, y, data.visitId)
   doc.text('Visit No. :', rightLabel, y)
-  lineValue(doc, rightValueStart, 197, y, data.visitId.replace('SV-', ''))
+  const visitNoDisplay =
+    data.visitNo != null && String(data.visitNo).trim() !== ''
+      ? String(data.visitNo)
+      : data.visitId.replace('SV-', '')
+  lineValue(doc, rightValueStart, 197, y, visitNoDisplay)
   doc.text('Date. :', 212, y)
   lineValue(doc, 228, 286, y, data.date)
 

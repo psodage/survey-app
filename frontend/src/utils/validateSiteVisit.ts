@@ -8,6 +8,7 @@ export type BillingLineInput = {
 export type SiteVisitValidationInput = {
   client: string
   site: string
+  siteAddress: string
   machine: string
   billingLines: BillingLineInput[]
   billingOtherCharges: string
@@ -17,6 +18,7 @@ export type SiteVisitValidationInput = {
 export function validateSiteVisitForm(input: SiteVisitValidationInput): string | null {
   if (!input.client.trim()) return 'Please select a client.'
   if (!input.site.trim()) return 'Please select a site.'
+  if (!input.siteAddress.trim()) return 'Please enter the site address.'
   if (!input.machine.trim() || input.machine === '—') {
     return 'Machine is not set for this site. Link an instrument to the site first.'
   }
