@@ -14,7 +14,7 @@ import {
 } from '../utils/scope.js'
 import { decAmount, effectivePaidAmount } from '../utils/visitPaymentMath.js'
 import { visitDateRangeForYear } from '../utils/yearQuery.js'
-import { reconcileSiteCreditsForAdmin } from './visitCreditAllocation.js'
+import { reconcileSiteCreditsForAdmin, reconcileSiteCreditsForInstrument } from './visitCreditAllocation.js'
 
 function adminIdString(id) {
   if (id == null) return ''
@@ -135,8 +135,12 @@ export async function getAccountManagerBySlug(req, slug) {
  * Financial summary for one account manager ledger (scoped by adminId / accountManagerId, not instrument).
  */
 export async function getLedgerSummaryForManager(req, managerDoc, yearRaw) {
-  const adminId = managerAdminObjectId(managerDoc)
-  await reconcileSiteCreditsForAdmin(req.user.companyId, adminId)
+  const { effectiveInstrumentId } = await resolveInstrumentScope(req)
+  if (effectiveInstrumentId) {
+    await reconcileSiteCreditsForInstrument(req.user.companyId, effectiveInstrumentId)
+  } else {
+    await reconcileSiteCreditsForAdmin(req.user.companyId, managerAdminObjectId(managerDoc))
+  }
 
   const visitYearRange = visitDateRangeForYear(yearRaw)
   const txMatch = {
@@ -240,8 +244,12 @@ export async function listClientSiteOptionsForManager(req, managerDoc) {
 }
 
 export async function listAccountRowsForManager(req, managerDoc, yearRaw) {
-  const adminId = managerAdminObjectId(managerDoc)
-  await reconcileSiteCreditsForAdmin(req.user.companyId, adminId)
+  const { effectiveInstrumentId } = await resolveInstrumentScope(req)
+  if (effectiveInstrumentId) {
+    await reconcileSiteCreditsForInstrument(req.user.companyId, effectiveInstrumentId)
+  } else {
+    await reconcileSiteCreditsForAdmin(req.user.companyId, managerAdminObjectId(managerDoc))
+  }
 
   const visitYearRange = visitDateRangeForYear(yearRaw)
   const clients = await Client.find({

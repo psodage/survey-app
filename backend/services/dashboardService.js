@@ -1,7 +1,8 @@
 import Client from '../models/Client.js'
 import Site from '../models/Site.js'
 import SiteVisit from '../models/SiteVisit.js'
-import { sharedInstrumentOperationalScope } from '../utils/scope.js'
+import { resolveInstrumentScope, sharedInstrumentOperationalScope } from '../utils/scope.js'
+import { reconcileSiteCreditsForInstrument } from './visitCreditAllocation.js'
 import { visitDateRangeForYear } from '../utils/yearQuery.js'
 import { decAmount } from '../utils/visitPaymentMath.js'
 
@@ -51,6 +52,10 @@ function visitAmountFieldsStage() {
 }
 
 export async function getDashboard(req) {
+  const { effectiveInstrumentId } = await resolveInstrumentScope(req)
+  if (effectiveInstrumentId) {
+    await reconcileSiteCreditsForInstrument(req.user.companyId, effectiveInstrumentId)
+  }
   const visitYearRange = visitDateRangeForYear(req.query?.year)
   const base = {
     companyId: req.user.companyId,

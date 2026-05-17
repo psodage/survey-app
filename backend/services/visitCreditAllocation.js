@@ -11,19 +11,17 @@ function toObjectId(v) {
  * Apply a credit (FIFO by visitDate) to visits on the site that still owe money.
  * Updates paymentStatus and paidAmount. Unallocated surplus is left on the Transaction only.
  */
-export async function applyCreditToSiteVisits(session, { companyId, adminId, siteId, creditAmount }) {
+export async function applyCreditToSiteVisits(session, { companyId, siteId, creditAmount }) {
   if (!siteId) return
   const amount = Number(creditAmount)
   if (!Number.isFinite(amount) || amount <= 0) return
 
   const siteObjectId = toObjectId(siteId)
-  const adminObjectId = toObjectId(adminId)
   const companyObjectId = toObjectId(companyId)
 
   const visits = await (() => {
     let q = SiteVisit.find({
       companyId: companyObjectId,
-      adminId: adminObjectId,
       siteId: siteObjectId,
       paymentStatus: { $ne: 'waived' },
     }).sort({ visitDate: 1 })
@@ -69,20 +67,17 @@ export async function applyCreditToSiteVisits(session, { companyId, adminId, sit
 }
 
 /**
- * After a site credit is removed (or the ledger changes), strip explicit `paidAmount` from visits on that
- * site (ledger-driven rows only), then replay all remaining credit transactions in date order so pending
- * matches FIFO allocation — same rule as {@link applyCreditToSiteVisits}.
+ * Replay all ledger credits on a site (every coworker) against all visits on that site.
+ * Shared instrument clients/sites use one visit pool; credits from any admin reduce pending.
  */
-export async function recomputeVisitCreditsForSite(session, { companyId, adminId, siteId }) {
+export async function recomputeVisitCreditsForSite(session, { companyId, siteId }) {
   if (!siteId) return
 
   const siteObjectId = toObjectId(siteId)
-  const adminObjectId = toObjectId(adminId)
   const companyObjectId = toObjectId(companyId)
 
   const clearFilter = {
     companyId: companyObjectId,
-    adminId: adminObjectId,
     siteId: siteObjectId,
     paymentStatus: { $ne: 'waived' },
     paidAmount: { $exists: true, $ne: null },
@@ -92,7 +87,6 @@ export async function recomputeVisitCreditsForSite(session, { companyId, adminId
 
   let q = Transaction.find({
     companyId: companyObjectId,
-    adminId: adminObjectId,
     siteId: siteObjectId,
     type: 'credit',
   }).sort({ occurredOn: 1, _id: 1 })
@@ -103,28 +97,38 @@ export async function recomputeVisitCreditsForSite(session, { companyId, adminId
     const creditAmount = decAmount(tx.amount)
     await applyCreditToSiteVisits(session, {
       companyId: companyObjectId,
-      adminId: adminObjectId,
       siteId: siteObjectId,
       creditAmount,
     })
   }
 }
 
-/** Replay FIFO credit allocation for every site that has ledger credits under this admin. */
-export async function reconcileSiteCreditsForAdmin(companyId, adminId) {
+/** Replay credits for every site that has ledger credits on an instrument. */
+export async function reconcileSiteCreditsForInstrument(companyId, instrumentId) {
+  if (!instrumentId) return
   const companyObjectId = toObjectId(companyId)
-  const adminObjectId = toObjectId(adminId)
+  const instrumentObjectId = toObjectId(instrumentId)
   const siteIds = await Transaction.distinct('siteId', {
     companyId: companyObjectId,
-    adminId: adminObjectId,
+    instrumentId: instrumentObjectId,
     type: 'credit',
     siteId: { $ne: null },
   })
   for (const siteId of siteIds) {
-    await recomputeVisitCreditsForSite(null, {
-      companyId: companyObjectId,
-      adminId: adminObjectId,
-      siteId,
-    })
+    await recomputeVisitCreditsForSite(null, { companyId: companyObjectId, siteId })
+  }
+}
+
+/** @deprecated Use reconcileSiteCreditsForInstrument when instrument is known. */
+export async function reconcileSiteCreditsForAdmin(companyId, adminId) {
+  const companyObjectId = toObjectId(companyId)
+  const siteIds = await Transaction.distinct('siteId', {
+    companyId: companyObjectId,
+    adminId: toObjectId(adminId),
+    type: 'credit',
+    siteId: { $ne: null },
+  })
+  for (const siteId of siteIds) {
+    await recomputeVisitCreditsForSite(null, { companyId: companyObjectId, siteId })
   }
 }

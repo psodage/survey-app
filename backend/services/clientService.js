@@ -3,7 +3,6 @@ import Client from '../models/Client.js'
 import Site from '../models/Site.js'
 import SiteVisit from '../models/SiteVisit.js'
 import User from '../models/User.js'
-import AccountManager from '../models/AccountManager.js'
 import Transaction from '../models/Transaction.js'
 import Invoice from '../models/Invoice.js'
 import SurveyFile from '../models/SurveyFile.js'
@@ -11,6 +10,7 @@ import { ApiError } from '../utils/ApiError.js'
 import * as uploadService from './uploadService.js'
 import { parseObjectId } from '../utils/instrumentAccess.js'
 import { resolveInstrumentScope, sharedInstrumentOperationalScope } from '../utils/scope.js'
+import { reconcileSiteCreditsForInstrument } from './visitCreditAllocation.js'
 import { decAmount, effectivePaidAmount } from '../utils/visitPaymentMath.js'
 import { visitDateRangeForYear } from '../utils/yearQuery.js'
 
@@ -71,6 +71,9 @@ async function siteFinancials(siteId, visitDateRange, instrumentId) {
 
 export async function listClients(req) {
   const { effectiveInstrumentId } = await resolveInstrumentScope(req)
+  if (effectiveInstrumentId) {
+    await reconcileSiteCreditsForInstrument(req.user.companyId, effectiveInstrumentId)
+  }
   const visitYearRange = visitDateRangeForYear(req.query?.year)
   const match = {
     companyId: req.user.companyId,
@@ -175,6 +178,11 @@ function escapeRegex(s) {
 
 export async function getClientReportExport(req, clientId, yearRaw) {
   const client = await getClientById(req, clientId)
+  const { effectiveInstrumentId } = await resolveInstrumentScope(req)
+  const instrumentId = effectiveInstrumentId ?? client.instrumentId
+  if (instrumentId) {
+    await reconcileSiteCreditsForInstrument(req.user.companyId, instrumentId)
+  }
   const visitYearRange = visitDateRangeForYear(yearRaw)
 
   const sites = await Site.find({ clientId: client._id, companyId: req.user.companyId })
@@ -184,7 +192,7 @@ export async function getClientReportExport(req, clientId, yearRaw) {
 
   const siteRows = []
   for (const s of sites) {
-    const { received, pending } = await siteFinancials(s._id, visitYearRange)
+    const { received, pending } = await siteFinancials(s._id, visitYearRange, instrumentId)
     const lastVisit = visitYearRange
       ? await SiteVisit.findOne({ siteId: s._id, visitDate: visitYearRange })
           .sort({ visitDate: -1 })
@@ -213,7 +221,11 @@ export async function getClientReportExport(req, clientId, yearRaw) {
     })
   }
 
-  const visitMatch = { clientId: client._id, ...(visitYearRange ? { visitDate: visitYearRange } : {}) }
+  const visitMatch = {
+    clientId: client._id,
+    ...(instrumentId ? { instrumentId } : {}),
+    ...(visitYearRange ? { visitDate: visitYearRange } : {}),
+  }
   const visits = await SiteVisit.find(visitMatch)
     .select('visitCode visitNo visitDate machineLabel paymentMode paymentStatus amount siteId')
     .populate('siteId', 'name')
@@ -236,17 +248,8 @@ export async function getClientReportExport(req, clientId, yearRaw) {
     companyId: req.user.companyId,
     clientId: client._id,
     type: 'credit',
+    ...(instrumentId ? { instrumentId } : {}),
     ...(visitYearRange ? { occurredOn: visitYearRange } : {}),
-  }
-  if (req.user.role === 'admin') {
-    const ownAm = await AccountManager.findOne({
-      companyId: req.user.companyId,
-      adminId: req.user.id,
-      isActive: true,
-    })
-      .select('_id')
-      .lean()
-    if (ownAm) creditMatch.accountManagerId = ownAm._id
   }
   const credits = await Transaction.find(creditMatch)
     .populate('siteId', 'name')
@@ -269,7 +272,7 @@ export async function getClientReportExport(req, clientId, yearRaw) {
     }
   })
 
-  const { revenue, received, pending } = await clientFinancials(client._id, visitYearRange)
+  const { revenue, received, pending } = await clientFinancials(client._id, visitYearRange, instrumentId)
   const totalCredit = credits.reduce((sum, t) => sum + decAmount(t.amount), 0)
 
   return {

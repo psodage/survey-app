@@ -7,6 +7,7 @@ import Invoice from '../models/Invoice.js'
 import SurveyFile from '../models/SurveyFile.js'
 import { ApiError } from '../utils/ApiError.js'
 import { resolveInstrumentScope, sharedInstrumentOperationalScope } from '../utils/scope.js'
+import { reconcileSiteCreditsForInstrument } from './visitCreditAllocation.js'
 import { visitDateRangeForYear } from '../utils/yearQuery.js'
 import { decAmount, effectivePaidAmount } from '../utils/visitPaymentMath.js'
 import * as uploadService from './uploadService.js'
@@ -117,6 +118,9 @@ export async function createSite(req, { clientId, name, locationLabel }) {
 
 export async function listAllSites(req) {
   const { effectiveInstrumentId } = await resolveInstrumentScope(req)
+  if (effectiveInstrumentId) {
+    await reconcileSiteCreditsForInstrument(req.user.companyId, effectiveInstrumentId)
+  }
   const visitYearRange = visitDateRangeForYear(req.query?.year)
   const match = {
     companyId: req.user.companyId,

@@ -5,7 +5,12 @@ import Client from '../models/Client.js'
 import Site from '../models/Site.js'
 import SiteVisit from '../models/SiteVisit.js'
 import { ApiError } from '../utils/ApiError.js'
-import { resolveInstrumentScope, optionalAdminIdQuery, sharedInstrumentOperationalScope } from '../utils/scope.js'
+import {
+  resolveInstrumentScope,
+  optionalAdminIdQuery,
+  instrumentScopeMatch,
+  sharedInstrumentOperationalScope,
+} from '../utils/scope.js'
 import { visitDateRangeForYear } from '../utils/yearQuery.js'
 import * as accountManagerService from './accountManagerService.js'
 import { recomputeVisitCreditsForSite } from './visitCreditAllocation.js'
@@ -65,8 +70,8 @@ export async function createTransaction(req, accountManagerId, body) {
   if (body.clientName) {
     const c = await Client.findOne({
       companyId: req.user.companyId,
-      adminId: am.adminId,
       name: new RegExp(`^${escape(body.clientName.trim())}$`, 'i'),
+      ...(await sharedInstrumentOperationalScope(req)),
     })
     if (c) clientId = c._id
   }
@@ -145,7 +150,6 @@ export async function createTransaction(req, accountManagerId, body) {
       created = t
       await recomputeVisitCreditsForSite(session, {
         companyId: req.user.companyId,
-        adminId: am.adminId,
         siteId,
       })
     })
@@ -182,7 +186,6 @@ export async function deleteTransaction(req, txId) {
   if (shouldRecompute) {
     await recomputeVisitCreditsForSite(null, {
       companyId: t.companyId,
-      adminId: t.adminId,
       siteId: t.siteId,
     })
   }

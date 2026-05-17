@@ -507,10 +507,9 @@ export async function deleteVisit(req, visitId) {
     await SurveyFile.deleteMany({ companyId: req.user.companyId, _id: { $in: fileObjectIds } })
   }
 
-  if (visit.adminId && visit.siteId) {
+  if (visit.siteId) {
     await recomputeVisitCreditsForSite(null, {
       companyId: req.user.companyId,
-      adminId: visit.adminId,
       siteId: visit.siteId,
     })
   }
