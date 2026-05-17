@@ -105,7 +105,7 @@ const toolbarSelectClass =
   'h-8 min-w-[128px] flex-1 rounded-md border border-neutral-200 bg-white px-2.5 text-xs font-bold text-neutral-700 outline-none transition focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20 md:h-10 md:min-w-[150px] md:rounded-lg md:px-3 md:text-sm sm:flex-initial'
 
 export function SiteDetails({ onNavigate }: SiteDetailsProps) {
-  const { token, user, company, companyAdmins } = useAuth()
+  const { token, user, company, companyAdmins, activeInstrumentId } = useAuth()
   const { selectedYear } = useSelectedYear()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [visitsSearchQuery, setVisitsSearchQuery] = useState('')
@@ -295,7 +295,11 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
     }
     setVisitsFetchState('loading')
     try {
-      const params: { year: string; siteId?: string; _t?: number } = { year: selectedYear, _t: Date.now() }
+      const params: { year: string; siteId?: string; instrumentId?: string; _t?: number } = {
+        year: selectedYear,
+        _t: Date.now(),
+        ...(activeInstrumentId ? { instrumentId: activeInstrumentId } : {}),
+      }
       if (siteId) params.siteId = siteId
       const res = await http.get<{
         ok: boolean

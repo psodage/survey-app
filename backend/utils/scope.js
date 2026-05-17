@@ -1,4 +1,5 @@
 import mongoose from 'mongoose'
+import Instrument from '../models/Instrument.js'
 import { ApiError } from './ApiError.js'
 import { getAllowedInstrumentObjectIds } from './instrumentAccess.js'
 import { instrumentCoworkerAdminIdStrings } from './instrumentPeers.js'
@@ -26,7 +27,13 @@ export async function resolveInstrumentScope(req) {
       throw new ApiError(400, 'Invalid instrument id')
     }
     const rid = new mongoose.Types.ObjectId(requested)
-    if (!allowedInstrumentIds.some((id) => id != null && id.equals(rid))) {
+    const inAllowed = allowedInstrumentIds.some((id) => id != null && id.equals(rid))
+    if (!inAllowed && req.user?.role === 'admin') {
+      const exists = await Instrument.exists({ _id: rid, companyId: req.user.companyId })
+      if (!exists) throw new ApiError(403, 'Instrument is not available for this account')
+      return { allowedInstrumentIds, effectiveInstrumentId: rid }
+    }
+    if (!inAllowed) {
       throw new ApiError(403, 'Instrument is not available for this account')
     }
     return { allowedInstrumentIds, effectiveInstrumentId: rid }
@@ -65,7 +72,7 @@ export async function sharedInstrumentOperationalScope(req) {
 
   if (effectiveInstrumentId) return { instrumentId: effectiveInstrumentId }
   if (allowedInstrumentIds.length) return instrumentScopeMatch(allowedInstrumentIds)
-  return { adminId: user.id }
+  return {}
 }
 
 /**

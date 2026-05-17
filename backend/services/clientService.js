@@ -34,8 +34,12 @@ function populatedDocName(ref) {
   return '—'
 }
 
-async function clientFinancials(clientId, visitDateRange) {
-  const q = { clientId, ...(visitDateRange ? { visitDate: visitDateRange } : {}) }
+async function clientFinancials(clientId, visitDateRange, instrumentId) {
+  const q = {
+    clientId,
+    ...(instrumentId ? { instrumentId } : {}),
+    ...(visitDateRange ? { visitDate: visitDateRange } : {}),
+  }
   const visits = await SiteVisit.find(q).select('amount paymentStatus paidAmount').lean()
   let revenue = 0
   let received = 0
@@ -48,8 +52,12 @@ async function clientFinancials(clientId, visitDateRange) {
   return { revenue, received, pending }
 }
 
-async function siteFinancials(siteId, visitDateRange) {
-  const q = { siteId, ...(visitDateRange ? { visitDate: visitDateRange } : {}) }
+async function siteFinancials(siteId, visitDateRange, instrumentId) {
+  const q = {
+    siteId,
+    ...(instrumentId ? { instrumentId } : {}),
+    ...(visitDateRange ? { visitDate: visitDateRange } : {}),
+  }
   const visits = await SiteVisit.find(q).select('amount paymentStatus paidAmount').lean()
   let revenue = 0
   let received = 0
@@ -62,6 +70,7 @@ async function siteFinancials(siteId, visitDateRange) {
 }
 
 export async function listClients(req) {
+  const { effectiveInstrumentId } = await resolveInstrumentScope(req)
   const visitYearRange = visitDateRangeForYear(req.query?.year)
   const match = {
     companyId: req.user.companyId,
@@ -74,8 +83,12 @@ export async function listClients(req) {
     .lean()
   const out = []
   for (const c of clients) {
-    const sites = await Site.countDocuments({ clientId: c._id })
-    const { revenue, received, pending } = await clientFinancials(c._id, visitYearRange)
+    const sites = await Site.countDocuments({
+      clientId: c._id,
+      companyId: req.user.companyId,
+      ...(effectiveInstrumentId ? { instrumentId: effectiveInstrumentId } : {}),
+    })
+    const { revenue, received, pending } = await clientFinancials(c._id, visitYearRange, effectiveInstrumentId)
     out.push({
       id: c._id.toString(),
       name: c.name,
@@ -114,7 +127,6 @@ export async function createClient(req, body) {
   }
   const dup = await Client.findOne({
     companyId: req.user.companyId,
-    adminId,
     instrumentId: effectiveInstrumentId,
     name: new RegExp(`^${escapeRegex(body.name.trim())}$`, 'i'),
   })

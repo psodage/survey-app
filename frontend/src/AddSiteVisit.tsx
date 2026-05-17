@@ -130,7 +130,7 @@ function defaultBillingLines(): BillingLineDraft[] {
 }
 
 export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
-  const { token, user } = useAuth()
+  const { token, user, activeInstrumentId } = useAuth()
   const { selectedYear } = useSelectedYear()
   const { pathname, search } = useLocation()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
@@ -170,8 +170,9 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
   const loadData = useCallback(async () => {
     if (!token) return
     try {
+      const scopeParams = { year: selectedYear, ...(activeInstrumentId ? { instrumentId: activeInstrumentId } : {}) }
       const [cRes, sRes, vRes] = await Promise.all([
-        http.get<{ ok: boolean; clients: Array<{ name: string }> }>('/api/clients', { params: { year: selectedYear } }),
+        http.get<{ ok: boolean; clients: Array<{ name: string }> }>('/api/clients', { params: scopeParams }),
         http.get<{
           ok: boolean
           sites: Array<{
@@ -182,8 +183,8 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
             instrumentName?: string
             instrumentCategory?: string
           }>
-        }>('/api/sites', { params: { year: selectedYear } }),
-        http.get<{ ok: boolean; visits: VisitRecord[] }>('/api/visits', { params: { year: selectedYear } }),
+        }>('/api/sites', { params: scopeParams }),
+        http.get<{ ok: boolean; visits: VisitRecord[] }>('/api/visits', { params: scopeParams }),
       ])
       const names = cRes.data?.ok ? cRes.data.clients.map((c) => c.name) : []
       setClientOptions(names)
@@ -207,7 +208,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
     } catch {
       toast.error('Could not load visits data')
     }
-  }, [token, selectedYear])
+  }, [token, selectedYear, activeInstrumentId])
 
   usePageRefresh(loadData, [loadData])
 

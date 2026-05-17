@@ -4,6 +4,7 @@ import User from '../models/User.js'
 import Company from '../models/Company.js'
 import Instrument from '../models/Instrument.js'
 import InstrumentAssignment from '../models/InstrumentAssignment.js'
+import AccountManager from '../models/AccountManager.js'
 import { ApiError } from '../utils/ApiError.js'
 import mongoose from 'mongoose'
 import { signAccessToken } from '../utils/token.js'
@@ -241,6 +242,10 @@ export async function assignInstruments(user, adminId, instrumentIds) {
         assignedByUserId: user.id,
         isActive: true,
       })),
+    )
+    await AccountManager.updateMany(
+      { companyId: user.companyId, adminId: admin._id, isActive: true },
+      { $set: { instrumentId: instrumentIds[0] } },
     )
   }
   return { ok: true }

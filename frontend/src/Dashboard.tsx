@@ -65,7 +65,7 @@ type RecentVisitRow = {
 }
 
 export default function Dashboard({ onNavigate }: DashboardProps) {
-  const { user, token } = useAuth()
+  const { user, token, activeInstrumentId } = useAuth()
   const { selectedYear } = useSelectedYear()
   const { refreshTick } = useRefresh()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
@@ -96,7 +96,9 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
             totalSites: number
             totalClients: number
           }
-        }>('/api/dashboard', { params: { year: selectedYear } })
+        }>('/api/dashboard', {
+          params: { year: selectedYear, ...(activeInstrumentId ? { instrumentId: activeInstrumentId } : {}) },
+        })
         if (cancelled || !res.data?.ok) return
         setRecentVisits(res.data.recentVisits ?? [])
         setPendingAmountByClient(res.data.pendingAmountByClient ?? [])
@@ -114,7 +116,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
     return () => {
       cancelled = true
     }
-  }, [token, selectedYear, refreshTick])
+  }, [token, selectedYear, refreshTick, activeInstrumentId])
 
   const getVisitDetailsPath = (visit: RecentVisitRow) => {
     const params = new URLSearchParams({

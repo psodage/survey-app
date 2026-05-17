@@ -110,7 +110,7 @@ type ClientsSitesProps = {
 }
 
 export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
-  const { token, user } = useAuth()
+  const { token, user, activeInstrumentId } = useAuth()
   const { selectedYear } = useSelectedYear()
   const { refreshTick } = useRefresh()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
@@ -139,6 +139,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
 
   const refreshClientsAndSites = useCallback(async () => {
     if (!token) return
+    const scopeParams = { year: selectedYear, ...(activeInstrumentId ? { instrumentId: activeInstrumentId } : {}) }
     try {
       const [cRes, sRes] = await Promise.all([
         http.get<{
@@ -152,7 +153,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
             received: string
             pending: string
           }>
-        }>('/api/clients', { params: { year: selectedYear } }),
+        }>('/api/clients', { params: scopeParams }),
         http.get<{
           ok: boolean
           sites: Array<{
@@ -165,7 +166,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
             received: string
             pending: string
           }>
-        }>('/api/sites', { params: { year: selectedYear } }),
+        }>('/api/sites', { params: scopeParams }),
       ])
       if (cRes.data?.ok) {
         setClients(
@@ -199,7 +200,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
     } catch {
       toast.error('Could not load clients or sites.')
     }
-  }, [token, selectedYear, refreshTick])
+  }, [token, selectedYear, refreshTick, activeInstrumentId])
 
   useEffect(() => {
     void refreshClientsAndSites()

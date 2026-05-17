@@ -48,15 +48,15 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
-/** Prefer stored selection only when it is still in the user's instrument list. */
+/** Prefer server default, then stored selection when still in the user's instrument list. */
 function resolveActiveInstrumentId(
-  stored: string | null,
   server: string | null,
+  stored: string | null,
   instruments: InstrumentSummary[],
 ): string | null {
   const allowed = new Set(instruments.map((i) => i.id))
-  if (stored && allowed.has(stored)) return stored
   if (server && allowed.has(server)) return server
+  if (stored && allowed.has(stored)) return stored
   return instruments[0]?.id ?? null
 }
 
@@ -141,8 +141,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         instruments,
         managers: mgrs,
         activeInstrumentId: resolveActiveInstrumentId(
-          tokenStorage.getInstrumentId(),
           res.data.activeInstrumentId ?? null,
+          tokenStorage.getInstrumentId(),
           instruments,
         ),
       })
@@ -206,8 +206,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           instruments,
           managers: mgrs,
           activeInstrumentId: resolveActiveInstrumentId(
-            tokenStorage.getInstrumentId(),
             res.data.activeInstrumentId ?? null,
+            tokenStorage.getInstrumentId(),
             instruments,
           ),
         })

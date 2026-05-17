@@ -36,7 +36,7 @@ type AddSiteProps = {
 }
 
 export default function AddSite({ onNavigate }: AddSiteProps) {
-  const { token } = useAuth()
+  const { token, activeInstrumentId } = useAuth()
   const { selectedYear } = useSelectedYear()
   const { refreshTick } = useRefresh()
   const location = useLocation()
@@ -55,7 +55,7 @@ export default function AddSite({ onNavigate }: AddSiteProps) {
     ;(async () => {
       try {
         const res = await http.get<{ ok: boolean; clients: Array<{ id: string; name: string }> }>('/api/clients', {
-          params: { year: selectedYear },
+          params: { year: selectedYear, ...(activeInstrumentId ? { instrumentId: activeInstrumentId } : {}) },
         })
         if (!res.data?.ok) return
         const ids: Record<string, string> = {}
@@ -76,7 +76,7 @@ export default function AddSite({ onNavigate }: AddSiteProps) {
         toast.error('Could not load clients')
       }
     })()
-  }, [token, clientFromQuery, selectedYear, refreshTick])
+  }, [token, clientFromQuery, selectedYear, refreshTick, activeInstrumentId])
 
   const filteredClientOptions = useMemo(() => {
     const normalizedQuery = clientSearchQuery.trim().toLowerCase()

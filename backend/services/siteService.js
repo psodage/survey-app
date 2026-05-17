@@ -21,8 +21,12 @@ function statusLabel(s) {
   return 'Completed'
 }
 
-async function siteFinancials(siteId, visitDateRange) {
-  const q = { siteId, ...(visitDateRange ? { visitDate: visitDateRange } : {}) }
+async function siteFinancials(siteId, visitDateRange, instrumentId) {
+  const q = {
+    siteId,
+    ...(instrumentId ? { instrumentId } : {}),
+    ...(visitDateRange ? { visitDate: visitDateRange } : {}),
+  }
   const visits = await SiteVisit.find(q).select('amount paymentStatus paidAmount').lean()
   let total = 0
   let received = 0
@@ -48,6 +52,7 @@ async function lastVisitLabelForSite(siteId, visitDateRange, fallbackLastVisitAt
 }
 
 export async function listSitesForClient(req, clientId) {
+  const { effectiveInstrumentId } = await resolveInstrumentScope(req)
   const client = await Client.findOne({
     _id: clientId,
     companyId: req.user.companyId,
@@ -56,14 +61,18 @@ export async function listSitesForClient(req, clientId) {
   if (!client) throw new ApiError(404, 'Client not found')
 
   const visitYearRange = visitDateRangeForYear(req.query?.year)
-  const sites = await Site.find({ clientId, companyId: req.user.companyId })
+  const sites = await Site.find({
+    clientId,
+    companyId: req.user.companyId,
+    ...(effectiveInstrumentId ? { instrumentId: effectiveInstrumentId } : {}),
+  })
     .select('name locationLabel address status lastVisitAt updatedAt')
     .sort({ updatedAt: -1 })
     .limit(200)
     .lean()
   const out = []
   for (const s of sites) {
-    const { received, pending } = await siteFinancials(s._id, visitYearRange)
+    const { received, pending } = await siteFinancials(s._id, visitYearRange, effectiveInstrumentId)
     const lastVisit = await lastVisitLabelForSite(s._id, visitYearRange, s.lastVisitAt)
     out.push({
       id: s._id.toString(),
@@ -107,6 +116,7 @@ export async function createSite(req, { clientId, name, locationLabel }) {
 }
 
 export async function listAllSites(req) {
+  const { effectiveInstrumentId } = await resolveInstrumentScope(req)
   const visitYearRange = visitDateRangeForYear(req.query?.year)
   const match = {
     companyId: req.user.companyId,
@@ -121,7 +131,7 @@ export async function listAllSites(req) {
     .lean()
   const out = []
   for (const s of sites) {
-    const { received, pending } = await siteFinancials(s._id, visitYearRange)
+    const { received, pending } = await siteFinancials(s._id, visitYearRange, effectiveInstrumentId)
     const lastVisit = await lastVisitLabelForSite(s._id, visitYearRange, s.lastVisitAt)
     const inst = s.instrumentId && typeof s.instrumentId === 'object' ? s.instrumentId : null
     out.push({
