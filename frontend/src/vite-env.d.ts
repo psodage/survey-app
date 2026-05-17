@@ -14,3 +14,9 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv
 }
+
+/** Safari iOS pinch-zoom gesture events (non-standard). */
+interface GestureEvent extends UIEvent {
+  readonly scale: number
+  readonly rotation: number
+}
