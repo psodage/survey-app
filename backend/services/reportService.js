@@ -1,5 +1,5 @@
 import SiteVisit from '../models/SiteVisit.js'
-import { resolveInstrumentScope, instrumentScopeMatch, peerAwareAdminScopeMatch } from '../utils/scope.js'
+import { sharedInstrumentOperationalScope } from '../utils/scope.js'
 
 function escapeRegex(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -11,11 +11,9 @@ function paymentLabel(s) {
 }
 
 export async function listReportRows(req, filters) {
-  const { allowedInstrumentIds } = await resolveInstrumentScope(req)
   const match = {
     companyId: req.user.companyId,
-    ...instrumentScopeMatch(allowedInstrumentIds),
-    ...(await peerAwareAdminScopeMatch(req)),
+    ...(await sharedInstrumentOperationalScope(req)),
   }
   if (filters.fromDate || filters.toDate) {
     match.visitDate = {}

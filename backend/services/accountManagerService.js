@@ -8,10 +8,9 @@ import Transaction from '../models/Transaction.js'
 import { ApiError } from '../utils/ApiError.js'
 import { instrumentCoworkerAdminIdStrings } from '../utils/instrumentPeers.js'
 import {
-  instrumentScopeMatch,
   optionalAdminIdQuery,
-  peerAwareAdminScopeMatch,
   resolveInstrumentScope,
+  sharedInstrumentOperationalScope,
 } from '../utils/scope.js'
 import { decAmount, effectivePaidAmount } from '../utils/visitPaymentMath.js'
 import { visitDateRangeForYear } from '../utils/yearQuery.js'
@@ -69,6 +68,16 @@ export async function assertAccountManagerReadAccess(req, amLean) {
   }
   if (req.user.role === 'admin') {
     if (adminIdString(req.user.id) === amAdminId) return
+    const { effectiveInstrumentId } = await resolveInstrumentScope(req)
+    const amInstRaw = amLean?.instrumentId
+    if (
+      effectiveInstrumentId &&
+      amInstRaw &&
+      mongoose.isValidObjectId(amInstRaw) &&
+      new mongoose.Types.ObjectId(amInstRaw).equals(effectiveInstrumentId)
+    ) {
+      return
+    }
     const peers = await instrumentCoworkerAdminIdStrings(req)
     if (peers?.has(amAdminId) && peers.has(adminIdString(req.user.id))) return
     if (await adminsShareInstrumentAssignment(req, amAdminId)) return
@@ -84,20 +93,20 @@ function formatInr(n) {
  * Client rows visible on a ledger page. Admins on the same instrument share clients/sites/visits;
  * debit/credit/net stay scoped to the viewed account manager. Super-admins see the manager's slice.
  */
-async function sharedClientAdminScope(req, managerDoc) {
-  if (req.user.role === 'super_admin') {
-    return { adminId: managerAdminObjectId(managerDoc) }
-  }
-  const peerScope = await peerAwareAdminScopeMatch(req)
-  if (peerScope.adminId?.$in) return peerScope
-  return { adminId: managerAdminObjectId(managerDoc) }
+async function sharedClientAdminScope(req) {
+  return sharedInstrumentOperationalScope(req)
 }
 
 export async function listAccountManagers(req) {
   const q = optionalAdminIdQuery(req)
   const match = { companyId: req.user.companyId, isActive: true, ...q }
   if (req.user.role === 'admin') {
-    Object.assign(match, await peerAwareAdminScopeMatch(req))
+    const { effectiveInstrumentId } = await resolveInstrumentScope(req)
+    if (effectiveInstrumentId) {
+      match.instrumentId = effectiveInstrumentId
+    } else {
+      match.adminId = req.user.id
+    }
   }
   const rows = await AccountManager.find(match).sort({ fullName: 1 }).lean()
   return rows.map((r) => ({
@@ -144,11 +153,9 @@ export async function getLedgerSummaryForManager(req, managerDoc, yearRaw) {
     else totalCredit += a
   }
 
-  const { allowedInstrumentIds } = await resolveInstrumentScope(req)
   const clients = await Client.find({
     companyId: req.user.companyId,
-    ...instrumentScopeMatch(allowedInstrumentIds),
-    ...(await sharedClientAdminScope(req, managerDoc)),
+    ...(await sharedClientAdminScope(req)),
   })
     .select('_id')
     .lean()
@@ -182,12 +189,10 @@ export async function getLedgerSummaryForManager(req, managerDoc, yearRaw) {
  * shared across account managers. Debit/credit/balance remain per manager.
  */
 export async function getGlobalPendingTotal(req, yearRaw) {
-  const { allowedInstrumentIds } = await resolveInstrumentScope(req)
   const visitYearRange = visitDateRangeForYear(yearRaw)
   const visitMatch = {
     companyId: req.user.companyId,
-    ...instrumentScopeMatch(allowedInstrumentIds),
-    ...(await peerAwareAdminScopeMatch(req)),
+    ...(await sharedInstrumentOperationalScope(req)),
     ...(visitYearRange ? { visitDate: visitYearRange } : {}),
   }
   const visits = await SiteVisit.find(visitMatch).select('amount paymentStatus paidAmount').lean()
@@ -203,11 +208,9 @@ export async function getGlobalPendingTotal(req, yearRaw) {
 /** Client → site names for credit transaction dropdowns (scoped to manager's adminId). */
 export async function listClientSiteOptionsForManager(req, managerDoc) {
   await assertAccountManagerReadAccess(req, managerDoc)
-  const { allowedInstrumentIds } = await resolveInstrumentScope(req)
   const clients = await Client.find({
     companyId: req.user.companyId,
-    ...instrumentScopeMatch(allowedInstrumentIds),
-    ...(await sharedClientAdminScope(req, managerDoc)),
+    ...(await sharedClientAdminScope(req)),
   })
     .select('name')
     .sort({ name: 1 })
@@ -240,12 +243,10 @@ export async function listAccountRowsForManager(req, managerDoc, yearRaw) {
   const adminId = managerAdminObjectId(managerDoc)
   await reconcileSiteCreditsForAdmin(req.user.companyId, adminId)
 
-  const { allowedInstrumentIds } = await resolveInstrumentScope(req)
   const visitYearRange = visitDateRangeForYear(yearRaw)
   const clients = await Client.find({
     companyId: req.user.companyId,
-    ...instrumentScopeMatch(allowedInstrumentIds),
-    ...(await sharedClientAdminScope(req, managerDoc)),
+    ...(await sharedClientAdminScope(req)),
   })
     .select('name phone')
     .sort({ name: 1 })

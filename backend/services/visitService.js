@@ -7,7 +7,7 @@ import Invoice from '../models/Invoice.js'
 import Transaction from '../models/Transaction.js'
 import SurveyFile from '../models/SurveyFile.js'
 import { ApiError } from '../utils/ApiError.js'
-import { resolveInstrumentScope, adminIdFilter, instrumentScopeMatch, peerAwareAdminScopeMatch } from '../utils/scope.js'
+import { resolveInstrumentScope, sharedInstrumentOperationalScope } from '../utils/scope.js'
 import { visitDateRangeForYear } from '../utils/yearQuery.js'
 import { owedAmount } from '../utils/visitPaymentMath.js'
 import { recomputeVisitCreditsForSite } from './visitCreditAllocation.js'
@@ -179,7 +179,6 @@ function serializeBillingLines(billingLines) {
 }
 
 export async function listVisits(req) {
-  const { allowedInstrumentIds } = await resolveInstrumentScope(req)
   const visitYearRange = visitDateRangeForYear(req.query?.year)
   const rawSiteId = typeof req.query?.siteId === 'string' ? req.query.siteId.trim() : ''
   let siteIdFilter = {}
@@ -191,8 +190,7 @@ export async function listVisits(req) {
     const site = await Site.findOne({
       _id: sid,
       companyId: req.user.companyId,
-      ...instrumentScopeMatch(allowedInstrumentIds),
-      ...(await peerAwareAdminScopeMatch(req)),
+      ...(await sharedInstrumentOperationalScope(req)),
     })
       .select('_id')
       .lean()
@@ -204,8 +202,7 @@ export async function listVisits(req) {
 
   const match = {
     companyId: req.user.companyId,
-    ...instrumentScopeMatch(allowedInstrumentIds),
-    ...(await peerAwareAdminScopeMatch(req)),
+    ...(await sharedInstrumentOperationalScope(req)),
     ...siteIdFilter,
     ...(visitYearRange ? { visitDate: visitYearRange } : {}),
   }
@@ -230,8 +227,7 @@ export async function createVisit(req, body, { preUploadedPhotos } = {}) {
   const site = await Site.findOne({
     _id: body.siteId,
     companyId: req.user.companyId,
-    ...instrumentScopeMatch(allowedInstrumentIds),
-    ...(await peerAwareAdminScopeMatch(req)),
+    ...(await sharedInstrumentOperationalScope(req)),
   })
   if (!site) throw new ApiError(404, 'Site not found')
 
@@ -335,8 +331,7 @@ export async function getVisitById(req, visitId) {
   const visit = await SiteVisit.findOne({
     _id: visitId,
     companyId: req.user.companyId,
-    ...instrumentScopeMatch(allowedInstrumentIds),
-    ...(await peerAwareAdminScopeMatch(req)),
+    ...(await sharedInstrumentOperationalScope(req)),
   })
     .populate('clientId', 'name')
     .populate('siteId', 'name')
@@ -351,8 +346,7 @@ export async function updateVisit(req, visitId, body) {
   const visit = await SiteVisit.findOne({
     _id: visitId,
     companyId: req.user.companyId,
-    ...instrumentScopeMatch(allowedInstrumentIds),
-    ...(await peerAwareAdminScopeMatch(req)),
+    ...(await sharedInstrumentOperationalScope(req)),
   })
   if (!visit) throw new ApiError(404, 'Visit not found')
 
@@ -442,8 +436,7 @@ export async function appendVisitPhotos(req, visitId, { urls, fileIds }) {
   const visit = await SiteVisit.findOne({
     _id: visitId,
     companyId: req.user.companyId,
-    ...instrumentScopeMatch(allowedInstrumentIds),
-    ...(await peerAwareAdminScopeMatch(req)),
+    ...(await sharedInstrumentOperationalScope(req)),
   })
   if (!visit) throw new ApiError(404, 'Visit not found')
   if (urls?.length) {
@@ -465,8 +458,7 @@ export async function deleteVisit(req, visitId) {
   const visit = await SiteVisit.findOne({
     _id: visitId,
     companyId: req.user.companyId,
-    ...instrumentScopeMatch(allowedInstrumentIds),
-    ...(await peerAwareAdminScopeMatch(req)),
+    ...(await sharedInstrumentOperationalScope(req)),
   })
     .select('_id siteId clientId adminId instrumentId photoFileIds photoUrls invoiceId visitCode')
     .lean()

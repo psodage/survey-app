@@ -5,7 +5,7 @@ import Client from '../models/Client.js'
 import Site from '../models/Site.js'
 import SiteVisit from '../models/SiteVisit.js'
 import { ApiError } from '../utils/ApiError.js'
-import { resolveInstrumentScope, optionalAdminIdQuery, instrumentScopeMatch, peerAwareAdminScopeMatch } from '../utils/scope.js'
+import { resolveInstrumentScope, optionalAdminIdQuery, sharedInstrumentOperationalScope } from '../utils/scope.js'
 import { visitDateRangeForYear } from '../utils/yearQuery.js'
 import * as accountManagerService from './accountManagerService.js'
 import { recomputeVisitCreditsForSite } from './visitCreditAllocation.js'
@@ -86,8 +86,7 @@ export async function createTransaction(req, accountManagerId, body) {
     const v = await SiteVisit.findOne({
       _id: rawVisitId,
       companyId: req.user.companyId,
-      ...instrumentScopeMatch(allowedInstrumentIds),
-      ...(await peerAwareAdminScopeMatch(req)),
+      ...(await sharedInstrumentOperationalScope(req)),
     })
       .select('_id siteId clientId instrumentId')
       .lean()

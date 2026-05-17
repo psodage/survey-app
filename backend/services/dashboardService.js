@@ -1,7 +1,7 @@
 import Client from '../models/Client.js'
 import Site from '../models/Site.js'
 import SiteVisit from '../models/SiteVisit.js'
-import { resolveInstrumentScope, instrumentScopeMatch, peerAwareAdminScopeMatch } from '../utils/scope.js'
+import { sharedInstrumentOperationalScope } from '../utils/scope.js'
 import { visitDateRangeForYear } from '../utils/yearQuery.js'
 import { decAmount } from '../utils/visitPaymentMath.js'
 
@@ -51,12 +51,10 @@ function visitAmountFieldsStage() {
 }
 
 export async function getDashboard(req) {
-  const { allowedInstrumentIds } = await resolveInstrumentScope(req)
   const visitYearRange = visitDateRangeForYear(req.query?.year)
   const base = {
     companyId: req.user.companyId,
-    ...instrumentScopeMatch(allowedInstrumentIds),
-    ...(await peerAwareAdminScopeMatch(req)),
+    ...(await sharedInstrumentOperationalScope(req)),
   }
 
   const visitMatch = { ...base, ...(visitYearRange ? { visitDate: visitYearRange } : {}) }

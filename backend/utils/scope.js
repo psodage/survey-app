@@ -47,8 +47,31 @@ export function adminIdFilter(req) {
 }
 
 /**
+ * Clients, sites, and visits on the active instrument are shared by every admin on that
+ * instrument. Debit/credit/net balance stay per account manager.
+ */
+export async function sharedInstrumentOperationalScope(req) {
+  const user = req.user
+  if (!user) return {}
+
+  const { allowedInstrumentIds, effectiveInstrumentId } = await resolveInstrumentScope(req)
+
+  if (user.role === 'super_admin') {
+    const adminQ = optionalAdminIdQuery(req)
+    if (effectiveInstrumentId) return { instrumentId: effectiveInstrumentId, ...adminQ }
+    if (allowedInstrumentIds.length) return { ...instrumentScopeMatch(allowedInstrumentIds), ...adminQ }
+    return adminQ
+  }
+
+  if (effectiveInstrumentId) return { instrumentId: effectiveInstrumentId }
+  if (allowedInstrumentIds.length) return instrumentScopeMatch(allowedInstrumentIds)
+  return { adminId: user.id }
+}
+
+/**
  * For admins: when a valid assigned instrument is active (header/query), include all peer
  * admins on that instrument in read queries; otherwise restrict to self. Super-admins: no filter.
+ * @deprecated Prefer sharedInstrumentOperationalScope for clients/sites/visits.
  */
 export async function peerAwareAdminScopeMatch(req) {
   const user = req.user

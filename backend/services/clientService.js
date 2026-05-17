@@ -10,12 +10,7 @@ import SurveyFile from '../models/SurveyFile.js'
 import { ApiError } from '../utils/ApiError.js'
 import * as uploadService from './uploadService.js'
 import { parseObjectId } from '../utils/instrumentAccess.js'
-import {
-  resolveInstrumentScope,
-  optionalAdminIdQuery,
-  instrumentScopeMatch,
-  peerAwareAdminScopeMatch,
-} from '../utils/scope.js'
+import { resolveInstrumentScope, sharedInstrumentOperationalScope } from '../utils/scope.js'
 import { decAmount, effectivePaidAmount } from '../utils/visitPaymentMath.js'
 import { visitDateRangeForYear } from '../utils/yearQuery.js'
 
@@ -67,14 +62,10 @@ async function siteFinancials(siteId, visitDateRange) {
 }
 
 export async function listClients(req) {
-  const { allowedInstrumentIds } = await resolveInstrumentScope(req)
-  const adminQ = optionalAdminIdQuery(req)
   const visitYearRange = visitDateRangeForYear(req.query?.year)
   const match = {
     companyId: req.user.companyId,
-    ...instrumentScopeMatch(allowedInstrumentIds),
-    ...(await peerAwareAdminScopeMatch(req)),
-    ...adminQ,
+    ...(await sharedInstrumentOperationalScope(req)),
   }
   const clients = await Client.find(match)
     .select('name phone updatedAt')
@@ -291,12 +282,10 @@ export async function getClientReportExport(req, clientId, yearRaw) {
 }
 
 export async function getClientById(req, id) {
-  const { allowedInstrumentIds } = await resolveInstrumentScope(req)
   const client = await Client.findOne({
     _id: id,
     companyId: req.user.companyId,
-    ...instrumentScopeMatch(allowedInstrumentIds),
-    ...(await peerAwareAdminScopeMatch(req)),
+    ...(await sharedInstrumentOperationalScope(req)),
   }).lean()
   if (!client) throw new ApiError(404, 'Client not found')
   return client
@@ -307,16 +296,15 @@ export async function getClientById(req, id) {
  * (including Cloudinary assets), and account-manager transactions that reference those records.
  */
 export async function deleteClientWithSites(req, clientId) {
-  const { allowedInstrumentIds } = await resolveInstrumentScope(req)
-  const adminQ = optionalAdminIdQuery(req)
   const client = await Client.findOne({
     _id: clientId,
     companyId: req.user.companyId,
-    ...instrumentScopeMatch(allowedInstrumentIds),
-    ...(await peerAwareAdminScopeMatch(req)),
-    ...adminQ,
-  }).select('_id')
+    ...(await sharedInstrumentOperationalScope(req)),
+  }).select('_id adminId')
   if (!client) throw new ApiError(404, 'Client not found')
+  if (req.user.role === 'admin' && client.adminId?.toString() !== req.user.id.toString()) {
+    throw new ApiError(403, 'Forbidden')
+  }
 
   const sites = await Site.find({ clientId: client._id, companyId: req.user.companyId }).select('_id').lean()
   const siteIds = sites.map((s) => s._id)

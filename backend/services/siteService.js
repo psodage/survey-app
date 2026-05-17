@@ -6,7 +6,7 @@ import Transaction from '../models/Transaction.js'
 import Invoice from '../models/Invoice.js'
 import SurveyFile from '../models/SurveyFile.js'
 import { ApiError } from '../utils/ApiError.js'
-import { resolveInstrumentScope, optionalAdminIdQuery, instrumentScopeMatch, peerAwareAdminScopeMatch } from '../utils/scope.js'
+import { resolveInstrumentScope, sharedInstrumentOperationalScope } from '../utils/scope.js'
 import { visitDateRangeForYear } from '../utils/yearQuery.js'
 import { decAmount, effectivePaidAmount } from '../utils/visitPaymentMath.js'
 import * as uploadService from './uploadService.js'
@@ -48,12 +48,10 @@ async function lastVisitLabelForSite(siteId, visitDateRange, fallbackLastVisitAt
 }
 
 export async function listSitesForClient(req, clientId) {
-  const { allowedInstrumentIds } = await resolveInstrumentScope(req)
   const client = await Client.findOne({
     _id: clientId,
     companyId: req.user.companyId,
-    ...instrumentScopeMatch(allowedInstrumentIds),
-    ...(await peerAwareAdminScopeMatch(req)),
+    ...(await sharedInstrumentOperationalScope(req)),
   }).lean()
   if (!client) throw new ApiError(404, 'Client not found')
 
@@ -85,8 +83,7 @@ export async function createSite(req, { clientId, name, locationLabel }) {
   const client = await Client.findOne({
     _id: clientId,
     companyId: req.user.companyId,
-    ...instrumentScopeMatch(allowedInstrumentIds),
-    ...(await peerAwareAdminScopeMatch(req)),
+    ...(await sharedInstrumentOperationalScope(req)),
   })
   if (!client) throw new ApiError(404, 'Client not found')
   const site = await Site.create({
@@ -110,12 +107,10 @@ export async function createSite(req, { clientId, name, locationLabel }) {
 }
 
 export async function listAllSites(req) {
-  const { allowedInstrumentIds } = await resolveInstrumentScope(req)
   const visitYearRange = visitDateRangeForYear(req.query?.year)
   const match = {
     companyId: req.user.companyId,
-    ...instrumentScopeMatch(allowedInstrumentIds),
-    ...(await peerAwareAdminScopeMatch(req)),
+    ...(await sharedInstrumentOperationalScope(req)),
   }
   const sites = await Site.find(match)
     .select('name locationLabel address status lastVisitAt updatedAt clientId instrumentId')
@@ -150,16 +145,15 @@ export async function listAllSites(req) {
  * related transactions, and linked survey files (Cloudinary + DB).
  */
 export async function deleteSiteWithRelated(req, siteId) {
-  const { allowedInstrumentIds } = await resolveInstrumentScope(req)
-  const adminQ = optionalAdminIdQuery(req)
   const site = await Site.findOne({
     _id: siteId,
     companyId: req.user.companyId,
-    ...instrumentScopeMatch(allowedInstrumentIds),
-    ...(await peerAwareAdminScopeMatch(req)),
-    ...adminQ,
-  }).select('_id')
+    ...(await sharedInstrumentOperationalScope(req)),
+  }).select('_id adminId')
   if (!site) throw new ApiError(404, 'Site not found')
+  if (req.user.role === 'admin' && site.adminId?.toString() !== req.user.id.toString()) {
+    throw new ApiError(403, 'Forbidden')
+  }
 
   const visits = await SiteVisit.find({ siteId: site._id, companyId: req.user.companyId })
     .select('_id photoFileIds photoUrls invoiceId')
