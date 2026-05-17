@@ -315,11 +315,8 @@ export async function deleteClientWithSites(req, clientId) {
     _id: clientId,
     companyId: req.user.companyId,
     ...(await sharedInstrumentOperationalScope(req)),
-  }).select('_id adminId')
+  }).select('_id')
   if (!client) throw new ApiError(404, 'Client not found')
-  if (req.user.role === 'admin' && client.adminId?.toString() !== req.user.id.toString()) {
-    throw new ApiError(403, 'Forbidden')
-  }
 
   const sites = await Site.find({ clientId: client._id, companyId: req.user.companyId }).select('_id').lean()
   const siteIds = sites.map((s) => s._id)

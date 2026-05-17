@@ -163,11 +163,8 @@ export async function deleteSiteWithRelated(req, siteId) {
     _id: siteId,
     companyId: req.user.companyId,
     ...(await sharedInstrumentOperationalScope(req)),
-  }).select('_id adminId')
+  }).select('_id')
   if (!site) throw new ApiError(404, 'Site not found')
-  if (req.user.role === 'admin' && site.adminId?.toString() !== req.user.id.toString()) {
-    throw new ApiError(403, 'Forbidden')
-  }
 
   const visits = await SiteVisit.find({ siteId: site._id, companyId: req.user.companyId })
     .select('_id photoFileIds photoUrls invoiceId')
