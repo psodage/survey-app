@@ -105,7 +105,6 @@ export default defineConfig(({ mode }) => {
       output: {
         manualChunks: {
           vendor: ['react', 'react-dom', 'react-router-dom'],
-          pdf: ['jspdf', 'jspdf-autotable'],
           ui: ['lucide-react'],
         },
       },

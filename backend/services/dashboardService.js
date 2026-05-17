@@ -3,7 +3,7 @@ import Site from '../models/Site.js'
 import SiteVisit from '../models/SiteVisit.js'
 import { resolveInstrumentScope, instrumentScopeMatch, peerAwareAdminScopeMatch } from '../utils/scope.js'
 import { visitDateRangeForYear } from '../utils/yearQuery.js'
-import { decAmount, effectivePaidAmount } from '../utils/visitPaymentMath.js'
+import { decAmount } from '../utils/visitPaymentMath.js'
 
 function formatInr(n) {
   return `₹${Math.round(n).toLocaleString('en-IN')}`
@@ -12,6 +12,42 @@ function formatInr(n) {
 function paymentLabel(s) {
   const m = { pending: 'Pending', partial: 'Partial', paid: 'Paid', waived: 'Waived' }
   return m[s] ?? s
+}
+
+/** MongoDB expression matching effectivePaidAmount() in visitPaymentMath.js */
+function receivedAmountExpr() {
+  return {
+    $let: {
+      vars: {
+        amt: { $toDouble: { $ifNull: ['$amount', 0] } },
+        paidSet: { $ne: [{ $ifNull: ['$paidAmount', null] }, null] },
+      },
+      in: {
+        $cond: [
+          '$$paidSet',
+          { $min: ['$$amt', { $toDouble: { $ifNull: ['$paidAmount', 0] } }] },
+          {
+            $switch: {
+              branches: [
+                { case: { $eq: ['$paymentStatus', 'paid'] }, then: '$$amt' },
+                { case: { $eq: ['$paymentStatus', 'partial'] }, then: { $multiply: ['$$amt', 0.5] } },
+              ],
+              default: 0,
+            },
+          },
+        ],
+      },
+    },
+  }
+}
+
+function visitAmountFieldsStage() {
+  return {
+    $addFields: {
+      amountNum: { $toDouble: { $ifNull: ['$amount', 0] } },
+      receivedNum: receivedAmountExpr(),
+    },
+  }
 }
 
 export async function getDashboard(req) {
@@ -24,7 +60,52 @@ export async function getDashboard(req) {
   }
 
   const visitMatch = { ...base, ...(visitYearRange ? { visitDate: visitYearRange } : {}) }
-  const visits = await SiteVisit.find(visitMatch).sort({ visitDate: -1 }).limit(10).populate('clientId', 'name').populate('siteId', 'name').lean()
+
+  const [visits, facetRows, totalClients, totalSites] = await Promise.all([
+    SiteVisit.find(visitMatch)
+      .sort({ visitDate: -1 })
+      .limit(10)
+      .populate('clientId', 'name')
+      .populate('siteId', 'name')
+      .lean(),
+    SiteVisit.aggregate([
+      { $match: visitMatch },
+      visitAmountFieldsStage(),
+      {
+        $facet: {
+          totals: [
+            {
+              $group: {
+                _id: null,
+                totalRevenue: { $sum: '$amountNum' },
+                received: { $sum: '$receivedNum' },
+              },
+            },
+          ],
+          byClient: [
+            { $match: { clientId: { $ne: null } } },
+            {
+              $group: {
+                _id: '$clientId',
+                revenue: { $sum: '$amountNum' },
+                received: { $sum: '$receivedNum' },
+              },
+            },
+            {
+              $addFields: {
+                pending: { $subtract: ['$revenue', '$received'] },
+              },
+            },
+            { $match: { pending: { $gt: 0 } } },
+            { $sort: { pending: -1 } },
+            { $limit: 50 },
+          ],
+        },
+      },
+    ]),
+    Client.countDocuments(base),
+    Site.countDocuments(base),
+  ])
 
   const recentVisits = visits.map((v) => ({
     id: v.visitCode || v._id.toString(),
@@ -40,28 +121,14 @@ export async function getDashboard(req) {
     work: v.workDescription ?? '',
   }))
 
-  const allVisits = await SiteVisit.find(visitMatch)
-    .select('amount paymentStatus paidAmount clientId')
-    .limit(5000)
-    .lean()
-  const byClient = new Map()
-  for (const v of allVisits) {
-    const id = v.clientId?.toString()
-    if (!id) continue
-    const a = decAmount(v.amount)
-    if (!byClient.has(id)) byClient.set(id, { revenue: 0, received: 0 })
-    const row = byClient.get(id)
-    row.revenue += a
-    row.received += effectivePaidAmount(v)
-  }
+  const facet = facetRows[0] ?? { totals: [], byClient: [] }
+  const totals = facet.totals[0] ?? { totalRevenue: 0, received: 0 }
+  const totalRevenue = totals.totalRevenue ?? 0
+  const received = totals.received ?? 0
+  const pending = Math.max(0, totalRevenue - received)
 
-  const pendingEntries = []
-  for (const [id, agg] of byClient) {
-    const pending = Math.max(0, agg.revenue - agg.received)
-    if (pending > 0) pendingEntries.push({ id, pending })
-  }
-  pendingEntries.sort((a, b) => b.pending - a.pending)
-  const topPendingIds = pendingEntries.slice(0, 50).map((e) => e.id)
+  const byClient = facet.byClient ?? []
+  const topPendingIds = byClient.map((row) => row._id)
   const clients =
     topPendingIds.length > 0
       ? await Client.find({ ...base, _id: { $in: topPendingIds } })
@@ -69,21 +136,14 @@ export async function getDashboard(req) {
           .lean()
       : []
   const nameById = new Map(clients.map((c) => [c._id.toString(), c.name]))
-  const pendingAmountByClient = pendingEntries
-    .filter((e) => nameById.has(e.id))
-    .map((e) => [nameById.get(e.id), formatInr(e.pending)])
-
-  let totalRevenue = 0
-  let received = 0
-  for (const v of allVisits) {
-    const a = decAmount(v.amount)
-    totalRevenue += a
-    received += effectivePaidAmount(v)
-  }
-  const pending = Math.max(0, totalRevenue - received)
-
-  const totalClients = await Client.countDocuments(base)
-  const totalSites = await Site.countDocuments(base)
+  const pendingAmountByClient = byClient
+    .map((row) => {
+      const id = row._id?.toString()
+      const name = id ? nameById.get(id) : undefined
+      if (!name) return null
+      return [name, formatInr(row.pending)]
+    })
+    .filter(Boolean)
 
   return {
     stats: {

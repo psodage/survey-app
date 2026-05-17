@@ -1,4 +1,5 @@
 import express from 'express'
+import compression from 'compression'
 import helmet from 'helmet'
 import cors from 'cors'
 import mongoose from 'mongoose'
@@ -41,6 +42,7 @@ if (!isBrevoConfigured()) {
 
 const app = express()
 app.set('trust proxy', 1)
+app.use(compression())
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }))
 function isAllowedCorsOrigin(origin) {
   if (!origin) return true

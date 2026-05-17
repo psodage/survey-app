@@ -48,7 +48,7 @@ import http from './api/http'
 import { useAuth } from './context/AuthContext'
 import { useSelectedYear } from './context/SelectedYearContext'
 import { signOut } from './signOut'
-import { exportSiteVisitsPdf } from './exportSiteVisitsPdf'
+import { lazyExportSiteVisitsPdf } from './utils/lazyPdf'
 import { runExport } from './utils/runExport'
 import { computeVisitListStats } from './utils/visitListStats'
 import { validateSiteVisitForm } from './utils/validateSiteVisit'
@@ -694,7 +694,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                         if (filteredVisitRecords.length === 0 || exportBusy) return
                         setExportBusy(true)
                         void runExport('PDF', () =>
-                          exportSiteVisitsPdf(
+                          lazyExportSiteVisitsPdf(
                             filteredVisitRecords.map((r) => ({
                               id: r.id,
                               client: r.client,

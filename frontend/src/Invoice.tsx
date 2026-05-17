@@ -20,7 +20,7 @@ import { AccountManagerSidebarBlock } from './AccountManagerSidebarBlock'
 import { CollaborationBrandMark } from './CollaborationBrandMark'
 import { LayoutFooter } from './LayoutFooter'
 import { CardShell } from './dashboardCards'
-import { exportInvoicePdf } from './exportInvoicePdf'
+import { lazyExportInvoicePdf } from './utils/lazyPdf'
 import { todayInvoiceDate } from './utils/invoiceDate'
 import { layoutBrandLogo } from './brandLogo'
 import { AppSelect } from './components/AppSelect'
@@ -108,7 +108,7 @@ export default function Invoice({ onNavigate }: InvoiceProps) {
     const extraCharges = parseMoney(formValues.extraCharges)
     const discount = parseMoney(formValues.discount)
 
-    await exportInvoicePdf({
+    await lazyExportInvoicePdf({
       client: formValues.client,
       site: formValues.site,
       workType: formValues.workType,

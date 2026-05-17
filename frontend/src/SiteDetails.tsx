@@ -37,9 +37,13 @@ import {
 } from './dashboardCards'
 import { ConfirmAlert } from './ConfirmAlert'
 import { EditSiteVisitModal, type EditSiteVisitInitial } from './components/EditSiteVisitModal'
-import { exportCombinedSiteInvoicePdf, exportInvoicePdf, type InvoicePdfBillingLine } from './exportInvoicePdf'
-import { exportSiteReportPdf } from './exportSiteReportPdf'
-import { exportVisitRecordPdf } from './exportVisitRecordPdf'
+import type { InvoicePdfBillingLine } from './exportInvoicePdf'
+import {
+  lazyExportCombinedSiteInvoicePdf,
+  lazyExportInvoicePdf,
+  lazyExportSiteReportPdf,
+  lazyExportVisitRecordPdf,
+} from './utils/lazyPdf'
 import { formatBillingLinesForDisplay } from './utils/formatBillingLines'
 import { todayInvoiceDate } from './utils/invoiceDate'
 import { AppSelect } from './components/AppSelect'
@@ -462,7 +466,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
       : undefined
     setExportBusy(true)
     void runExport('site report', () =>
-      exportSiteReportPdf({
+      lazyExportSiteReportPdf({
         client,
         siteName: name,
         location: effectiveLocation || undefined,
@@ -608,7 +612,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
     const hasBilling = Boolean(record.billingLines?.length)
     setExportBusy(true)
     void runExport('invoice', () =>
-      exportInvoicePdf({
+      lazyExportInvoicePdf({
       client,
       site: `${siteAddressLine} (Visit ${record.id})`,
       workType: record.machine,
@@ -666,7 +670,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
     }))
     setExportBusy(true)
     void runExport('combined invoice', () =>
-      exportCombinedSiteInvoicePdf({
+      lazyExportCombinedSiteInvoicePdf({
         client,
         site: name,
         location: effectiveLocation || undefined,
@@ -701,7 +705,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
     const reportEngineer = record.engineerName?.trim() || effectiveEngineerName
     setExportBusy(true)
     void runExport('visit PDF', () =>
-      exportVisitRecordPdf({
+      lazyExportVisitRecordPdf({
         visitId: record.visitId,
         visitNo: reportVisitNo,
         client,
@@ -1210,7 +1214,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                             : parseVisitAmount(effectiveAmount)
                         setExportBusy(true)
                         void runExport('invoice', () =>
-                          exportInvoicePdf({
+                          lazyExportInvoicePdf({
                             client,
                             site: `${siteAddressLine} (Visit ${visitId})`,
                             workType: effectiveMachine,

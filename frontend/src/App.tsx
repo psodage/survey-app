@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import {
   Navigate,
   Outlet,
@@ -8,23 +8,25 @@ import {
   useNavigate,
   type NavigateFunction,
 } from 'react-router-dom'
-import AccountManager from './AccountManager'
-import AccountManagerSelect from './AccountManagerSelect'
 import { DEFAULT_ACCOUNT_MANAGER_ID } from './accountManagersData'
-import AddSite from './AddSite'
-import AddSiteVisit from './AddSiteVisit'
-import ClientsSites from './ClientsSites'
-import Dashboard from './Dashboard'
-import Invoice from './Invoice'
-import Reports from './Reports'
-import { SiteDetails } from './SiteDetails'
-import Settings from './Settings'
 import InstallPrompt from './components/InstallPrompt.jsx'
+import { RouteFallback } from './components/RouteFallback'
 import Login from './Login.jsx'
 import ForgotPassword from './ForgotPassword.jsx'
 import VerifyOtp from './VerifyOtp.jsx'
 import ResetPassword from './ResetPassword.jsx'
 import { useAuth } from './context/AuthContext'
+
+const Dashboard = lazy(() => import('./Dashboard'))
+const Invoice = lazy(() => import('./Invoice'))
+const AccountManager = lazy(() => import('./AccountManager'))
+const AccountManagerSelect = lazy(() => import('./AccountManagerSelect'))
+const ClientsSites = lazy(() => import('./ClientsSites'))
+const AddSite = lazy(() => import('./AddSite'))
+const AddSiteVisit = lazy(() => import('./AddSiteVisit'))
+const SiteDetails = lazy(() => import('./SiteDetails').then((m) => ({ default: m.SiteDetails })))
+const Reports = lazy(() => import('./Reports'))
+const Settings = lazy(() => import('./Settings'))
 
 const PUBLIC_PATHS = new Set(['/login', '/forgot-password', '/verify-reset-otp', '/reset-password'])
 
@@ -82,27 +84,29 @@ function AppRoutes() {
   const navigate = useNavigate()
 
   return (
-    <Routes location={location}>
-      <Route element={<AuthBoundary />}>
-        <Route path="/" element={<HomeRedirect />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/forgot-password" element={<ForgotPassword />} />
-        <Route path="/verify-reset-otp" element={<VerifyOtp />} />
-        <Route path="/reset-password" element={<ResetPassword />} />
-        <Route path="/dashboard" element={<Dashboard onNavigate={navigate} />} />
-        <Route path="/invoice" element={<Invoice onNavigate={navigate} />} />
-        <Route path="/account-manager" element={<AccountManagerIndex onNavigate={navigate} />} />
-        <Route path="/account-manager/:managerId" element={<AccountManager onNavigate={navigate} />} />
-        <Route path="/clients-sites" element={<ClientsSites onNavigate={navigate} />} />
-        <Route path="/add-site" element={<AddSite onNavigate={navigate} />} />
-        <Route path="/site-visits" element={<AddSiteVisit onNavigate={navigate} />} />
-        <Route path="/add-site-visit" element={<AddSiteVisit onNavigate={navigate} />} />
-        <Route path="/site-details" element={<SiteDetails onNavigate={navigate} />} />
-        <Route path="/reports" element={<Reports onNavigate={navigate} />} />
-        <Route path="/settings" element={<Settings onNavigate={navigate} />} />
-        <Route path="*" element={<CatchAllRedirect />} />
-      </Route>
-    </Routes>
+    <Suspense fallback={<RouteFallback />}>
+      <Routes location={location}>
+        <Route element={<AuthBoundary />}>
+          <Route path="/" element={<HomeRedirect />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/verify-reset-otp" element={<VerifyOtp />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/dashboard" element={<Dashboard onNavigate={navigate} />} />
+          <Route path="/invoice" element={<Invoice onNavigate={navigate} />} />
+          <Route path="/account-manager" element={<AccountManagerIndex onNavigate={navigate} />} />
+          <Route path="/account-manager/:managerId" element={<AccountManager onNavigate={navigate} />} />
+          <Route path="/clients-sites" element={<ClientsSites onNavigate={navigate} />} />
+          <Route path="/add-site" element={<AddSite onNavigate={navigate} />} />
+          <Route path="/site-visits" element={<AddSiteVisit onNavigate={navigate} />} />
+          <Route path="/add-site-visit" element={<AddSiteVisit onNavigate={navigate} />} />
+          <Route path="/site-details" element={<SiteDetails onNavigate={navigate} />} />
+          <Route path="/reports" element={<Reports onNavigate={navigate} />} />
+          <Route path="/settings" element={<Settings onNavigate={navigate} />} />
+          <Route path="*" element={<CatchAllRedirect />} />
+        </Route>
+      </Routes>
+    </Suspense>
   )
 }
 

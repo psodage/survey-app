@@ -45,12 +45,7 @@ import { signOut } from './signOut'
 import { ConfirmAlert } from './ConfirmAlert'
 import { AppSelect } from './components/AppSelect'
 import { TablePagination } from './components/TablePagination'
-import {
-  exportAllClientsExcel,
-  exportAllClientsPdf,
-  exportClientExcel,
-  exportClientPdf,
-} from './utils/exportClientsReport'
+import { lazyExportAllClientsPdf, lazyExportClientPdf } from './utils/lazyPdf'
 import { runExport } from './utils/runExport'
 
 const CLIENT_PAGE_SIZE = 10
@@ -521,7 +516,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
         return
       }
       await runExport('client PDF', () =>
-        exportClientPdf({
+        lazyExportClientPdf({
           client: res.data.client ?? selectedClient,
           sites: res.data.sites ?? selectedSites,
           visits: res.data.visits,
@@ -566,14 +561,15 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
         toast.error('Could not load client report data')
         return
       }
-      await runExport('client spreadsheet', () =>
-        exportClientExcel({
+      await runExport('client spreadsheet', async () => {
+        const { exportClientExcel } = await import('./utils/exportClientsReport')
+        return exportClientExcel({
           client: res.data.client ?? selectedClient,
           sites: res.data.sites ?? selectedSites,
           visits: res.data.visits,
           credits: res.data.credits,
-        }),
-      )
+        })
+      })
     } catch {
       toast.error('Could not export client spreadsheet')
     } finally {
@@ -663,15 +659,16 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
   const handleExportAllClientsPdf = () => {
     if (exportBusy) return
     setExportBusy(true)
-    void runExport('clients PDF', () => exportAllClientsPdf(filteredRows)).finally(() => setExportBusy(false))
+    void runExport('clients PDF', () => lazyExportAllClientsPdf(filteredRows)).finally(() => setExportBusy(false))
   }
 
   const handleExportAllClientsExcel = () => {
     if (exportBusy) return
     setExportBusy(true)
-    void runExport('clients spreadsheet', () => exportAllClientsExcel(filteredRows)).finally(() =>
-      setExportBusy(false),
-    )
+    void runExport('clients spreadsheet', async () => {
+      const { exportAllClientsExcel } = await import('./utils/exportClientsReport')
+      return exportAllClientsExcel(filteredRows)
+    }).finally(() => setExportBusy(false))
   }
 
   return (
