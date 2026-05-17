@@ -112,14 +112,24 @@ function Login() {
 
   async function onSubmit(event) {
     event.preventDefault()
-    const email = identifier.trim()
-    if (!email || !password) {
-      toast.error('Enter email and password.')
+    const id = identifier.trim()
+    if (!id || !password) {
+      toast.error('Enter email or mobile number and password.')
+      return
+    }
+    const digits = id.replace(/\D/g, '')
+    if (id.includes('@')) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(id)) {
+        toast.error('Enter a valid email address.')
+        return
+      }
+    } else if (digits.length < 10) {
+      toast.error('Enter a valid 10-digit mobile number.')
       return
     }
     setIsSubmitting(true)
     try {
-      await login(email, password)
+      await login(id, password)
       setIdentifier('')
       setPassword('')
       toast.success('Signed in')

@@ -1,7 +1,19 @@
 import { z } from 'zod'
 
 export const loginSchema = z.object({
-  email: z.string().email(),
+  /** Email address or mobile number (10+ digits; +91 / spaces allowed). */
+  email: z
+    .string()
+    .min(1, 'Email or mobile number is required')
+    .max(200)
+    .refine(
+      (v) => {
+        const s = v.trim()
+        if (s.includes('@')) return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s)
+        return s.replace(/\D/g, '').length >= 10
+      },
+      { message: 'Enter a valid email or mobile number' },
+    ),
   password: z.string().min(1),
 })
 

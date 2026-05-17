@@ -9,6 +9,7 @@ import { ApiError } from '../utils/ApiError.js'
 import mongoose from 'mongoose'
 import { signAccessToken } from '../utils/token.js'
 import { getAllowedInstrumentObjectIds } from '../utils/instrumentAccess.js'
+import { isEmailLoginIdentifier, phoneDigitsForLogin, phoneSuffixRegex } from '../utils/loginIdentifier.js'
 import { isBrevoConfigured, sendPasswordResetOtpEmail } from './mailService.js'
 
 const OTP_TTL_MS = 10 * 60 * 1000
@@ -62,21 +63,51 @@ async function listActiveAdminContacts(companyId) {
   }))
 }
 
-export async function login({ email, password }) {
-  const normalized = email.trim().toLowerCase()
-  const matches = await User.find({ email: normalized }).select('+passwordHash').populate('companyId')
+async function findUsersForLogin(identifier) {
+  const raw = String(identifier ?? '').trim()
+  if (!raw) return []
+
+  if (isEmailLoginIdentifier(raw)) {
+    return User.find({ email: raw.toLowerCase() }).select('+passwordHash').populate('companyId')
+  }
+
+  const last10 = phoneDigitsForLogin(raw)
+  if (!last10) return []
+
+  const phoneRe = phoneSuffixRegex(last10)
+  let matches = await User.find({ 'profile.phone': phoneRe }).select('+passwordHash').populate('companyId')
+
   if (matches.length === 0) {
-    throw new ApiError(401, 'Invalid email or password')
+    const amRows = await AccountManager.find({ phone: phoneRe, isActive: true }).select('adminId').lean()
+    const adminIds = [...new Set(amRows.map((r) => r.adminId?.toString()).filter(Boolean))]
+    if (adminIds.length) {
+      matches = await User.find({ _id: { $in: adminIds } }).select('+passwordHash').populate('companyId')
+    }
+  }
+
+  return matches
+}
+
+export async function login({ email, password }) {
+  const matches = await findUsersForLogin(email)
+  if (matches.length === 0) {
+    throw new ApiError(401, 'Invalid email, mobile number, or password')
   }
   if (matches.length > 1) {
-    throw new ApiError(400, 'Multiple accounts share this email. Contact support.')
+    const byEmail = isEmailLoginIdentifier(email)
+    throw new ApiError(
+      400,
+      byEmail
+        ? 'Multiple accounts share this email. Contact support.'
+        : 'Multiple accounts share this mobile number. Contact support.',
+    )
   }
   const user = matches[0]
   if (!user || !user.isActive) {
-    throw new ApiError(401, 'Invalid email or password')
+    throw new ApiError(401, 'Invalid email, mobile number, or password')
   }
   const ok = await bcrypt.compare(password, user.passwordHash)
-  if (!ok) throw new ApiError(401, 'Invalid email or password')
+  if (!ok) throw new ApiError(401, 'Invalid email, mobile number, or password')
 
   user.lastLoginAt = new Date()
   await user.save()
