@@ -1,5 +1,6 @@
 import mongoose from 'mongoose'
 import AccountManager from '../models/AccountManager.js'
+import InstrumentAssignment from '../models/InstrumentAssignment.js'
 import Client from '../models/Client.js'
 import Site from '../models/Site.js'
 import SiteVisit from '../models/SiteVisit.js'
@@ -30,6 +31,27 @@ function managerAdminObjectId(managerDoc) {
   throw new ApiError(500, 'Account manager has invalid admin reference')
 }
 
+/** True when both admins have an active assignment on at least one shared instrument. */
+async function adminsShareInstrumentAssignment(req, otherAdminId) {
+  const other = adminIdString(otherAdminId)
+  if (!other || adminIdString(req.user.id) === other) return false
+  const instrumentIds = await InstrumentAssignment.distinct('instrumentId', {
+    companyId: req.user.companyId,
+    adminId: req.user.id,
+    isActive: true,
+    revokedAt: { $exists: false },
+  })
+  if (!instrumentIds.length) return false
+  const shared = await InstrumentAssignment.exists({
+    companyId: req.user.companyId,
+    adminId: other,
+    instrumentId: { $in: instrumentIds },
+    isActive: true,
+    revokedAt: { $exists: false },
+  })
+  return Boolean(shared)
+}
+
 /**
  * Admins may read their own ledger or another admin's on the same active instrument (header).
  * Super-admins respect optional `adminId` query scope when set.
@@ -48,9 +70,9 @@ export async function assertAccountManagerReadAccess(req, amLean) {
   if (req.user.role === 'admin') {
     if (adminIdString(req.user.id) === amAdminId) return
     const peers = await instrumentCoworkerAdminIdStrings(req)
-    if (!peers || !peers.has(amAdminId) || !peers.has(adminIdString(req.user.id))) {
-      throw new ApiError(403, 'Forbidden')
-    }
+    if (peers?.has(amAdminId) && peers.has(adminIdString(req.user.id))) return
+    if (await adminsShareInstrumentAssignment(req, amAdminId)) return
+    throw new ApiError(403, 'Forbidden')
   }
 }
 

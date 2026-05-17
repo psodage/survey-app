@@ -94,3 +94,21 @@ body.api-loading-active {
     padding-bottom: 7rem;
   }
 }
+
+/** Native date inputs on iOS Safari ignore width unless ancestors and the control can shrink. */
+.app-date-input {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.app-date-input::-webkit-date-and-time-value {
+  min-width: 0;
+  text-align: left;
+}
+
+.app-date-input::-webkit-calendar-picker-indicator {
+  margin: 0;
+  padding: 0;
+}

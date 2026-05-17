@@ -49,8 +49,7 @@ export async function deleteInstrument(req, id) {
 }
 
 /**
- * Admins who have an AccountManager row for this instrument (same company), else assignment-based list.
- * Uses `AccountManager.instrumentId` when those rows exist.
+ * Admins on this instrument: union of InstrumentAssignment and AccountManager.instrumentId rows.
  */
 export async function listCoworkersOnInstrument(req) {
   const raw =
@@ -73,86 +72,81 @@ export async function listCoworkersOnInstrument(req) {
     if (!canSee) throw new ApiError(403, 'Not assigned to this instrument')
   }
 
-  const assignments = await InstrumentAssignment.find({
-    companyId: req.user.companyId,
-    instrumentId,
-    isActive: true,
-    revokedAt: { $exists: false },
-  })
-    .select('adminId')
-    .lean()
+  const [assignments, amByInstrument] = await Promise.all([
+    InstrumentAssignment.find({
+      companyId: req.user.companyId,
+      instrumentId,
+      isActive: true,
+      revokedAt: { $exists: false },
+    })
+      .select('adminId')
+      .lean(),
+    AccountManager.find({
+      companyId: req.user.companyId,
+      instrumentId,
+      isActive: true,
+    })
+      .select('adminId slug fullName phone shortName')
+      .sort({ fullName: 1 })
+      .lean(),
+  ])
 
-  const amByInstrument = await AccountManager.find({
-    companyId: req.user.companyId,
-    instrumentId,
-    isActive: true,
-  })
-    .select('adminId slug fullName phone shortName')
-    .sort({ fullName: 1 })
-    .lean()
+  const adminIdStrings = [
+    ...new Set([
+      ...assignments.map((a) => a.adminId.toString()),
+      ...amByInstrument.map((r) => r.adminId.toString()),
+    ]),
+  ]
+  if (!adminIdStrings.length) return []
 
-  if (amByInstrument.length > 0) {
-    const adminIds = [...new Set(amByInstrument.map((r) => r.adminId.toString()))].map((id) => new mongoose.Types.ObjectId(id))
-    const users = await User.find({
+  const adminIds = adminIdStrings.map((id) => new mongoose.Types.ObjectId(id))
+  const amDetailByAdmin = new Map(amByInstrument.map((r) => [r.adminId.toString(), r]))
+
+  const [users, amRows] = await Promise.all([
+    User.find({
       _id: { $in: adminIds },
       companyId: req.user.companyId,
       role: 'admin',
       isActive: true,
     })
       .select('profile email')
-      .lean()
-    const profileById = new Map(users.map((u) => [u._id.toString(), u]))
-    /** One entry per AccountManager document so every slug on this instrument appears (multiple admins). */
-    return amByInstrument.map((r) => {
-      const u = profileById.get(r.adminId.toString())
-      const fullName = (r.fullName && r.fullName.trim()) || u?.profile?.fullName || ''
-      const shortName = (r.shortName && r.shortName.trim()) || fullName || '—'
-      return {
-        adminId: r.adminId.toString(),
-        accountManagerSlug: r.slug,
-        fullName,
-        shortName,
-        phone: (r.phone && r.phone.trim()) || u?.profile?.phone || '',
-        email: u?.email ?? '',
-      }
+      .lean(),
+    AccountManager.find({
+      adminId: { $in: adminIds },
+      companyId: req.user.companyId,
+      isActive: true,
     })
-  }
+      .select('adminId slug fullName phone shortName')
+      .lean(),
+  ])
 
-  const adminIdStrings = [...new Set(assignments.map((a) => a.adminId.toString()))]
-  if (!adminIdStrings.length) return []
-
-  const adminIds = adminIdStrings.map((id) => new mongoose.Types.ObjectId(id))
-
-  const users = await User.find({
-    _id: { $in: adminIds },
-    companyId: req.user.companyId,
-    role: 'admin',
-    isActive: true,
-  })
-    .select('profile email')
-    .sort({ 'profile.fullName': 1 })
-    .lean()
-
-  const amRows = await AccountManager.find({
-    adminId: { $in: adminIds },
-    companyId: req.user.companyId,
-    isActive: true,
-  })
-    .select('adminId slug')
-    .lean()
-
+  const profileById = new Map(users.map((u) => [u._id.toString(), u]))
   const slugByAdmin = new Map()
   for (const r of amRows) {
     const key = r.adminId.toString()
     if (!slugByAdmin.has(key)) slugByAdmin.set(key, r.slug)
+    if (!amDetailByAdmin.has(key)) amDetailByAdmin.set(key, r)
   }
 
-  return users.map((u) => ({
-    adminId: u._id.toString(),
-    accountManagerSlug: slugByAdmin.get(u._id.toString()) ?? null,
-    fullName: u.profile?.fullName ?? '',
-    shortName: (u.profile?.fullName && u.profile.fullName.trim()) || '—',
-    phone: u.profile?.phone ?? '',
-    email: u.email ?? '',
-  }))
+  const sortKey = (adminId) => {
+    const am = amDetailByAdmin.get(adminId)
+    const u = profileById.get(adminId)
+    return (am?.fullName && am.fullName.trim()) || u?.profile?.fullName || u?.email || adminId
+  }
+  adminIdStrings.sort((a, b) => sortKey(a).localeCompare(sortKey(b)))
+
+  return adminIdStrings.map((adminId) => {
+    const am = amDetailByAdmin.get(adminId)
+    const u = profileById.get(adminId)
+    const fullName = (am?.fullName && am.fullName.trim()) || u?.profile?.fullName || ''
+    const shortName = (am?.shortName && am.shortName.trim()) || fullName || '—'
+    return {
+      adminId,
+      accountManagerSlug: slugByAdmin.get(adminId) ?? null,
+      fullName,
+      shortName,
+      phone: (am?.phone && am.phone.trim()) || u?.profile?.phone || '',
+      email: u?.email ?? '',
+    }
+  })
 }

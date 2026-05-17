@@ -953,7 +953,7 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
 
             {viewMode !== 'pending' && isAddOpen && canEditLedgerActions ? (
               <div className="fixed inset-0 z-[60] grid place-items-center bg-black/50 px-4 py-6">
-                <div className="w-full max-w-lg rounded-2xl bg-white p-3 shadow-xl ring-1 ring-black/10 sm:p-5">
+                <div className="w-full max-w-lg overflow-hidden rounded-2xl bg-white p-3 shadow-xl ring-1 ring-black/10 sm:p-5">
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
                       <div className="truncate text-base font-extrabold text-neutral-900">Add Transaction</div>
@@ -973,7 +973,7 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                   </div>
 
                   <form
-                    className="mt-4 grid grid-cols-1 gap-3"
+                    className="mt-4 grid min-w-0 grid-cols-1 gap-3"
                     onSubmit={async (event) => {
                       event.preventDefault()
                       if (!managerIdFromRoute) return
@@ -1060,8 +1060,8 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                       }
                     }}
                   >
-                    <div className="grid grid-cols-2 gap-2 md:gap-3">
-                      <label className="grid gap-1">
+                    <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 md:gap-3">
+                      <label className="grid min-w-0 gap-1">
                         <span className="text-xs font-bold text-neutral-700">Type</span>
                         <AppSelect
                           value={draftTx.type}
@@ -1083,13 +1083,13 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                         />
                       </label>
 
-                      <label className="grid gap-1">
+                      <label className="grid min-w-0 gap-1">
                         <span className="text-xs font-bold text-neutral-700">Date</span>
                         <input
                           type="date"
                           value={draftTx.date}
                           onChange={(event) => setDraftTx((prev) => ({ ...prev, date: event.target.value }))}
-                          className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
+                          className="app-date-input h-11 w-full min-w-0 max-w-full rounded-xl border border-neutral-200 bg-white px-2 text-sm font-semibold text-neutral-900 outline-none focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20 sm:px-3"
                         />
                       </label>
                     </div>
@@ -1119,8 +1119,8 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                         />
                       </label>
                     ) : (
-                      <div className="grid grid-cols-2 gap-2 md:gap-3">
-                        <label className="grid gap-1">
+                      <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 md:gap-3">
+                        <label className="grid min-w-0 gap-1">
                           <span className="text-xs font-bold text-neutral-700">Client (Credit)</span>
                           <AppSelect
                             value={draftTx.client ?? clientOptions[0] ?? ''}
@@ -1139,7 +1139,7 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                           />
                         </label>
 
-                        <label className="grid gap-1">
+                        <label className="grid min-w-0 gap-1">
                           <span className="text-xs font-bold text-neutral-700">Site</span>
                           <AppSelect
                             value={draftTx.site ?? ''}
