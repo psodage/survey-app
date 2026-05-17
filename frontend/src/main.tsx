@@ -3,7 +3,10 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import { Toaster } from 'sonner'
 import { registerSW } from 'virtual:pwa-register'
+import { initPwaInstallCapture } from './utils/pwaInstall'
 import './index.css'
+
+initPwaInstallCapture()
 import App from './App.tsx'
 import { AuthReadyGate } from './components/AuthReadyGate'
 import ServerWakeUp from './components/ServerWakeUp'

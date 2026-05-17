@@ -1,11 +1,4 @@
-/** Detect installed PWA / standalone display mode. */
-export function isStandalonePwa(): boolean {
-  if (typeof window === 'undefined') return false
-  return (
-    window.matchMedia('(display-mode: standalone)').matches ||
-    (navigator as Navigator & { standalone?: boolean }).standalone === true
-  )
-}
+export { isStandalonePwa } from './pwaInstall'
 
 function isMobileLike(): boolean {
   if (typeof navigator === 'undefined') return false
