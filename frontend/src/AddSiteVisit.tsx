@@ -383,7 +383,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
   }
 
   return (
-    <div className="flex h-[100svh] max-h-[100svh] min-h-[100svh] flex-col overflow-hidden bg-black md:h-dvh md:max-h-dvh md:min-h-dvh md:bg-neutral-100">
+    <div className="app-layout-root flex flex-col overflow-hidden bg-black md:h-dvh md:max-h-dvh md:min-h-dvh md:bg-neutral-100">
       <div className="flex min-h-0 flex-1 w-full max-w-none">
       <aside className="fixed inset-y-0 left-0 z-20 hidden w-[280px] flex-col bg-gradient-to-b from-[#050505] via-[#0b0b0b] to-[#040404] pb-20 text-white lg:flex">
           <div className="px-6 pt-7">
@@ -604,7 +604,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
           </header>
 
           <div className="mobile-main-scroll-pad min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-white p-4 sm:px-6 sm:pt-6 md:p-6 lg:p-8">
-            <div className="mx-auto w-full max-w-[1200px] space-y-6 pb-6 md:space-y-8 md:pb-0">
+            <div className="visit-form-page-inner mx-auto w-full max-w-[1200px] space-y-6 pb-6 md:space-y-8 md:pb-0">
               {!showAddForm ? (
                 <section className="grid grid-cols-2 gap-1.5 md:gap-4 xl:grid-cols-4">
                   <StatCard

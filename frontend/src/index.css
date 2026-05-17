@@ -5,6 +5,8 @@
   color-scheme: light;
   font-family: "Manrope", Inter, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   background: #000;
+  --app-vh: 100dvh;
+  --app-vv-top: 0px;
 }
 
 * {
@@ -19,10 +21,9 @@ body,
 }
 
 html {
-  height: 100%;
-  height: 100dvh;
-  min-height: 100dvh;
-  max-height: 100dvh;
+  height: var(--app-vh, 100dvh);
+  min-height: var(--app-vh, 100dvh);
+  max-height: var(--app-vh, 100dvh);
   overflow: hidden;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
@@ -30,10 +31,9 @@ html {
 
 body {
   margin: 0;
-  height: 100%;
-  height: 100dvh;
-  min-height: 100dvh;
-  max-height: 100dvh;
+  height: var(--app-vh, 100dvh);
+  min-height: var(--app-vh, 100dvh);
+  max-height: var(--app-vh, 100dvh);
   width: 100%;
   background: #000;
   color: #fff;
@@ -46,12 +46,18 @@ body {
 }
 
 #root {
-  height: 100%;
-  height: 100dvh;
-  min-height: 100dvh;
-  max-height: 100dvh;
+  height: var(--app-vh, 100dvh);
+  min-height: var(--app-vh, 100dvh);
+  max-height: var(--app-vh, 100dvh);
   width: 100%;
   overflow: hidden;
+}
+
+/** Full-height app pages (replaces h-[100svh] on iOS when the keyboard resizes the visual viewport). */
+.app-layout-root {
+  height: var(--app-vh, 100svh);
+  max-height: var(--app-vh, 100svh);
+  min-height: var(--app-vh, 100svh);
 }
 
 /** Vertical scroll regions keep pan-y; pinch zoom is blocked at document level on iOS. */
@@ -81,11 +87,37 @@ body.api-loading-active {
 /** Scrollable main content above fixed mobile bottom nav (Clients, Site Details, Visits, etc.) */
 .mobile-main-scroll-pad {
   padding-bottom: calc(6.25rem + max(24px, env(safe-area-inset-bottom, 0px)));
+  -webkit-overflow-scrolling: touch;
+}
+
+body.keyboard-open .mobile-main-scroll-pad {
+  padding-bottom: max(1.25rem, env(safe-area-inset-bottom, 0px));
+}
+
+body.keyboard-open .visit-form-page-inner {
+  padding-bottom: 2.5rem;
+}
+
+/** Hide bottom tab bar while the keyboard is open so it is not covered by iOS accessory UI. */
+body.keyboard-open nav[aria-label='Mobile primary navigation'] {
+  transform: translate3d(0, 110%, 0);
+  pointer-events: none;
+  visibility: hidden;
 }
 
 @media (min-width: 768px) {
   .mobile-main-scroll-pad {
     padding-bottom: 6rem;
+  }
+
+  body.keyboard-open .mobile-main-scroll-pad {
+    padding-bottom: 6rem;
+  }
+
+  body.keyboard-open nav[aria-label='Mobile primary navigation'] {
+    transform: none;
+    pointer-events: auto;
+    visibility: visible;
   }
 }
 

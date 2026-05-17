@@ -4,11 +4,13 @@ import { BrowserRouter } from 'react-router-dom'
 import { Toaster } from 'sonner'
 import { registerSW } from 'virtual:pwa-register'
 import { initPwaInstallCapture } from './utils/pwaInstall'
+import { initIosKeyboardViewport } from './utils/iosKeyboardViewport'
 import { initPwaZoomLock } from './utils/pwaZoomLock'
 import './index.css'
 
 initPwaInstallCapture()
 initPwaZoomLock()
+initIosKeyboardViewport()
 import App from './App.tsx'
 import { AuthReadyGate } from './components/AuthReadyGate'
 import ServerWakeUp from './components/ServerWakeUp'
