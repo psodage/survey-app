@@ -20,7 +20,14 @@ export type AuthUser = {
 
 export type InstrumentSummary = { id: string; name: string; category?: string; status?: string }
 
-export type AccountManagerSummary = { id: string; _id: string; name: string; shortName: string; phone: string }
+export type AccountManagerSummary = {
+  id: string
+  _id: string
+  adminId?: string
+  name: string
+  shortName: string
+  phone: string
+}
 
 export type CompanyAdminContact = { id: string; fullName: string; phone: string }
 

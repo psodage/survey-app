@@ -1,4 +1,6 @@
-export { isStandalonePwa } from './pwaInstall'
+import { isStandalonePwa } from './pwaInstall'
+
+export { isStandalonePwa }
 
 function isMobileLike(): boolean {
   if (typeof navigator === 'undefined') return false

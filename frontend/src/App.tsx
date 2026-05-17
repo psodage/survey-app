@@ -54,8 +54,9 @@ function CatchAllRedirect() {
 /** Mobile: pick a manager. Desktop (md+): same URL redirects to default manager ledger. */
 function AccountManagerIndex({ onNavigate }: { onNavigate: NavigateFunction }) {
   const location = useLocation()
-  const { managers } = useAuth()
-  const defaultSlug = managers[0]?.id ?? DEFAULT_ACCOUNT_MANAGER_ID
+  const { managers, user } = useAuth()
+  const ownSlug = managers.find((m) => m.adminId && user?.id && m.adminId === user.id)?.id
+  const defaultSlug = ownSlug ?? managers[0]?.id ?? DEFAULT_ACCOUNT_MANAGER_ID
   const [mdUp, setMdUp] = useState(
     () => typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches,
   )

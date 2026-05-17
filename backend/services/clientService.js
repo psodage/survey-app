@@ -3,6 +3,7 @@ import Client from '../models/Client.js'
 import Site from '../models/Site.js'
 import SiteVisit from '../models/SiteVisit.js'
 import User from '../models/User.js'
+import AccountManager from '../models/AccountManager.js'
 import Transaction from '../models/Transaction.js'
 import Invoice from '../models/Invoice.js'
 import SurveyFile from '../models/SurveyFile.js'
@@ -233,6 +234,16 @@ export async function getClientReportExport(req, clientId, yearRaw) {
     clientId: client._id,
     type: 'credit',
     ...(visitYearRange ? { occurredOn: visitYearRange } : {}),
+  }
+  if (req.user.role === 'admin') {
+    const ownAm = await AccountManager.findOne({
+      companyId: req.user.companyId,
+      adminId: req.user.id,
+      isActive: true,
+    })
+      .select('_id')
+      .lean()
+    if (ownAm) creditMatch.accountManagerId = ownAm._id
   }
   const credits = await Transaction.find(creditMatch)
     .populate('siteId', 'name')
